@@ -23,8 +23,6 @@ Important:
     with selfies.encoder(smiles).
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import math
@@ -36,7 +34,7 @@ from typing import Any
 
 import numpy as np
 import torch
-from datasets import Dataset, IterableDataset, load_dataset
+from datasets import Dataset, IterableDataset
 from torch.nn.utils.rnn import pad_sequence
 from tqdm.auto import tqdm
 from transformers import (
@@ -47,24 +45,23 @@ from transformers import (
     set_seed,
 )
 
-try:
-    from ape_tokenizer import APETokenizer
-except ImportError as exc:
-    raise ImportError(
-        "Could not import APETokenizer. Install it with:\n"
-        "  pip install git+https://github.com/mikemayuare/apetokenizer.git"
-    ) from exc
+from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.utils import (
+    collect_corpus_for_tokenizer,
+    encode_sequence,
+    get_streaming_dataset,
+    normalize_sequence,
+    resolve_special_ids,
+    tokenizer_vocab_size,
+)
 
 
 DATASET_NAME = "mikemayuare/PubChem10M_SMILES_SELFIES"
 
-SPECIAL_TOKENS = {
-    "pad_token": "<pad>",
-    "bos_token": "<s>",
-    "eos_token": "</s>",
-    "unk_token": "<unk>",
-    "mask_token": "<mask>",
-}
+# Pre-trained tokenizer vocabulary shipped with this repository.
+_DEFAULT_TOKENIZER_VOCAB = (
+    Path(__file__).resolve().parent.parent.parent / "tokenizer" / "tokenizer.json"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -77,8 +74,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tokenizer_vocab_path",
         type=str,
-        default=None,
-        help="Existing APE vocab JSON. If omitted, defaults to output_dir/ape_<representation>_vocab.json.",
+        default=str(_DEFAULT_TOKENIZER_VOCAB),
+        help="APE vocab JSON to load. Defaults to tokenizer/tokenizer.json in the repo root.",
     )
 
     # Dataset
@@ -94,7 +91,7 @@ def parse_args() -> argparse.Namespace:
     # Tokenizer
     parser.add_argument("--max_vocab_size", type=int, default=5000)
     parser.add_argument("--min_freq_for_merge", type=int, default=2000)
-    parser.add_argument("--train_tokenizer", action="store_true", default=True)
+    parser.add_argument("--train_tokenizer", action="store_true", default=False)
     parser.add_argument(
         "--no_train_tokenizer", action="store_false", dest="train_tokenizer"
     )
@@ -172,48 +169,6 @@ def adjust_args_for_backend(
     return args
 
 
-def normalize_sequence(example: dict[str, Any], representation: str) -> str | None:
-    seq = example.get(representation)
-    if seq is None:
-        return None
-    seq = str(seq).strip()
-    return seq if seq else None
-
-
-def get_streaming_dataset(
-    dataset_name: str, seed: int, buffer_size: int
-) -> IterableDataset:
-    ds = load_dataset(dataset_name, split="train", streaming=True)
-    return ds.shuffle(seed=seed, buffer_size=buffer_size)
-
-
-def collect_corpus_for_tokenizer(
-    dataset_name: str,
-    representation: str,
-    n: int,
-    seed: int,
-    buffer_size: int,
-) -> list[str]:
-    ds = get_streaming_dataset(dataset_name, seed=seed, buffer_size=buffer_size)
-    corpus: list[str] = []
-
-    pbar = tqdm(total=n, desc=f"Collecting {representation} corpus for APE tokenizer")
-    for row in ds:
-        seq = normalize_sequence(row, representation)
-        if seq is None:
-            continue
-        corpus.append(seq)
-        pbar.update(1)
-        if len(corpus) >= n:
-            break
-    pbar.close()
-
-    if not corpus:
-        raise RuntimeError("Tokenizer corpus is empty. Check dataset column names.")
-
-    return corpus
-
-
 def train_or_load_ape_tokenizer(args: argparse.Namespace) -> APETokenizer:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -245,89 +200,6 @@ def train_or_load_ape_tokenizer(args: argparse.Namespace) -> APETokenizer:
         tokenizer.load_vocabulary(str(vocab_path))
 
     return tokenizer
-
-
-def tokenizer_vocab_size(tokenizer: APETokenizer) -> int:
-    if hasattr(tokenizer, "get_vocab"):
-        vocab = tokenizer.get_vocab()
-        if isinstance(vocab, dict):
-            return len(vocab)
-
-    for attr in ["vocab", "vocabulary", "token_to_id", "token2id"]:
-        if hasattr(tokenizer, attr):
-            value = getattr(tokenizer, attr)
-            if isinstance(value, dict):
-                return len(value)
-
-    raise AttributeError(
-        "Could not infer APETokenizer vocabulary size. "
-        "Inspect the tokenizer object and adjust tokenizer_vocab_size()."
-    )
-
-
-def token_id(tokenizer: APETokenizer, token: str) -> int:
-    if hasattr(tokenizer, "convert_tokens_to_ids"):
-        out = tokenizer.convert_tokens_to_ids([token])
-        return int(out[0] if isinstance(out, list) else out)
-
-    encoded = tokenizer(token, add_special_tokens=False)
-    ids = encoded["input_ids"]
-
-    if isinstance(ids, torch.Tensor):
-        ids = ids.tolist()
-    if ids and isinstance(ids[0], list):
-        ids = ids[0]
-    if len(ids) != 1:
-        raise ValueError(f"Token {token!r} resolved to {ids}, expected one ID.")
-
-    return int(ids[0])
-
-
-def resolve_special_ids(tokenizer: APETokenizer) -> dict[str, int]:
-    ids: dict[str, int] = {}
-    for name, token in SPECIAL_TOKENS.items():
-        try:
-            ids[name] = token_id(tokenizer, token)
-        except Exception:
-            attr_name = name + "_id"
-            if hasattr(tokenizer, attr_name):
-                ids[name] = int(getattr(tokenizer, attr_name))
-            else:
-                raise RuntimeError(
-                    f"Could not resolve ID for special token {token!r}. "
-                    "Check APETokenizer special-token names."
-                )
-    return ids
-
-
-def encode_sequence(
-    tokenizer: APETokenizer, seq: str, max_seq_length: int
-) -> dict[str, list[int]]:
-    encoded = tokenizer(
-        seq,
-        padding=False,
-        max_length=max_seq_length,
-        add_special_tokens=True,
-        return_tensors=None,
-    )
-
-    input_ids = encoded["input_ids"]
-    attention_mask = encoded.get("attention_mask", [1] * len(input_ids))
-
-    if isinstance(input_ids, torch.Tensor):
-        input_ids = input_ids.tolist()
-    if isinstance(attention_mask, torch.Tensor):
-        attention_mask = attention_mask.tolist()
-
-    if input_ids and isinstance(input_ids[0], list):
-        input_ids = input_ids[0]
-    if attention_mask and isinstance(attention_mask[0], list):
-        attention_mask = attention_mask[0]
-
-    return {
-        "input_ids": list(map(int, input_ids[:max_seq_length])),
-        "attention_mask": list(map(int, attention_mask[:max_seq_length])),
-    }
 
 
 def make_train_iterable_dataset(
@@ -437,19 +309,21 @@ def build_modernbert_config(
     vocab_size: int,
     special_ids: dict[str, int],
 ) -> ModernBertConfig:
-    return ModernBertConfig(
+    config = ModernBertConfig(
         vocab_size=vocab_size,
         hidden_size=args.hidden_size,
         num_hidden_layers=args.num_hidden_layers,
         num_attention_heads=args.num_attention_heads,
         intermediate_size=args.intermediate_size,
         max_position_embeddings=args.max_seq_length,
-        global_attn_every_n_layers=args.global_attn_every_n_layers,
-        local_attention=args.local_attention,
         pad_token_id=special_ids["pad_token"],
         bos_token_id=special_ids["bos_token"],
         eos_token_id=special_ids["eos_token"],
     )
+    # Not in typed stubs for all Transformers versions but valid config attributes.
+    setattr(config, "global_attn_every_n_layers", args.global_attn_every_n_layers)
+    setattr(config, "local_attention", args.local_attention)
+    return config
 
 
 def compute_metrics(eval_pred: Any) -> dict[str, float]:
@@ -588,7 +462,6 @@ def main() -> None:
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
-        overwrite_output_dir=True,
         max_steps=args.max_steps,
         per_device_train_batch_size=args.per_device_train_batch_size,
         per_device_eval_batch_size=args.per_device_eval_batch_size,
@@ -612,11 +485,12 @@ def main() -> None:
         report_to=["tensorboard"],
         load_best_model_at_end=False,
     )
+    setattr(training_args, "overwrite_output_dir", True)
 
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
+        train_dataset=train_dataset,  # type: ignore[arg-type]
         eval_dataset=eval_dataset,
         data_collator=collator,
         compute_metrics=compute_metrics if args.compute_masked_accuracy else None,
@@ -631,8 +505,8 @@ def main() -> None:
     model.config.save_pretrained(str(final_dir))
 
     metrics = train_result.metrics
-    metrics["train_samples_streaming"] = "streaming"
-    metrics["num_parameters"] = n_params
+    metrics["train_samples_streaming"] = 1.0
+    metrics["num_parameters"] = float(n_params)
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
     trainer.save_state()

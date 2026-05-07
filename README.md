@@ -16,7 +16,8 @@ The intended workflow is:
 ## Files
 
 - `train_selfies_ape_modernbert.py` — main training script.
-- `README.md` — this document.
+- `README.md` — this document
+- `tokenizer/tokenizer.json` is from [mikemayuare/SELFY-APE-HIV](https://huggingface.co/mikemayuare/SELFY-APE-HIV/blob/main/tokenizer.json)
 
 ## Installation
 
@@ -25,12 +26,12 @@ The intended workflow is:
 Do not install `flash-attn` on Mac.
 
 ```bash
-conda create -n molbert-mps python=3.11 -y
-conda activate molbert-mps
+uv venv .venv --python 3.13
+source .venv/bin/activate
 
-pip install torch torchvision torchaudio
-pip install "transformers>=4.48" datasets accelerate evaluate tqdm numpy tensorboard
-pip install git+https://github.com/mikemayuare/apetokenizer.git
+uv pip install torch torchvision torchaudio
+uv pip install "transformers>=5.0" datasets accelerate evaluate tqdm numpy tensorboard
+uv pip install git+https://github.com/mikemayuare/apetokenizer.git
 ```
 
 Check that MPS is available:
@@ -46,14 +47,15 @@ PY
 ### CUDA
 
 ```bash
-conda create -n molbert-cuda python=3.11 -y
-conda activate molbert-cuda
+uv venv .venv --python 3.13
+source .venv/bin/activate
 
-pip install "torch>=2.2" "transformers>=4.48" datasets accelerate evaluate tqdm numpy tensorboard
-pip install git+https://github.com/mikemayuare/apetokenizer.git
+uv pip install "torch>=2.2" torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+uv pip install "transformers>=5.0" datasets accelerate evaluate tqdm numpy tensorboard
+uv pip install git+https://github.com/mikemayuare/apetokenizer.git
 
 # Optional on supported NVIDIA GPUs
-pip install flash-attn --no-build-isolation
+uv pip install flash-attn --no-build-isolation
 ```
 
 ## Quick Start

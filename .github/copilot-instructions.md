@@ -38,5 +38,6 @@ Trailing commas in function calls is fine and can improve readability, so do not
 Don't remove comments from the code, but feel free to edit them for clarity and conciseness. Always keep comments that explain the purpose of code blocks or complex logic, as they can be helpful for future reference and for other readers of the code.
 
 # Python
-"from __future__ import annotations" is not necessary in Python 3.10 and later, so do not add it to any new Python files. It is only needed for backward compatibility with older Python versions.
+`from __future__ import annotations` is not necessary in Python 3.10 and later, so do not add it to any new Python files. It is only needed for backward compatibility with older Python versions.
 Always implement notebooks as py:percent and not Jupyter notebooks, .ipynb files. This means using the `# %%` syntax to define code cells, and avoiding the use of Jupyter-specific features like markdown cells or magic commands. This allows for better compatibility with different editors and tools, and makes it easier to version control the code.
+Reconsider if using `from typing import cast` is necessary, as it is often not needed in modern Python code and can be avoided for simplicity. Only use it when there is a clear need for type casting that cannot be easily achieved with standard Python syntax.

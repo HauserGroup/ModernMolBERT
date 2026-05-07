@@ -31,3 +31,10 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 include = ["modernmolbert*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "smoke: optional end-to-end smoke tests",
+    "mps: tests intended for Apple MPS",
+    "cuda: tests intended for CUDA",
+]

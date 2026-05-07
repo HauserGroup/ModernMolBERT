@@ -147,8 +147,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def log_step(message: str) -> None:
-
+def log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
@@ -204,6 +203,63 @@ def adjust_args_for_backend(
         args.tokenizer_validation_samples = min(args.tokenizer_validation_samples, 200)
 
     return args
+
+
+def preview_dataset_and_tokenizer(
+    args: argparse.Namespace,
+    tokenizer: APETokenizer,
+    special_ids: dict[str, int],
+    n_examples: int = 3,
+) -> None:
+    log("Previewing dataset and tokenization...")
+
+    ds = get_streaming_dataset(
+        args.dataset_name,
+        seed=args.seed + 999,
+        buffer_size=min(args.shuffle_buffer_size, 10_000),
+    )
+
+    examples: list[str] = []
+    for row in ds:
+        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        if seq is None:
+            continue
+        examples.append(seq)
+        if len(examples) >= n_examples:
+            break
+
+    log(f"Dataset: {args.dataset_name}")
+    log("Dataset mode: streaming")
+    log("Dataset nominal size: PubChem10M_SMILES_SELFIES has 10M train rows")
+    log(f"Representation: {SELFIES_REPRESENTATION}")
+
+    for i, seq in enumerate(examples, start=1):
+        encoded = encode_sequence(tokenizer, seq, args.max_seq_length)
+        input_ids = encoded["input_ids"]
+
+        non_special = [x for x in input_ids if x not in set(special_ids.values())]
+        unk_count = sum(1 for x in non_special if x == special_ids["unk_token"])
+
+        # Best effort token display. Adjust if your APETokenizer has a different method.
+        tokens = None
+        if hasattr(tokenizer, "convert_ids_to_tokens"):
+            try:
+                tokens = tokenizer.convert_ids_to_tokens(input_ids[:30])
+            except Exception:
+                tokens = None
+
+        log(f"Example {i}:")
+        print(
+            f"  raw SELFIES: {seq[:300]}{'...' if len(seq) > 300 else ''}", flush=True
+        )
+        print(
+            f"  token ids:   {input_ids[:30]}{' ...' if len(input_ids) > 30 else ''}",
+            flush=True,
+        )
+        if tokens is not None:
+            print(f"  tokens:      {tokens}", flush=True)
+        print(f"  length:      {len(input_ids)}", flush=True)
+        print(f"  unk count:   {unk_count}", flush=True)
 
 
 def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[str]:
@@ -477,6 +533,38 @@ def compute_metrics(eval_pred: Any) -> dict[str, float]:
     return {"masked_accuracy": float((preds[mask] == labels[mask]).mean())}
 
 
+def log_training_plan(
+    args: argparse.Namespace, backend: str, n_params: int | None = None
+) -> None:
+    effective_batch_size = (
+        args.per_device_train_batch_size * args.gradient_accumulation_steps
+    )
+    log("Training plan:")
+    print(f"  backend:                    {backend}", flush=True)
+    print(f"  model_size:                 {args.model_size}", flush=True)
+    if n_params is not None:
+        print(f"  parameters:                 {n_params / 1e6:.2f}M", flush=True)
+    print(f"  max_steps:                  {args.max_steps}", flush=True)
+    print(f"  max_seq_length:             {args.max_seq_length}", flush=True)
+    print(f"  mlm_probability:            {args.mlm_probability}", flush=True)
+    print(
+        f"  train batch/device:         {args.per_device_train_batch_size}", flush=True
+    )
+    print(
+        f"  gradient_accumulation:      {args.gradient_accumulation_steps}", flush=True
+    )
+    print(f"  effective batch size:       {effective_batch_size}", flush=True)
+    print(
+        f"  eval batch/device:          {args.per_device_eval_batch_size}", flush=True
+    )
+    print(f"  eval every steps:           {args.eval_steps}", flush=True)
+    print(f"  save every steps:           {args.save_steps}", flush=True)
+    print(f"  save_total_limit:           {args.save_total_limit}", flush=True)
+    print(f"  logging every steps:        {args.logging_steps}", flush=True)
+    print(f"  report_to:                  {args.report_to}", flush=True)
+    print(f"  bf16/fp16:                  {args.bf16}/{args.fp16}", flush=True)
+
+
 def write_run_metadata(
     args: argparse.Namespace,
     backend: str,
@@ -584,10 +672,10 @@ def main() -> None:
     with (output_dir / "run_args.json").open("w", encoding="utf-8") as f:
         json.dump(vars(args), f, indent=2)
 
-    print(f"Backend: {backend}")
-    print(f"bf16={args.bf16}, fp16={args.fp16}")
+    log(f"Backend: {backend}")
+    log(f"bf16={args.bf16}, fp16={args.fp16}")
 
-    print("Loading and validating tokenizer...")
+    log("Loading and validating tokenizer...")
     (
         tokenizer,
         _tokenizer_metadata,
@@ -598,47 +686,47 @@ def main() -> None:
         tokenizer_stats,
     ) = load_and_validate_tokenizer(args)
 
-    print(f"Vocabulary size: {vocab_size}")
-    print(f"Special token IDs: {special_ids}")
-    print(
-        f"Tokenizer stats: unk_rate={tokenizer_stats['unk_rate']:.6f}, "
-        f"truncation_rate={tokenizer_stats['truncation_rate']:.6f}"
-    )
+    log(f"Vocabulary size: {vocab_size}")
+    log(f"Special token IDs: {special_ids}")
+    log("Tokenizer validation stats:")
+    for key in sorted(tokenizer_stats):
+        value = tokenizer_stats[key]
+        if isinstance(value, float):
+            print(f"  {key}: {value:.6f}", flush=True)
+        else:
+            print(f"  {key}: {value}", flush=True)
     if tokenizer_stats["truncation_rate"] > args.truncation_warn_threshold:
-        print(
-            "Warning: truncation rate is high "
+        log(
+            f"Warning: truncation rate is high "
             f"({tokenizer_stats['truncation_rate']:.4f} > {args.truncation_warn_threshold:.4f})"
         )
 
-    print("Building datasets...")
+    log("Building datasets...")
     train_dataset = make_train_iterable_dataset(args, tokenizer)
     eval_dataset = make_eval_dataset(args, tokenizer)
 
-    log_step("Building ModernBERT config...")
+    preview_dataset_and_tokenizer(
+        args=args,
+        tokenizer=tokenizer,
+        special_ids=special_ids,
+        n_examples=3,
+    )
+
+    log("Building ModernBERT model (this can take a while on MPS/CPU)...")
 
     config = build_modernbert_config(args, vocab_size, special_ids)
+    model = AutoModelForMaskedLM.from_config(config)
+    n_params = sum(p.numel() for p in model.parameters())
 
-    log_step("ModernBERT config built.")
-
-    log_step(
+    log(
         f"Config: ModernBERT-{args.model_size}, "
         f"vocab_size={config.vocab_size}, "
         f"hidden_size={config.hidden_size}, "
         f"layers={config.num_hidden_layers}, "
         f"max_position_embeddings={config.max_position_embeddings}"
     )
-
-    log_step(
-        "Initializing ModernBERT model weights. This can take a while on MPS/CPU..."
-    )
-
-    model = AutoModelForMaskedLM.from_config(config)
-
-    log_step("Model object created. Counting parameters...")
-
-    n_params = sum(p.numel() for p in model.parameters())
-
-    log_step(f"Model parameters: {n_params / 1e6:.2f}M")
+    log(f"Model parameters: {n_params / 1e6:.2f}M")
+    log_training_plan(args, backend, n_params=n_params)
 
     collator = MolecularMLMCollator(
         pad_token_id=special_ids["pad_token"],
@@ -650,7 +738,13 @@ def main() -> None:
 
     report_to = [] if args.report_to == "none" else [args.report_to]
 
-    print("Testing one training batch before Trainer...", flush=True)
+    if args.report_to == "tensorboard":
+        log("TensorBoard enabled.")
+        log(f"Follow training with: tensorboard --logdir {output_dir}")
+    else:
+        log("TensorBoard disabled. Use --report_to tensorboard to enable it.")
+
+    log("Testing one training batch before Trainer...")
 
     one = []
 
@@ -683,6 +777,7 @@ def main() -> None:
         bf16=args.bf16,
         fp16=args.fp16,
         dataloader_num_workers=args.num_workers,
+        dataloader_pin_memory=(backend == "cuda"),
         remove_unused_columns=False,
         prediction_loss_only=not args.compute_masked_accuracy,
         report_to=report_to,
@@ -699,7 +794,13 @@ def main() -> None:
         compute_metrics=compute_metrics if args.compute_masked_accuracy else None,
     )
 
-    print("Starting training...")
+    log("Starting training...")
+    log(f"Training logs will print every {args.logging_steps} steps.")
+    log(f"Evaluation will run every {args.eval_steps} steps.")
+    log(f"Checkpoints will be saved every {args.save_steps} steps.")
+    log(f"Only the most recent {args.save_total_limit} checkpoints will be kept.")
+    log(f"Intermediate checkpoints: {output_dir}/checkpoint-*")
+    log(f"Final model will be saved to: {output_dir}/final_model")
     train_result = trainer.train()
 
     print("Saving final model...")

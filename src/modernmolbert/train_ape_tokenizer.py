@@ -5,6 +5,8 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
     SELFIES_REPRESENTATION,
@@ -53,6 +55,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
 
     output_vocab_path = Path(args.output_vocab_path)

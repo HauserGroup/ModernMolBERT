@@ -4,6 +4,8 @@
 import argparse
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
     SELFIES_REPRESENTATION,
@@ -102,6 +104,7 @@ def _assert_ethanol_not_unknown(
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
 
     vocab_path = Path(args.tokenizer_vocab_path)

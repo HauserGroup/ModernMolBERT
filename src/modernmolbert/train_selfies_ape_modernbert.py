@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
 import numpy as np
 import torch
 import transformers
@@ -569,6 +571,7 @@ tokenizer.load_vocabulary("final_model/tokenizer.json")
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
     backend = detect_backend(args)
     validate_args(args, backend)

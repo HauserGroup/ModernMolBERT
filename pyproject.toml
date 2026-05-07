@@ -1,0 +1,22 @@
+[project]
+name = "modernmolbert"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "accelerate>=1.13.0",
+    "datasets>=4.8.5",
+    "evaluate>=0.4.6",
+    "jupyterlab>=4.5.7",
+    "numpy>=2.4.4",
+    "sentence-transformers>=5.4.1",
+    "tqdm>=4.67.3",
+    "transformers>=5.8.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+    "pytest>=9.0.3",
+]

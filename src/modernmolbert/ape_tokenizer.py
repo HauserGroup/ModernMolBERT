@@ -1,9 +1,9 @@
 """from https://github.com/mikemayuare/apetokenizer"""
 
 from collections import defaultdict
-import re
 import json
 import os
+import re
 from typing import Any
 
 
@@ -105,20 +105,11 @@ class APETokenizer:
         return len(self.vocabulary)
 
     def pre_tokenize(self, molecule):
-        """Pretokenize SMILES or SELFIES
+        """Pretokenize SELFIES strings into bracketed tokens.
 
-        Args:
-            molecule (str): SMILES or SELFIES strings
-            type (str): Type of inputs, "smiles" for SMILES or "selfies" for SELFIES. Defaults to "selfies".
-
-        Returns:
-            list: Tokenized molecules.
+        SELFIES tokens are bracketed, e.g. [C], [=Branch1], [Ring1].
         """
-        # words = re.findall(r"\[[^\]]*\]", molecule)
-
-        pattern = r"(\[[^\]]+]|Br?|Cl?|N|O|S|P|F|I|b|c|n|o|s|p|\(|\)|\.|=|#|-|\+|\\\\|\/|:|~|@|\?|>|\*|\$|\%[0-9]{2}|[0-9])"
-        words = re.findall(pattern, molecule)
-
+        words = re.findall(r"\[[^\]]+\]", molecule)
         return words
 
     def train(
@@ -151,15 +142,23 @@ class APETokenizer:
         # to add the pretokens to the vocabulary numbering
         pre_tokens_counts = len(vocabulary_frequency)
 
-        # Function optimized to reduce dictionary lookups
+        # Recompute pair counts from scratch every merge iteration.
+        # Persisting counts across iterations can bias stale pairs and prevent
+        # convergence.
         def get_most_common_pair(words):
+            pair_counts = defaultdict(int)
             for i in range(len(words) - 1):
                 pair = (words[i], words[i + 1])
-                self.pair_counts[pair] += 1
+                pair_counts[pair] += 1
+
+            self.pair_counts = pair_counts
+
+            if not pair_counts:
+                return ("", ""), 0
 
             # Minimize lookups by using max function directly
             most_common_pair, freq = max(
-                self.pair_counts.items(), key=lambda x: x[1], default=(("", ""), 0)
+                pair_counts.items(), key=lambda x: x[1], default=(("", ""), 0)
             )
             return most_common_pair, freq
 
@@ -196,9 +195,17 @@ class APETokenizer:
                 print("\rMax vocabulary achieved", text_padding)
                 break
 
+            if len(words) < 2:
+                print("\rNo more mergeable pairs", text_padding)
+                break
+
             most_common_pair, freq = get_most_common_pair(words)
             if freq < self.min_freq_for_merge:
                 print("\rNot enough frequency found", text_padding)
+                break
+
+            if not most_common_pair[0] or not most_common_pair[1]:
+                print("\rNo valid merge pair found", text_padding)
                 break
 
             merged_word = "".join(most_common_pair)

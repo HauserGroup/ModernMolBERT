@@ -1,0 +1,3 @@
+{"SMILES": "CCO", "SELFIES": "[C][C][O]"}
+{"SMILES": "CC(=O)O", "SELFIES": "[C][C][=Branch1][C][=O][O]"}
+{"SMILES": "c1ccccc1", "SELFIES": "[C][=C][C][=C][C][=C][Ring1][=Branch1]"}

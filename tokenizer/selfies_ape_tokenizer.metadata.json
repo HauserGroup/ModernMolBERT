@@ -1,0 +1,9 @@
+{
+  "ape_source": "modernmolbert.bootstrap",
+  "creation_command": "python -m modernmolbert.train_ape_tokenizer",
+  "dataset_name": "mikemayuare/PubChem10M_SMILES_SELFIES",
+  "notes": "Bootstrap metadata for the repository canonical SELFIES tokenizer. Rebuild via train_ape_tokenizer for production training runs.",
+  "representation": "SELFIES",
+  "tokenizer_path": "tokenizer/selfies_ape_tokenizer.json",
+  "tokenizer_sha256": "80c661d52cc629fc3898b2f562eae01214338c3017005c6188d8f99c42f87c5b"
+}

@@ -1,358 +1,155 @@
-# ModernBERT + APE Tokenizer Molecular MLM Training
+# ModernMolBERT SELFIES Training
 
-This directory contains a training script for masked-language-model pretraining on molecular strings using:
+This repository trains a ModernBERT masked-language model on SELFIES strings only.
 
-- `mikemayuare/PubChem10M_SMILES_SELFIES`
-- `APETokenizer`
-- `ModernBERT`
-- SELFIES or SMILES as the molecular representation
+Core policy:
+- Tokenizer training is a separate step.
+- Model training only loads a vetted tokenizer + metadata pair.
+- Every run copies tokenizer artifacts into both `output_dir/` and `final_model/`.
 
-The intended workflow is:
+## Scope
 
-1. Run a small Mac MPS smoke test.
-2. Confirm the tokenizer, dataset, model, loss, and checkpointing all work.
-3. Move to CUDA for serious training.
+- Dataset: `mikemayuare/PubChem10M_SMILES_SELFIES`
+- Representation: `SELFIES` only
+- Tokenizer: `APETokenizer`
+- Model objective: MLM
 
-## Files
+## Canonical tokenizer artifacts
 
-- `train_selfies_ape_modernbert.py` — main training script.
-- `README.md` — this document
-- `tokenizer/tokenizer.json` is from [mikemayuare/SELFY-APE-HIV](https://huggingface.co/mikemayuare/SELFY-APE-HIV/blob/main/tokenizer.json)
+- `tokenizer/selfies_ape_tokenizer.json`
+- `tokenizer/selfies_ape_tokenizer.metadata.json`
+
+The metadata includes representation and SHA256; training validates both.
 
 ## Installation
 
-### Mac MPS
-
-Do not install `flash-attn` on Mac.
-
 ```bash
 uv venv .venv --python 3.13
 source .venv/bin/activate
-
-uv pip install torch torchvision torchaudio
-uv pip install "transformers>=5.0" datasets accelerate evaluate tqdm numpy tensorboard
-uv pip install git+https://github.com/mikemayuare/apetokenizer.git
+uv sync
 ```
 
-Check that MPS is available:
+## Commands
+
+### 1) Train/update tokenizer (separate stage)
 
 ```bash
-python - <<'PY'
-import torch
-print("MPS available:", torch.backends.mps.is_available())
-print("MPS built:", torch.backends.mps.is_built())
-PY
+uv run python -m modernmolbert.train_ape_tokenizer \
+  --output_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --dataset_name mikemayuare/PubChem10M_SMILES_SELFIES \
+  --tokenizer_train_size 2000000 \
+  --max_vocab_size 5000 \
+  --min_freq_for_merge 2000
 ```
 
-### CUDA
+### 2) Validate tokenizer (mandatory gate)
 
 ```bash
-uv venv .venv --python 3.13
-source .venv/bin/activate
-
-uv pip install "torch>=2.2" torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-uv pip install "transformers>=5.0" datasets accelerate evaluate tqdm numpy tensorboard
-uv pip install git+https://github.com/mikemayuare/apetokenizer.git
-
-# Optional on supported NVIDIA GPUs
-uv pip install flash-attn --no-build-isolation
+uv run python -m modernmolbert.validate_tokenizer \
+  --representation SELFIES \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json \
+  --n 1000
 ```
 
-## Quick Start
+Example expected output:
 
-### Mac MPS debug run
+```text
+representation: SELFIES
+vocab_size: ...
+unk_rate: ...
+mean_len: ...
+p95_len: ...
+truncation_rate@256: ...
+special_ids: ...
+```
 
-This is only a smoke test.
+### 3) Debug training run
 
 ```bash
-python train_selfies_ape_modernbert.py \
-  --output_dir ./runs/mps_debug_selfies_ape_modernbert \
-  --device_backend mps \
+uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --debug \
-  --representation SELFIES \
-  --tokenizer_train_size 10000 \
-  --eval_size 1000 \
-  --hidden_size 128 \
-  --num_hidden_layers 4 \
-  --num_attention_heads 4 \
-  --intermediate_size 512 \
-  --max_seq_length 256 \
-  --mlm_probability 0.30 \
-  --per_device_train_batch_size 8 \
-  --gradient_accumulation_steps 8 \
-  --learning_rate 1e-4
+  --output_dir runs/debug_selfies \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
 
-### Longer Mac MPS smoke test
+### 4) Larger training run
 
 ```bash
-python train_selfies_ape_modernbert.py \
-  --output_dir ./runs/mps_selfies_ape_modernbert_tiny \
-  --device_backend mps \
-  --representation SELFIES \
-  --tokenizer_train_size 50000 \
-  --eval_size 2000 \
-  --max_steps 5000 \
-  --hidden_size 128 \
-  --num_hidden_layers 4 \
-  --num_attention_heads 4 \
-  --intermediate_size 512 \
-  --max_seq_length 256 \
-  --mlm_probability 0.30 \
-  --per_device_train_batch_size 8 \
-  --gradient_accumulation_steps 8 \
-  --logging_steps 50 \
-  --eval_steps 500 \
-  --save_steps 1000 \
-  --learning_rate 1e-4
-```
-
-### CUDA 15M-ish SELFIES model
-
-```bash
-accelerate launch train_selfies_ape_modernbert.py \
-  --output_dir ./runs/cuda_selfies_ape_modernbert_15m \
-  --device_backend cuda \
-  --representation SELFIES \
-  --tokenizer_train_size 2000000 \
-  --eval_size 100000 \
+uv run python -m modernmolbert.train_selfies_ape_modernbert \
+  --output_dir runs/selfies_main \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json \
   --max_steps 150000 \
-  --hidden_size 256 \
-  --num_hidden_layers 8 \
-  --num_attention_heads 8 \
-  --intermediate_size 1024 \
-  --max_seq_length 512 \
-  --mlm_probability 0.30 \
   --per_device_train_batch_size 128 \
   --gradient_accumulation_steps 2 \
-  --learning_rate 1e-4 \
-  --bf16
+  --report_to tensorboard
 ```
 
-### Matched CUDA SMILES control
+## SMILES to SELFIES inference conversion
 
-```bash
-accelerate launch train_selfies_ape_modernbert.py \
-  --output_dir ./runs/cuda_smiles_ape_modernbert_15m \
-  --device_backend cuda \
-  --representation SMILES \
-  --tokenizer_train_size 2000000 \
-  --eval_size 100000 \
-  --max_steps 150000 \
-  --hidden_size 256 \
-  --num_hidden_layers 8 \
-  --num_attention_heads 8 \
-  --intermediate_size 1024 \
-  --max_seq_length 512 \
-  --mlm_probability 0.30 \
-  --per_device_train_batch_size 128 \
-  --gradient_accumulation_steps 2 \
-  --learning_rate 1e-4 \
-  --bf16
-```
-
-## Input Representation
-
-The script supports two representations:
-
-- `SELFIES`
-- `SMILES`
-
-If you train with:
-
-```bash
---representation SELFIES
-```
-
-then the model expects SELFIES strings at inference time. It will not directly accept SMILES unless you convert them first.
-
-Example:
+Checkpoints produced here expect SELFIES input. Convert SMILES before tokenization.
 
 ```python
 import selfies as sf
 
-smiles = "CC(=O)Oc1ccccc1C(=O)O"
-selfies_string = sf.encoder(smiles)
+
+def smiles_to_selfies(smiles: str) -> str:
+    # Keep conversion behavior explicit so invalid inputs can be handled upstream.
+    return sf.encoder(smiles)
 ```
 
-If you train with:
+Guidance:
+- Canonicalize SMILES in your serving pipeline if deterministic behavior matters.
+- Preserve stereochemistry upstream; conversion should operate on stereochemically complete strings.
+- Handle invalid SMILES explicitly (exception/log/drop) before tokenizer use.
 
-```bash
---representation SMILES
-```
+## Important options
 
-then the model expects SMILES strings.
-
-## Option Reference
-
-### Paths
-
-| Option | Default | Meaning |
+| Option | Default | Purpose |
 |---|---:|---|
-| `--output_dir` | required | Directory for checkpoints, final model, tokenizer vocabulary, and metadata. |
-| `--tokenizer_vocab_path` | `None` | Existing APE vocabulary JSON. If omitted, uses `output_dir/ape_<representation>_vocab.json`. |
+| `--tokenizer_vocab_path` | `tokenizer/selfies_ape_tokenizer.json` | Canonical SELFIES tokenizer vocabulary |
+| `--tokenizer_metadata_path` | `<vocab>.metadata.json` | Metadata with representation/hash checks |
+| `--unk_rate_threshold` | `0.001` | Fail if unknown-token rate is too high |
+| `--max_eval_batches` | `20` | Cap evaluation size for memory safety |
+| `--report_to` | `none` | Logging backend (`none` or `tensorboard`) |
+| `--val_split_mod` | `100` | Deterministic non-overlapping split modulus |
+| `--val_split_bucket` | `0` | Validation bucket for deterministic split |
 
-### Dataset
-
-| Option | Default | Meaning |
-|---|---:|---|
-| `--dataset_name` | `mikemayuare/PubChem10M_SMILES_SELFIES` | Hugging Face dataset name. |
-| `--representation` | `SELFIES` | Which dataset column to train on: `SELFIES` or `SMILES`. |
-| `--tokenizer_train_size` | `2000000` | Number of sequences used to train the APE tokenizer. |
-| `--eval_size` | `100000` | Number of sequences used for finite validation. |
-| `--shuffle_buffer_size` | `100000` | Streaming shuffle buffer. Larger improves shuffle quality but uses more memory. |
-| `--seed` | `13` | Random seed. |
-
-### Tokenizer
-
-| Option | Default | Meaning |
-|---|---:|---|
-| `--max_vocab_size` | `5000` | Maximum APE vocabulary size. |
-| `--min_freq_for_merge` | `2000` | Minimum frequency threshold for APE pair merges. |
-| `--train_tokenizer` | on | Train a new APE tokenizer. |
-| `--no_train_tokenizer` | off | Load an existing APE tokenizer vocabulary instead. |
-
-### Model Architecture
-
-| Option | Default | Meaning |
-|---|---:|---|
-| `--hidden_size` | `256` | Transformer hidden dimension. |
-| `--num_hidden_layers` | `8` | Number of ModernBERT layers. |
-| `--num_attention_heads` | `8` | Number of attention heads. Must divide hidden size. |
-| `--intermediate_size` | `1024` | Feed-forward dimension. |
-| `--max_seq_length` | `512` | Maximum tokenized sequence length. |
-| `--global_attn_every_n_layers` | `3` | Use global attention every N layers. |
-| `--local_attention` | `64` | Local attention window size. |
-
-### MLM
-
-| Option | Default | Meaning |
-|---|---:|---|
-| `--mlm_probability` | `0.30` | Fraction of eligible tokens selected for MLM corruption. |
-
-The collator uses BERT-style corruption:
-
-- 80% of selected tokens become `<mask>`
-- 10% become random tokens
-- 10% remain unchanged
-
-Special tokens and padding are never masked.
-
-### Training
-
-| Option | Default | Meaning |
-|---|---:|---|
-| `--max_steps` | `150000` | Total optimizer steps. Streaming datasets use step-based training. |
-| `--per_device_train_batch_size` | `128` | Per-device batch size. Use much smaller values on MPS. |
-| `--per_device_eval_batch_size` | `128` | Per-device validation batch size. |
-| `--gradient_accumulation_steps` | `2` | Accumulate gradients across this many steps. |
-| `--learning_rate` | `1e-4` | Initial learning rate. |
-| `--weight_decay` | `0.01` | AdamW weight decay. |
-| `--warmup_ratio` | `0.06` | Fraction of training used for warmup. |
-| `--max_grad_norm` | `1.0` | Gradient clipping norm. |
-
-Effective batch size is:
-
-```text
-per_device_train_batch_size × gradient_accumulation_steps × number_of_devices
-```
-
-### Runtime and Checkpointing
-
-| Option | Default | Meaning |
-|---|---:|---|
-| `--logging_steps` | `100` | Log every N steps. |
-| `--eval_steps` | `5000` | Evaluate every N steps. |
-| `--save_steps` | `5000` | Save checkpoint every N steps. |
-| `--save_total_limit` | `3` | Keep only the most recent N checkpoints. |
-| `--device_backend` | `auto` | One of `auto`, `cuda`, `mps`, or `cpu`. |
-| `--bf16` | on | Enable bfloat16. Automatically disabled on MPS/CPU. |
-| `--fp16` | off | Enable float16. Not recommended for MPS. |
-| `--num_workers` | `4` | DataLoader workers. Reduced automatically on MPS/CPU. |
-| `--compute_masked_accuracy` | off | Compute masked-token accuracy during eval. Off by default to avoid large MLM logits in memory. |
-| `--debug` | off | Tiny run for smoke testing. |
-
-## Output Files
+## Output layout
 
 Each run writes:
 
 ```text
 output_dir/
-  ape_<representation>_vocab.json
-  ape_tokenizer_metadata.json
-  README.checkpoint.md
   run_args.json
-  trainer_state.json
-  train_results.json
-  eval_results.json
-  checkpoint-*/
+  ape_tokenizer_metadata.json
+  tokenizer.json
+  tokenizer_metadata.json
+  README.checkpoint.md
   final_model/
     config.json
     model.safetensors
+    tokenizer.json
+    tokenizer_metadata.json
 ```
 
-The tokenizer is not a standard Hugging Face tokenizer. Always keep the APE vocabulary JSON with the model checkpoint.
+## Readiness gate
 
-## Reloading a Trained Checkpoint
+Do not launch long training until all pass:
 
-```python
-from transformers import AutoModelForMaskedLM
-from ape_tokenizer import APETokenizer
-
-model_dir = "./runs/cuda_selfies_ape_modernbert_15m/final_model"
-vocab_path = "./runs/cuda_selfies_ape_modernbert_15m/ape_selfies_vocab.json"
-
-tokenizer = APETokenizer()
-tokenizer.load_vocabulary(vocab_path)
-
-model = AutoModelForMaskedLM.from_pretrained(model_dir)
-model.eval()
-
-seq = "[C][C][O]"
-batch = tokenizer(seq, add_special_tokens=True, return_tensors="pt")
-out = model(**batch)
-print(out.logits.shape)
+```bash
+uv run pytest
+uv run ruff check .
+uv run python -m modernmolbert.validate_tokenizer \
+  --representation SELFIES \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json \
+  --n 1000
+uv run python -m modernmolbert.train_selfies_ape_modernbert \
+  --debug \
+  --output_dir runs/debug_selfies \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
-
-For a SELFIES-trained model, convert SMILES first:
-
-```python
-import selfies as sf
-
-smiles = "CCO"
-seq = sf.encoder(smiles)
-batch = tokenizer(seq, add_special_tokens=True, return_tensors="pt")
-```
-
-## Recommended Experimental Matrix
-
-Start with:
-
-| Model | Representation | Tokenizer | Params | Mask |
-|---|---|---|---:|---:|
-| ModernBERT-SELFIES-APE | SELFIES | APE | small | 0.30 |
-| ModernBERT-SMILES-APE | SMILES | APE | small | 0.30 |
-
-Then run masking-ratio ablations for the best setup:
-
-```text
-0.15, 0.30, 0.40, 0.50
-```
-
-Only scale the best variants.
-
-## Notes on Mac MPS
-
-MPS is suitable for debugging and short smoke tests. It is not recommended for final pretraining.
-
-Use:
-
-- full precision
-- small batch sizes
-- small models
-- short `max_steps`
-- no `flash-attn`
-- no `bf16`
-- no `fp16`
-
-The script disables bf16/fp16 automatically when `--device_backend mps` is used.

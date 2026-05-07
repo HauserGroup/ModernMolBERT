@@ -219,3 +219,7 @@ __marimo__/
 
 # scratch
 scratch/
+runs/
+
+# AI
+.github/prompts/

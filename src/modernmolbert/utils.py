@@ -2,6 +2,11 @@
 Shared utilities for APETokenizer interaction and dataset loading.
 """
 
+import hashlib
+import json
+import shutil
+import statistics
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -18,6 +23,105 @@ SPECIAL_TOKENS: dict[str, str] = {
     "unk_token": "<unk>",
     "mask_token": "<mask>",
 }
+
+SELFIES_REPRESENTATION = "SELFIES"
+SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
+SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
+
+
+def repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def default_selfies_tokenizer_path() -> Path:
+    return repo_root() / "tokenizer" / SELFIES_TOKENIZER_FILENAME
+
+
+def metadata_path_for_vocab(vocab_path: Path) -> Path:
+    return vocab_path.with_suffix(".metadata.json")
+
+
+def file_sha256(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def write_tokenizer_metadata(metadata_path: Path, metadata: dict[str, Any]) -> None:
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    with metadata_path.open("w", encoding="utf-8") as f:
+        json.dump(metadata, f, indent=2, sort_keys=True)
+
+
+def load_tokenizer_metadata(metadata_path: Path) -> dict[str, Any]:
+    with metadata_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"Tokenizer metadata must be a JSON object: {metadata_path}")
+    return data
+
+
+def copy_tokenizer_artifacts(
+    vocab_path: Path,
+    metadata_path: Path,
+    output_dir: Path,
+    final_model_dir: Path,
+) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    final_model_dir.mkdir(parents=True, exist_ok=True)
+
+    # Keep stable artifact names regardless of original file names.
+    shutil.copy2(vocab_path, output_dir / "tokenizer.json")
+    shutil.copy2(metadata_path, output_dir / "tokenizer_metadata.json")
+    shutil.copy2(vocab_path, final_model_dir / "tokenizer.json")
+    shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")
+
+
+def assert_metadata_representation(
+    metadata: dict[str, Any], expected_representation: str
+) -> None:
+    representation = str(metadata.get("representation", "")).upper()
+    if representation != expected_representation:
+        raise ValueError(
+            "Tokenizer metadata representation mismatch: "
+            f"expected {expected_representation}, found {representation or '<missing>'}."
+        )
+
+
+def sample_jsonl_sequences(file_path: Path, representation: str, n: int) -> list[str]:
+    rows: list[str] = []
+    with file_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                continue
+            seq = normalize_sequence(record, representation)
+            if seq is None:
+                continue
+            rows.append(seq)
+            if len(rows) >= n:
+                break
+    return rows
+
+
+def validate_selfies_sample_shape(sequences: list[str]) -> None:
+    if not sequences:
+        raise ValueError("No sequences available for SELFIES validation.")
+
+    bracketed = 0
+    for seq in sequences:
+        # Heuristic SELFIES guard: bracketed tokens should dominate.
+        if "[" in seq and "]" in seq:
+            bracketed += 1
+
+    if bracketed / len(sequences) < 0.95:
+        raise ValueError(
+            "Sampled values do not look like SELFIES strings (insufficient bracketed tokens)."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -154,3 +258,72 @@ def encode_sequence(
         "input_ids": list(map(int, input_ids[:max_seq_length])),
         "attention_mask": list(map(int, attention_mask[:max_seq_length])),
     }
+
+
+def compute_tokenization_stats(
+    tokenizer: APETokenizer,
+    sequences: list[str],
+    max_seq_length: int,
+    special_ids: dict[str, int],
+) -> dict[str, float]:
+    if not sequences:
+        raise ValueError("Cannot compute tokenization stats on an empty sequence list.")
+
+    unk_id = special_ids["unk_token"]
+    special_set = set(special_ids.values())
+
+    lengths: list[int] = []
+    truncations = 0
+    unknown_tokens = 0
+    eligible_tokens = 0
+    empty_sequences = 0
+    mostly_unknown = 0
+
+    for seq in sequences:
+        raw = tokenizer(seq, add_special_tokens=True, return_tensors=None)
+        raw_ids = raw["input_ids"]
+        if isinstance(raw_ids, torch.Tensor):
+            raw_ids = raw_ids.tolist()
+        if raw_ids and isinstance(raw_ids[0], list):
+            raw_ids = raw_ids[0]
+        raw_ids = [int(x) for x in raw_ids]
+
+        if not raw_ids:
+            empty_sequences += 1
+            continue
+
+        if len(raw_ids) > max_seq_length:
+            truncations += 1
+
+        encoded = encode_sequence(tokenizer, seq, max_seq_length)["input_ids"]
+        lengths.append(len(encoded))
+
+        non_special = [tok for tok in encoded if tok not in special_set]
+        if non_special:
+            unk_count = sum(1 for tok in non_special if tok == unk_id)
+            unknown_tokens += unk_count
+            eligible_tokens += len(non_special)
+            if unk_count / len(non_special) > 0.8:
+                mostly_unknown += 1
+
+    if not lengths:
+        raise ValueError("All sampled sequences tokenized to empty outputs.")
+
+    def pct(values: list[int], q: float) -> float:
+        ordered = sorted(values)
+        idx = max(0, min(len(ordered) - 1, int(round((len(ordered) - 1) * q))))
+        return float(ordered[idx])
+
+    stats: dict[str, float] = {
+        "sample_size": float(len(sequences)),
+        "mean_len": float(statistics.fmean(lengths)),
+        "p50_len": pct(lengths, 0.50),
+        "p95_len": pct(lengths, 0.95),
+        "p99_len": pct(lengths, 0.99),
+        "max_len": float(max(lengths)),
+        "truncation_rate": float(truncations / len(sequences)),
+        "unk_rate": float(unknown_tokens / max(1, eligible_tokens)),
+        "empty_sequence_rate": float(empty_sequences / len(sequences)),
+        "mostly_unknown_rate": float(mostly_unknown / len(sequences)),
+    }
+    return stats

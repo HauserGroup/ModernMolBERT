@@ -1,29 +1,14 @@
 #!/usr/bin/env python3
-"""
-Train a ModernBERT masked-language model on PubChem10M SMILES or SELFIES
-using the APE tokenizer.
+"""Train a ModernBERT masked-language model for SELFIES molecular strings.
 
-This script is designed for two stages:
+Model training requires an existing, vetted tokenizer vocabulary and metadata.
+Tokenizer training is intentionally a separate command:
 
-1. Mac MPS smoke tests:
-   - Validate dataset loading, APE tokenization, ModernBERT forward/backward,
-     checkpointing, and reloadability.
-   - Use small model and small batch sizes.
-
-2. CUDA training:
-   - Use the same script with larger settings.
-   - Enable bf16 on supported NVIDIA GPUs.
-
-Dataset:
-    mikemayuare/PubChem10M_SMILES_SELFIES
-
-Important:
-    If --representation SELFIES is used, the trained model expects SELFIES at
-    inference time. Convert SMILES to SELFIES before tokenization, for example
-    with selfies.encoder(smiles).
+    python -m modernmolbert.train_ape_tokenizer
 """
 
 import argparse
+import hashlib
 import json
 import math
 import platform
@@ -34,6 +19,7 @@ from typing import Any
 
 import numpy as np
 import torch
+import transformers
 from datasets import Dataset, IterableDataset
 from torch.nn.utils.rnn import pad_sequence
 from tqdm.auto import tqdm
@@ -47,26 +33,28 @@ from transformers import (
 
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
-    collect_corpus_for_tokenizer,
+    SELFIES_REPRESENTATION,
+    assert_metadata_representation,
+    compute_tokenization_stats,
+    copy_tokenizer_artifacts,
+    default_selfies_tokenizer_path,
     encode_sequence,
+    file_sha256,
     get_streaming_dataset,
+    load_tokenizer_metadata,
+    metadata_path_for_vocab,
     normalize_sequence,
     resolve_special_ids,
     tokenizer_vocab_size,
+    validate_selfies_sample_shape,
 )
-
 
 DATASET_NAME = "mikemayuare/PubChem10M_SMILES_SELFIES"
-
-# Pre-trained tokenizer vocabulary shipped with this repository.
-_DEFAULT_TOKENIZER_VOCAB = (
-    Path(__file__).resolve().parent.parent.parent / "tokenizer" / "tokenizer.json"
-)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train ModernBERT MLM on PubChem10M SMILES/SELFIES with APE tokenization."
+        description="Train SELFIES ModernBERT MLM with a vetted APE tokenizer.",
     )
 
     # Paths
@@ -74,27 +62,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tokenizer_vocab_path",
         type=str,
-        default=str(_DEFAULT_TOKENIZER_VOCAB),
-        help="APE vocab JSON to load. Defaults to tokenizer/tokenizer.json in the repo root.",
+        default=str(default_selfies_tokenizer_path()),
+        help="SELFIES tokenizer vocabulary JSON.",
+    )
+    parser.add_argument(
+        "--tokenizer_metadata_path",
+        type=str,
+        default=None,
+        help="Tokenizer metadata JSON. Defaults to <vocab>.metadata.json.",
     )
 
     # Dataset
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
-    parser.add_argument(
-        "--representation", type=str, choices=["SELFIES", "SMILES"], default="SELFIES"
-    )
-    parser.add_argument("--tokenizer_train_size", type=int, default=2_000_000)
     parser.add_argument("--eval_size", type=int, default=100_000)
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
 
-    # Tokenizer
-    parser.add_argument("--max_vocab_size", type=int, default=5000)
-    parser.add_argument("--min_freq_for_merge", type=int, default=2000)
-    parser.add_argument("--train_tokenizer", action="store_true", default=False)
-    parser.add_argument(
-        "--no_train_tokenizer", action="store_false", dest="train_tokenizer"
-    )
+    # Deterministic non-overlapping split by molecule identity.
+    parser.add_argument("--val_split_mod", type=int, default=100)
+    parser.add_argument("--val_split_bucket", type=int, default=0)
+
+    # Tokenization gates
+    parser.add_argument("--tokenizer_validation_samples", type=int, default=1000)
+    parser.add_argument("--unk_rate_threshold", type=float, default=0.001)
+    parser.add_argument("--truncation_warn_threshold", type=float, default=0.05)
 
     # Model
     parser.add_argument("--hidden_size", type=int, default=256)
@@ -129,14 +120,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bf16", action="store_true", default=True)
     parser.add_argument("--fp16", action="store_true", default=False)
     parser.add_argument("--num_workers", type=int, default=4)
+    parser.add_argument("--max_eval_batches", type=int, default=20)
+    parser.add_argument(
+        "--report_to",
+        type=str,
+        choices=["none", "tensorboard"],
+        default="none",
+    )
     parser.add_argument(
         "--compute_masked_accuracy",
         action="store_true",
-        help="Compute masked-token accuracy during eval. Off by default to avoid large MLM logits in memory.",
+        help="Compute masked-token accuracy during eval.",
     )
     parser.add_argument("--debug", action="store_true", help="Run a tiny smoke test.")
 
     return parser.parse_args()
+
+
+def sequence_bucket(seq: str, mod: int) -> int:
+    digest = hashlib.sha1(seq.encode("utf-8")).hexdigest()
+    return int(digest, 16) % mod
 
 
 def detect_backend(args: argparse.Namespace) -> str:
@@ -149,6 +152,40 @@ def detect_backend(args: argparse.Namespace) -> str:
     return "cpu"
 
 
+def validate_args(args: argparse.Namespace, backend: str) -> None:
+    if args.hidden_size <= 0 or args.intermediate_size <= 0:
+        raise ValueError("hidden_size and intermediate_size must be positive")
+    if args.num_hidden_layers < 2:
+        raise ValueError("num_hidden_layers must be >= 2")
+    if args.num_attention_heads <= 0:
+        raise ValueError("num_attention_heads must be positive")
+    if args.hidden_size % args.num_attention_heads != 0:
+        raise ValueError("hidden_size must be divisible by num_attention_heads")
+    if args.max_seq_length <= 0:
+        raise ValueError("max_seq_length must be positive")
+    if args.local_attention > args.max_seq_length:
+        raise ValueError("local_attention must be <= max_seq_length")
+
+    if not 0.0 <= args.mlm_probability <= 1.0:
+        raise ValueError("mlm_probability must be between 0 and 1")
+
+    if args.bf16 and args.fp16:
+        raise ValueError("bf16 and fp16 are mutually exclusive")
+
+    if args.per_device_train_batch_size <= 0 or args.per_device_eval_batch_size <= 0:
+        raise ValueError("batch sizes must be positive")
+
+    if args.val_split_mod < 2:
+        raise ValueError("val_split_mod must be >= 2")
+    if not 0 <= args.val_split_bucket < args.val_split_mod:
+        raise ValueError("val_split_bucket must satisfy 0 <= bucket < val_split_mod")
+
+    if backend == "cuda" and not torch.cuda.is_available():
+        raise ValueError("device_backend=cuda requested but CUDA is not available")
+    if backend == "mps" and not torch.backends.mps.is_available():
+        raise ValueError("device_backend=mps requested but MPS is not available")
+
+
 def adjust_args_for_backend(
     args: argparse.Namespace, backend: str
 ) -> argparse.Namespace:
@@ -159,47 +196,129 @@ def adjust_args_for_backend(
         args.num_workers = min(args.num_workers, 2)
 
     if args.debug:
-        args.tokenizer_train_size = min(args.tokenizer_train_size, 10_000)
-        args.eval_size = min(args.eval_size, 1_000)
+        args.eval_size = min(args.eval_size, 500)
         args.max_steps = min(args.max_steps, 200)
         args.logging_steps = min(args.logging_steps, 10)
         args.eval_steps = min(args.eval_steps, 50)
         args.save_steps = min(args.save_steps, 100)
+        args.tokenizer_validation_samples = min(args.tokenizer_validation_samples, 200)
 
     return args
 
 
-def train_or_load_ape_tokenizer(args: argparse.Namespace) -> APETokenizer:
-    output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    vocab_path = (
-        Path(args.tokenizer_vocab_path)
-        if args.tokenizer_vocab_path is not None
-        else output_dir / f"ape_{args.representation.lower()}_vocab.json"
+def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[str]:
+    ds = get_streaming_dataset(
+        args.dataset_name,
+        seed=args.seed,
+        buffer_size=args.shuffle_buffer_size,
     )
 
+    rows: list[str] = []
+    for row in ds:
+        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        if seq is None:
+            continue
+        if sequence_bucket(seq, args.val_split_mod) == args.val_split_bucket:
+            continue
+        rows.append(seq)
+        if len(rows) >= n:
+            break
+
+    return rows
+
+
+def load_and_validate_tokenizer(
+    args: argparse.Namespace,
+) -> tuple[
+    APETokenizer, dict[str, Any], Path, Path, int, dict[str, int], dict[str, float]
+]:
+    vocab_path = Path(args.tokenizer_vocab_path)
+    if not vocab_path.exists():
+        raise FileNotFoundError(
+            f"Tokenizer vocabulary not found: {vocab_path}\n"
+            "Train a tokenizer first with:\n"
+            "  python -m modernmolbert.train_ape_tokenizer"
+        )
+
+    metadata_path = (
+        Path(args.tokenizer_metadata_path)
+        if args.tokenizer_metadata_path is not None
+        else metadata_path_for_vocab(vocab_path)
+    )
+    if not metadata_path.exists():
+        raise FileNotFoundError(
+            f"Tokenizer metadata not found: {metadata_path}\n"
+            "Training requires tokenizer metadata with representation and hash details."
+        )
+
+    metadata = load_tokenizer_metadata(metadata_path)
+    assert_metadata_representation(
+        metadata, expected_representation=SELFIES_REPRESENTATION
+    )
+
+    recorded_sha = str(metadata.get("tokenizer_sha256", ""))
+    actual_sha = file_sha256(vocab_path)
+    if recorded_sha and recorded_sha != actual_sha:
+        raise ValueError(
+            "Tokenizer hash mismatch between file and metadata. "
+            f"metadata={recorded_sha}, file={actual_sha}"
+        )
+
     tokenizer = APETokenizer()
+    tokenizer.load_vocabulary(str(vocab_path))
 
-    if args.train_tokenizer or not vocab_path.exists():
-        corpus = collect_corpus_for_tokenizer(
-            dataset_name=args.dataset_name,
-            representation=args.representation,
-            n=args.tokenizer_train_size,
-            seed=args.seed,
-            buffer_size=args.shuffle_buffer_size,
-        )
-        tokenizer.train(
-            corpus,
-            max_vocab_size=args.max_vocab_size,
-            min_freq_for_merge=args.min_freq_for_merge,
-            save_checkpoint=False,
-        )
-        tokenizer.save_vocabulary(str(vocab_path))
-    else:
-        tokenizer.load_vocabulary(str(vocab_path))
+    vocab_size = tokenizer_vocab_size(tokenizer)
+    if vocab_size < 100:
+        raise ValueError(f"Suspiciously small tokenizer vocabulary: {vocab_size}")
 
-    return tokenizer
+    special_ids = resolve_special_ids(tokenizer)
+
+    validation_sequences = _sample_train_partition_sequences(
+        args, n=args.tokenizer_validation_samples
+    )
+    validate_selfies_sample_shape(validation_sequences)
+
+    ethanol_encoded = encode_sequence(tokenizer, "[C][C][O]", args.max_seq_length)[
+        "input_ids"
+    ]
+    non_special_ethanol = [
+        x for x in ethanol_encoded if x not in set(special_ids.values())
+    ]
+    if not non_special_ethanol:
+        raise ValueError("Tokenizer produced no usable SELFIES tokens for [C][C][O]")
+    unk_ethanol = sum(1 for x in non_special_ethanol if x == special_ids["unk_token"])
+    if unk_ethanol / len(non_special_ethanol) > 0.05:
+        raise ValueError("Tokenizer encodes [C][C][O] mostly as <unk>")
+
+    stats = compute_tokenization_stats(
+        tokenizer=tokenizer,
+        sequences=validation_sequences,
+        max_seq_length=args.max_seq_length,
+        special_ids=special_ids,
+    )
+
+    if stats["unk_rate"] > args.unk_rate_threshold:
+        raise ValueError(
+            f"Unknown-token rate too high: {stats['unk_rate']:.6f} "
+            f"(threshold {args.unk_rate_threshold:.6f})"
+        )
+    if stats["empty_sequence_rate"] > 0:
+        raise ValueError("Tokenizer produced empty tokenized outputs.")
+    if stats["mostly_unknown_rate"] > 0.01:
+        raise ValueError(
+            "Too many sequences are mostly unknown tokens: "
+            f"{stats['mostly_unknown_rate']:.4f}"
+        )
+
+    return (
+        tokenizer,
+        metadata,
+        vocab_path,
+        metadata_path,
+        vocab_size,
+        special_ids,
+        stats,
+    )
 
 
 def make_train_iterable_dataset(
@@ -210,10 +329,17 @@ def make_train_iterable_dataset(
         seed=args.seed + 100,
         buffer_size=args.shuffle_buffer_size,
     )
-    ds = ds.filter(lambda row: normalize_sequence(row, args.representation) is not None)
+
+    def keep_train(row: dict[str, Any]) -> bool:
+        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        if seq is None:
+            return False
+        return sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket
+
+    ds = ds.filter(keep_train)
 
     def preprocess(row: dict[str, Any]) -> dict[str, Any]:
-        seq = normalize_sequence(row, args.representation)
+        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
         assert seq is not None
         return encode_sequence(tokenizer, seq, args.max_seq_length)
 
@@ -221,6 +347,13 @@ def make_train_iterable_dataset(
 
 
 def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Dataset:
+    n_eval = args.eval_size
+    if args.max_eval_batches > 0:
+        n_eval = min(
+            n_eval,
+            args.max_eval_batches * args.per_device_eval_batch_size,
+        )
+
     ds = get_streaming_dataset(
         args.dataset_name,
         seed=args.seed + 200,
@@ -228,21 +361,27 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Data
     )
 
     rows: list[dict[str, list[int]]] = []
-    pbar = tqdm(total=args.eval_size, desc="Building finite validation set")
+    pbar = tqdm(total=n_eval, desc="Building finite validation set")
 
     for row in ds:
-        seq = normalize_sequence(row, args.representation)
+        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
         if seq is None:
             continue
+        if sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket:
+            continue
+
         rows.append(encode_sequence(tokenizer, seq, args.max_seq_length))
         pbar.update(1)
-        if len(rows) >= args.eval_size:
+        if len(rows) >= n_eval:
             break
 
     pbar.close()
 
     if not rows:
-        raise RuntimeError("Validation set is empty. Check dataset column names.")
+        raise RuntimeError(
+            "Validation set is empty after deterministic split. "
+            "Try a larger eval_size or adjust val_split_mod/val_split_bucket."
+        )
 
     return Dataset.from_list(rows)
 
@@ -320,9 +459,20 @@ def build_modernbert_config(
         bos_token_id=special_ids["bos_token"],
         eos_token_id=special_ids["eos_token"],
     )
-    # Not in typed stubs for all Transformers versions but valid config attributes.
-    setattr(config, "global_attn_every_n_layers", args.global_attn_every_n_layers)
-    setattr(config, "local_attention", args.local_attention)
+
+    available = set(config.to_dict().keys())
+    required = {
+        "global_attn_every_n_layers": args.global_attn_every_n_layers,
+        "local_attention": args.local_attention,
+    }
+    for field, value in required.items():
+        if field not in available and not hasattr(config, field):
+            raise ValueError(
+                "Installed transformers does not support required ModernBertConfig "
+                f"field '{field}'. transformers={transformers.__version__}"
+            )
+        setattr(config, field, value)
+
     return config
 
 
@@ -343,24 +493,29 @@ def write_run_metadata(
     vocab_size: int,
     special_ids: dict[str, int],
     n_params: int,
+    tokenizer_stats: dict[str, float],
+    tokenizer_vocab_path: Path,
+    tokenizer_metadata_path: Path,
 ) -> None:
     output_dir = Path(args.output_dir)
 
     metadata = {
         "dataset_name": args.dataset_name,
-        "representation": args.representation,
+        "representation": SELFIES_REPRESENTATION,
         "expected_input": (
-            "SELFIES strings. Convert SMILES with selfies.encoder() before tokenization."
-            if args.representation == "SELFIES"
-            else "SMILES strings."
+            "SELFIES strings only. Convert SMILES before inference using a helper such "
+            "as smiles_to_selfies()."
         ),
-        "ape_tokenizer_vocab": f"ape_{args.representation.lower()}_vocab.json",
+        "tokenizer_vocab_path": str(tokenizer_vocab_path),
+        "tokenizer_metadata_path": str(tokenizer_metadata_path),
         "backend": backend,
         "platform": platform.platform(),
         "torch_version": torch.__version__,
+        "transformers_version": transformers.__version__,
         "vocab_size": vocab_size,
         "special_ids": special_ids,
         "num_parameters": n_params,
+        "tokenizer_stats": tokenizer_stats,
         "args": vars(args),
     }
 
@@ -369,21 +524,22 @@ def write_run_metadata(
 
     readme = f"""# APE ModernBERT Molecular MLM Checkpoint
 
-This checkpoint was trained from scratch with ModernBERT for masked language modeling.
+This checkpoint was trained from scratch with ModernBERT for SELFIES masked language modeling.
 
 ## Representation
 
-`{args.representation}`
+`{SELFIES_REPRESENTATION}`
 
-{metadata["expected_input"]}
+This checkpoint expects SELFIES strings. Convert SMILES before tokenization.
 
 ## Tokenizer
 
-This model uses `APETokenizer`, not a standard Hugging Face tokenizer.
+This model uses `APETokenizer` from `modernmolbert.ape_tokenizer`.
 
-Keep this file paired with the checkpoint:
+Keep these files with the checkpoint:
 
-`ape_{args.representation.lower()}_vocab.json`
+- `tokenizer.json`
+- `tokenizer_metadata.json`
 
 ## Dataset
 
@@ -400,12 +556,12 @@ Keep this file paired with the checkpoint:
 
 ```python
 from transformers import AutoModelForMaskedLM
-from ape_tokenizer import APETokenizer
+from modernmolbert.ape_tokenizer import APETokenizer
 
 model = AutoModelForMaskedLM.from_pretrained("final_model")
 
 tokenizer = APETokenizer()
-tokenizer.load_vocabulary("ape_{args.representation.lower()}_vocab.json")
+tokenizer.load_vocabulary("final_model/tokenizer.json")
 ```
 """
     with (output_dir / "README.checkpoint.md").open("w", encoding="utf-8") as f:
@@ -415,6 +571,7 @@ tokenizer.load_vocabulary("ape_{args.representation.lower()}_vocab.json")
 def main() -> None:
     args = parse_args()
     backend = detect_backend(args)
+    validate_args(args, backend)
     args = adjust_args_for_backend(args, backend)
 
     output_dir = Path(args.output_dir)
@@ -431,15 +588,28 @@ def main() -> None:
     print(f"Backend: {backend}")
     print(f"bf16={args.bf16}, fp16={args.fp16}")
 
-    print("Training/loading APE tokenizer...")
-    tokenizer = train_or_load_ape_tokenizer(args)
+    print("Loading and validating tokenizer...")
+    (
+        tokenizer,
+        _tokenizer_metadata,
+        tokenizer_vocab_path,
+        tokenizer_metadata_path,
+        vocab_size,
+        special_ids,
+        tokenizer_stats,
+    ) = load_and_validate_tokenizer(args)
 
-    vocab_size = tokenizer_vocab_size(tokenizer)
-    assert vocab_size > 100, f"Suspiciously small vocab size: {vocab_size}"
-
-    special_ids = resolve_special_ids(tokenizer)
     print(f"Vocabulary size: {vocab_size}")
     print(f"Special token IDs: {special_ids}")
+    print(
+        f"Tokenizer stats: unk_rate={tokenizer_stats['unk_rate']:.6f}, "
+        f"truncation_rate={tokenizer_stats['truncation_rate']:.6f}"
+    )
+    if tokenizer_stats["truncation_rate"] > args.truncation_warn_threshold:
+        print(
+            "Warning: truncation rate is high "
+            f"({tokenizer_stats['truncation_rate']:.4f} > {args.truncation_warn_threshold:.4f})"
+        )
 
     print("Building datasets...")
     train_dataset = make_train_iterable_dataset(args, tokenizer)
@@ -459,6 +629,8 @@ def main() -> None:
         mlm_probability=args.mlm_probability,
         special_token_ids=list(special_ids.values()),
     )
+
+    report_to = [] if args.report_to == "none" else [args.report_to]
 
     training_args = TrainingArguments(
         output_dir=str(output_dir),
@@ -482,7 +654,7 @@ def main() -> None:
         dataloader_num_workers=args.num_workers,
         remove_unused_columns=False,
         prediction_loss_only=not args.compute_masked_accuracy,
-        report_to=["tensorboard"],
+        report_to=report_to,
         load_best_model_at_end=False,
     )
     setattr(training_args, "overwrite_output_dir", True)
@@ -504,6 +676,13 @@ def main() -> None:
     trainer.save_model(str(final_dir))
     model.config.save_pretrained(str(final_dir))
 
+    copy_tokenizer_artifacts(
+        vocab_path=tokenizer_vocab_path,
+        metadata_path=tokenizer_metadata_path,
+        output_dir=output_dir,
+        final_model_dir=final_dir,
+    )
+
     metrics = train_result.metrics
     metrics["train_samples_streaming"] = 1.0
     metrics["num_parameters"] = float(n_params)
@@ -511,7 +690,16 @@ def main() -> None:
     trainer.save_metrics("train", metrics)
     trainer.save_state()
 
-    write_run_metadata(args, backend, vocab_size, special_ids, n_params)
+    write_run_metadata(
+        args=args,
+        backend=backend,
+        vocab_size=vocab_size,
+        special_ids=special_ids,
+        n_params=n_params,
+        tokenizer_stats=tokenizer_stats,
+        tokenizer_vocab_path=tokenizer_vocab_path,
+        tokenizer_metadata_path=tokenizer_metadata_path,
+    )
 
     print("Running final evaluation...")
     eval_metrics = trainer.evaluate()
@@ -526,7 +714,7 @@ def main() -> None:
 
     print("Done.")
     print(f"Final model: {final_dir}")
-    print(f"APE vocab: {output_dir / f'ape_{args.representation.lower()}_vocab.json'}")
+    print(f"Tokenizer (copied): {final_dir / 'tokenizer.json'}")
 
 
 if __name__ == "__main__":

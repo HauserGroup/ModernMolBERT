@@ -702,10 +702,11 @@ wheels = [
 [[package]]
 name = "modernmolbert"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "accelerate" },
     { name = "datasets" },
+    { name = "huggingface-hub" },
     { name = "numpy" },
     { name = "python-dotenv" },
     { name = "tensorboard" },
@@ -725,6 +726,7 @@ dev = [
 requires-dist = [
     { name = "accelerate", specifier = ">=1.13.0" },
     { name = "datasets", specifier = ">=4.8.5" },
+    { name = "huggingface-hub", specifier = ">=1.14.0" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "tensorboard", specifier = ">=2.19.0" },

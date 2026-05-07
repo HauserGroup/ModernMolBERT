@@ -9,6 +9,7 @@ Tokenizer training is intentionally a separate command:
 
 import argparse
 import hashlib
+import time
 import json
 import math
 import platform
@@ -16,8 +17,10 @@ import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import os
 
 from dotenv import load_dotenv
+from huggingface_hub import login
 
 import numpy as np
 import torch
@@ -27,7 +30,7 @@ from torch.nn.utils.rnn import pad_sequence
 from tqdm.auto import tqdm
 from transformers import (
     AutoModelForMaskedLM,
-    ModernBertConfig,
+    AutoConfig,
     Trainer,
     TrainingArguments,
     set_seed,
@@ -90,13 +93,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--truncation_warn_threshold", type=float, default=0.05)
 
     # Model
-    parser.add_argument("--hidden_size", type=int, default=256)
-    parser.add_argument("--num_hidden_layers", type=int, default=8)
-    parser.add_argument("--num_attention_heads", type=int, default=8)
-    parser.add_argument("--intermediate_size", type=int, default=1024)
-    parser.add_argument("--max_seq_length", type=int, default=512)
-    parser.add_argument("--global_attn_every_n_layers", type=int, default=3)
-    parser.add_argument("--local_attention", type=int, default=64)
+    parser.add_argument(
+        "--model_size",
+        choices=["base", "large"],
+        default="base",
+        help="Use the official ModernBERT-base or ModernBERT-large architecture config.",
+    )
+    parser.add_argument(
+        "--max_seq_length",
+        type=int,
+        default=None,
+        help="Override max sequence length (default: use official model context length).",
+    )
 
     # MLM
     parser.add_argument("--mlm_probability", type=float, default=0.30)
@@ -108,7 +116,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0.01)
-    parser.add_argument("--warmup_ratio", type=float, default=0.06)
+    parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_grad_norm", type=float, default=1.0)
 
     # Runtime
@@ -139,6 +147,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def log_step(message: str) -> None:
+
+    print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
+
+
 def sequence_bucket(seq: str, mod: int) -> int:
     digest = hashlib.sha1(seq.encode("utf-8")).hexdigest()
     return int(digest, 16) % mod
@@ -155,33 +168,18 @@ def detect_backend(args: argparse.Namespace) -> str:
 
 
 def validate_args(args: argparse.Namespace, backend: str) -> None:
-    if args.hidden_size <= 0 or args.intermediate_size <= 0:
-        raise ValueError("hidden_size and intermediate_size must be positive")
-    if args.num_hidden_layers < 2:
-        raise ValueError("num_hidden_layers must be >= 2")
-    if args.num_attention_heads <= 0:
-        raise ValueError("num_attention_heads must be positive")
-    if args.hidden_size % args.num_attention_heads != 0:
-        raise ValueError("hidden_size must be divisible by num_attention_heads")
-    if args.max_seq_length <= 0:
+    if args.max_seq_length is not None and args.max_seq_length <= 0:
         raise ValueError("max_seq_length must be positive")
-    if args.local_attention > args.max_seq_length:
-        raise ValueError("local_attention must be <= max_seq_length")
-
     if not 0.0 <= args.mlm_probability <= 1.0:
         raise ValueError("mlm_probability must be between 0 and 1")
-
     if args.bf16 and args.fp16:
         raise ValueError("bf16 and fp16 are mutually exclusive")
-
     if args.per_device_train_batch_size <= 0 or args.per_device_eval_batch_size <= 0:
         raise ValueError("batch sizes must be positive")
-
     if args.val_split_mod < 2:
         raise ValueError("val_split_mod must be >= 2")
     if not 0 <= args.val_split_bucket < args.val_split_mod:
         raise ValueError("val_split_bucket must satisfy 0 <= bucket < val_split_mod")
-
     if backend == "cuda" and not torch.cuda.is_available():
         raise ValueError("device_backend=cuda requested but CUDA is not available")
     if backend == "mps" and not torch.backends.mps.is_available():
@@ -195,7 +193,7 @@ def adjust_args_for_backend(
     if backend in {"mps", "cpu"}:
         args.bf16 = False
         args.fp16 = False
-        args.num_workers = min(args.num_workers, 2)
+        args.num_workers = 0
 
     if args.debug:
         args.eval_size = min(args.eval_size, 500)
@@ -445,36 +443,26 @@ class MolecularMLMCollator:
         }
 
 
+MODERNBERT_CONFIGS = {
+    "base": "answerdotai/ModernBERT-base",
+    "large": "answerdotai/ModernBERT-large",
+}
+
+
 def build_modernbert_config(
     args: argparse.Namespace,
     vocab_size: int,
     special_ids: dict[str, int],
-) -> ModernBertConfig:
-    config = ModernBertConfig(
-        vocab_size=vocab_size,
-        hidden_size=args.hidden_size,
-        num_hidden_layers=args.num_hidden_layers,
-        num_attention_heads=args.num_attention_heads,
-        intermediate_size=args.intermediate_size,
-        max_position_embeddings=args.max_seq_length,
-        pad_token_id=special_ids["pad_token"],
-        bos_token_id=special_ids["bos_token"],
-        eos_token_id=special_ids["eos_token"],
-    )
-
-    available = set(config.to_dict().keys())
-    required = {
-        "global_attn_every_n_layers": args.global_attn_every_n_layers,
-        "local_attention": args.local_attention,
-    }
-    for field, value in required.items():
-        if field not in available and not hasattr(config, field):
-            raise ValueError(
-                "Installed transformers does not support required ModernBertConfig "
-                f"field '{field}'. transformers={transformers.__version__}"
-            )
-        setattr(config, field, value)
-
+):
+    config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
+    # Molecular tokenizer-specific fields only.
+    config.vocab_size = vocab_size
+    config.pad_token_id = special_ids["pad_token"]
+    config.bos_token_id = special_ids["bos_token"]
+    config.eos_token_id = special_ids["eos_token"]
+    # Optional context-length override (useful for MPS/debug runs).
+    if args.max_seq_length is not None:
+        config.max_position_embeddings = args.max_seq_length
     return config
 
 
@@ -572,10 +560,18 @@ tokenizer.load_vocabulary("final_model/tokenizer.json")
 
 def main() -> None:
     load_dotenv()
+    hf_token = os.environ.get("HF_TOKEN")
+    if hf_token:
+        login(token=hf_token)
     args = parse_args()
     backend = detect_backend(args)
     validate_args(args, backend)
     args = adjust_args_for_backend(args, backend)
+
+    # Resolve max_seq_length from the official model config when not explicitly set.
+    if args.max_seq_length is None:
+        _tmp = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
+        args.max_seq_length = _tmp.max_position_embeddings
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -618,12 +614,31 @@ def main() -> None:
     train_dataset = make_train_iterable_dataset(args, tokenizer)
     eval_dataset = make_eval_dataset(args, tokenizer)
 
-    print("Building ModernBERT model...")
+    log_step("Building ModernBERT config...")
+
     config = build_modernbert_config(args, vocab_size, special_ids)
+
+    log_step("ModernBERT config built.")
+
+    log_step(
+        f"Config: ModernBERT-{args.model_size}, "
+        f"vocab_size={config.vocab_size}, "
+        f"hidden_size={config.hidden_size}, "
+        f"layers={config.num_hidden_layers}, "
+        f"max_position_embeddings={config.max_position_embeddings}"
+    )
+
+    log_step(
+        "Initializing ModernBERT model weights. This can take a while on MPS/CPU..."
+    )
+
     model = AutoModelForMaskedLM.from_config(config)
 
+    log_step("Model object created. Counting parameters...")
+
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Model parameters: {n_params / 1e6:.2f}M")
+
+    log_step(f"Model parameters: {n_params / 1e6:.2f}M")
 
     collator = MolecularMLMCollator(
         pad_token_id=special_ids["pad_token"],
@@ -635,6 +650,19 @@ def main() -> None:
 
     report_to = [] if args.report_to == "none" else [args.report_to]
 
+    print("Testing one training batch before Trainer...", flush=True)
+
+    one = []
+
+    it = iter(train_dataset)
+
+    for _ in range(args.per_device_train_batch_size):
+        one.append(next(it))
+
+    batch = collator(one)
+
+    print({k: tuple(v.shape) for k, v in batch.items()}, flush=True)
+
     training_args = TrainingArguments(
         output_dir=str(output_dir),
         max_steps=args.max_steps,
@@ -643,7 +671,7 @@ def main() -> None:
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
-        warmup_ratio=args.warmup_ratio,
+        warmup_steps=args.warmup_steps,
         max_grad_norm=args.max_grad_norm,
         lr_scheduler_type="cosine",
         logging_steps=args.logging_steps,

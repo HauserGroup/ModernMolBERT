@@ -35,6 +35,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
+        "--data_dir",
+        type=Path,
+        default="data/pubchem10m_selfies",
+        help="Local Arrow dataset directory (e.g. data/pubchem10m_selfies). "
+        "Auto-detected from data/ if not set.",
+    )
+    parser.add_argument(
         "--representation",
         type=str,
         choices=[SELFIES_REPRESENTATION],
@@ -67,6 +74,7 @@ def main() -> None:
         n=args.tokenizer_train_size,
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
+        data_dir=args.data_dir,
     )
     validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
 

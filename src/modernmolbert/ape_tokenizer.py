@@ -128,12 +128,15 @@ class APETokenizer:
 
         text_padding = " " * 80
 
-        # Preprocessing: Tokenize and count word frequencies upfront
+        # Preprocessing: tokenize each molecule separately to preserve boundaries.
         print("Pretokenizing", end="\r")
-        words = [word for sentence in corpus for word in self.pre_tokenize(sentence)]
+        tokenized_corpus = [
+            tokens for sentence in corpus if (tokens := self.pre_tokenize(sentence))
+        ]
         vocabulary_frequency = defaultdict(int)
-        for word in words:
-            vocabulary_frequency[word] += 1
+        for tokens in tokenized_corpus:
+            for token in tokens:
+                vocabulary_frequency[token] += 1
         print(
             f"Pretokenization complete, found {len(vocabulary_frequency)} tokens",
             end="\r",
@@ -145,11 +148,12 @@ class APETokenizer:
         # Recompute pair counts from scratch every merge iteration.
         # Persisting counts across iterations can bias stale pairs and prevent
         # convergence.
-        def get_most_common_pair(words):
+        def get_most_common_pair(tokenized_corpus):
             pair_counts = defaultdict(int)
-            for i in range(len(words) - 1):
-                pair = (words[i], words[i + 1])
-                pair_counts[pair] += 1
+            for tokens in tokenized_corpus:
+                for i in range(len(tokens) - 1):
+                    pair = (tokens[i], tokens[i + 1])
+                    pair_counts[pair] += 1
 
             self.pair_counts = pair_counts
 
@@ -195,11 +199,11 @@ class APETokenizer:
                 print("\rMax vocabulary achieved", text_padding)
                 break
 
-            if len(words) < 2:
+            if all(len(tokens) < 2 for tokens in tokenized_corpus):
                 print("\rNo more mergeable pairs", text_padding)
                 break
 
-            most_common_pair, freq = get_most_common_pair(words)
+            most_common_pair, freq = get_most_common_pair(tokenized_corpus)
             if freq < self.min_freq_for_merge:
                 print("\rNot enough frequency found", text_padding)
                 break
@@ -217,26 +221,29 @@ class APETokenizer:
             merged_word_freq = vocabulary_frequency.get(merged_word, 0)
             vocabulary_frequency[merged_word] = merged_word_freq + freq
 
-            # Minimize dictionary lookups inside the loop
-            new_words = []
-            skip_next = False
-            for i in range(len(words)):
-                if skip_next:
-                    skip_next = False
-                    continue
+            # Apply merges inside each molecule only.
+            new_tokenized_corpus = []
+            for tokens in tokenized_corpus:
+                new_tokens = []
+                skip_next = False
+                for i in range(len(tokens)):
+                    if skip_next:
+                        skip_next = False
+                        continue
 
-                # Look ahead to minimize lookups
-                if (
-                    i < len(words) - 1
-                    and words[i] == most_common_pair[0]
-                    and words[i + 1] == most_common_pair[1]
-                ):
-                    new_words.append(merged_word)
-                    skip_next = True
-                else:
-                    new_words.append(words[i])
+                    if (
+                        i < len(tokens) - 1
+                        and tokens[i] == most_common_pair[0]
+                        and tokens[i + 1] == most_common_pair[1]
+                    ):
+                        new_tokens.append(merged_word)
+                        skip_next = True
+                    else:
+                        new_tokens.append(tokens[i])
 
-            words = new_words
+                new_tokenized_corpus.append(new_tokens)
+
+            tokenized_corpus = new_tokenized_corpus
 
         # Convert vocabulary_frequency to a regular dictionary for final output
         self.vocabulary_frequency = dict(vocabulary_frequency)
@@ -353,54 +360,50 @@ class APETokenizer:
 
     def encode(self, text, padding=False, max_length=None, add_special_tokens=False):
         """
-        Encodes a given text into a sequence of vocabulary indices.
+        Encode SELFIES text into vocabulary IDs.
 
-        :param text: String, the text to encode.
-        :param add_special_tokens: Boolean, whether to add bos and eos tokens.
-        :param max_length: Int, the maximum length of the sequence with padding.
-        :param padding: Boolean or String, False for no padding, True for default padding, or "max_length" for max_length padding.
-        :return: List of integers, the encoded text.
+        This operates on SELFIES pre-tokens, not raw characters. For example:
+            "[C][C][O]" -> ["[C]", "[C]", "[O]"]
+
+        Greedy APE matching is then done over spans of SELFIES tokens, so merged
+        vocabulary entries like "[C][C]" or "[C][C][O]" can still be used.
         """
-        # Initialize the list of encoded tokens
         encoded_tokens = []
 
-        # Add the Beginning of String token
         if add_special_tokens:
             encoded_tokens.append(self.vocabulary[self.bos_token])
 
-        # Scan and tokenize the text based on the vocabulary
-        i = 0
-        while i < len(text):
-            match = None
-            # Check for the longest sequence in the vocabulary that matches the text
-            for j in range(len(text), i, -1):
-                possible_match = text[i:j]
-                if possible_match in self.vocabulary:
-                    match = possible_match
-                    break
-            if match:
-                # Add the token's index to the encoded tokens
-                encoded_tokens.append(self.vocabulary[match])
-                i += len(match)  # Move past the matched text
-            else:
-                # If no match is found, use the unknown token and move one character forward
-                encoded_tokens.append(self.vocabulary[self.unk_token])
-                i += 1
+        pieces = self.pre_tokenize(text)
+
+        if not pieces:
+            encoded_tokens.append(self.vocabulary[self.unk_token])
+        else:
+            i = 0
+            while i < len(pieces):
+                # Longest-match over SELFIES-token spans, not raw string characters.
+                for j in range(len(pieces), i, -1):
+                    possible_match = "".join(pieces[i:j])
+                    if possible_match in self.vocabulary:
+                        encoded_tokens.append(self.vocabulary[possible_match])
+                        i = j
+                        break
+
+                else:
+                    encoded_tokens.append(self.vocabulary[self.unk_token])
+                    i += 1
 
         if add_special_tokens:
             encoded_tokens.append(self.vocabulary[self.eos_token])
 
-        # Handle padding if required
+        if max_length is not None:
+            encoded_tokens = encoded_tokens[:max_length]
+
         if padding:
-            pad_token = self.vocabulary[
-                self.pad_token
-            ]  # Assuming you have a PAD token in your vocabulary
             if max_length is None:
                 raise ValueError(
                     "max_length must be specified if padding is True or 'max_length'"
                 )
-
-            # Add padding tokens until the sequence is of max_length
+            pad_token = self.vocabulary[self.pad_token]
             while len(encoded_tokens) < max_length:
                 encoded_tokens.append(pad_token)
 

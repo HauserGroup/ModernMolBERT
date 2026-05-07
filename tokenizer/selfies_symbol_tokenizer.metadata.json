@@ -1,0 +1,10 @@
+{
+  "dataset_name": "mikemayuare/PubChem10M_SMILES_SELFIES",
+  "note": "Fast interim tokenizer: bracketed SELFIES symbols only; no APE merges.",
+  "num_selfies_symbols": 127,
+  "representation": "SELFIES",
+  "sample_size": 200000,
+  "tokenizer_sha256": "7a1e2c3efd7cef6b1029f12afccfadc7989234b7adda22a4c37a4b470d5ddf69",
+  "tokenizer_type": "SELFIES_SYMBOL_LEVEL",
+  "vocab_size": 132
+}

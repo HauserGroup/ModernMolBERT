@@ -1,10 +1,13 @@
 from pathlib import Path
 
 from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.validate_tokenizer import _assert_ethanol_not_unknown
 from modernmolbert.utils import (
     SELFIES_REPRESENTATION,
     compute_tokenization_stats,
+    eligible_token_ids,
     file_sha256,
+    ignored_special_token_ids,
     metadata_path_for_vocab,
     resolve_special_ids,
     sample_jsonl_sequences,
@@ -27,6 +30,28 @@ def _tiny_tokenizer() -> APETokenizer:
         "[=O]": 8,
         "[=C]": 9,
         "[Ring1]": 10,
+    }
+    tok.special_tokens = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "<unk>": 3,
+        "<mask>": 4,
+    }
+    tok.update_reverse_vocabulary()
+    return tok
+
+
+def _broken_bracket_tokenizer() -> APETokenizer:
+    tok = APETokenizer()
+    tok.vocabulary = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "<unk>": 3,
+        "<mask>": 4,
+        "C": 5,
+        "O": 6,
     }
     tok.special_tokens = {
         "<s>": 0,
@@ -75,3 +100,76 @@ def test_tokenization_stats_and_metadata_helpers(tmp_path: Path):
     )
 
     assert metadata_path.exists()
+
+
+def test_unk_rate_counts_unknown_tokens_when_unk_is_special():
+    tokenizer = _broken_bracket_tokenizer()
+    special_ids = resolve_special_ids(tokenizer)
+
+    stats = compute_tokenization_stats(
+        tokenizer=tokenizer,
+        sequences=["[C][C][O]"],
+        max_seq_length=64,
+        special_ids=special_ids,
+    )
+
+    # Expect unknowns from bracket characters to be counted.
+    assert stats["unk_rate"] > 0.5
+
+    encoded = tokenizer("[C][C][O]", add_special_tokens=True)["input_ids"]
+    eligible = eligible_token_ids(encoded, special_ids)
+    assert len(eligible) == 3
+    assert sum(1 for x in eligible if x == special_ids["unk_token"]) == 3
+
+
+def test_ethanol_gate_fails_when_selfies_symbols_are_unknown():
+    tokenizer = _broken_bracket_tokenizer()
+    special_ids = resolve_special_ids(tokenizer)
+
+    try:
+        _assert_ethanol_not_unknown(tokenizer, special_ids)
+        assert False, "Expected ethanol gate to fail for broken tokenizer"
+    except ValueError as exc:
+        assert "unk_rate" in str(exc)
+
+
+def test_selfies_encoding_does_not_split_brackets():
+
+    tok = APETokenizer()
+
+    tok.vocabulary = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "<unk>": 3,
+        "<mask>": 4,
+        "[C]": 5,
+        "[O]": 6,
+        "[C][C]": 7,
+    }
+
+    tok.update_reverse_vocabulary()
+
+    ids = tok.encode("[C][C][O]", add_special_tokens=True)
+
+    assert ids == [0, 7, 6, 2]
+
+    assert tok.vocabulary["<unk>"] not in ids
+
+
+def test_ignored_special_token_ids_excludes_unk_token():
+    special_ids = {
+        "bos_token": 0,
+        "pad_token": 1,
+        "eos_token": 2,
+        "unk_token": 3,
+        "mask_token": 4,
+    }
+
+    ignored = ignored_special_token_ids(special_ids)
+
+    assert special_ids["pad_token"] in ignored
+    assert special_ids["bos_token"] in ignored
+    assert special_ids["eos_token"] in ignored
+    assert special_ids["mask_token"] in ignored
+    assert special_ids["unk_token"] not in ignored

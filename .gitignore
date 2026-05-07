@@ -220,6 +220,7 @@ __marimo__/
 # scratch
 scratch/
 runs/
+data/
 
 # AI
 .github/prompts/

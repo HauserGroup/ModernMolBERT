@@ -43,8 +43,10 @@ from modernmolbert.utils import (
     compute_tokenization_stats,
     copy_tokenizer_artifacts,
     default_selfies_tokenizer_path,
+    eligible_token_ids,
     encode_sequence,
     file_sha256,
+    find_local_dataset,
     get_streaming_dataset,
     load_tokenizer_metadata,
     metadata_path_for_vocab,
@@ -79,6 +81,13 @@ def parse_args() -> argparse.Namespace:
 
     # Dataset
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
+    parser.add_argument(
+        "--data_dir",
+        type=Path,
+        default="data/pubchem10m_selfies",
+        help="Local Arrow dataset directory (e.g. data/pubchem10m_selfies). "
+        "Auto-detected from data/ if not set.",
+    )
     parser.add_argument("--eval_size", type=int, default=100_000)
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
@@ -217,6 +226,7 @@ def preview_dataset_and_tokenizer(
         args.dataset_name,
         seed=args.seed + 999,
         buffer_size=min(args.shuffle_buffer_size, 10_000),
+        data_dir=args.data_dir,
     )
 
     examples: list[str] = []
@@ -228,17 +238,20 @@ def preview_dataset_and_tokenizer(
         if len(examples) >= n_examples:
             break
 
+    local = find_local_dataset(args.data_dir)
     log(f"Dataset: {args.dataset_name}")
-    log("Dataset mode: streaming")
-    log("Dataset nominal size: PubChem10M_SMILES_SELFIES has 10M train rows")
+    log(
+        f"Dataset mode: {'local (from disk): ' + str(local) if local else 'streaming (HF Hub)'}"
+    )
     log(f"Representation: {SELFIES_REPRESENTATION}")
 
     for i, seq in enumerate(examples, start=1):
         encoded = encode_sequence(tokenizer, seq, args.max_seq_length)
         input_ids = encoded["input_ids"]
 
-        non_special = [x for x in input_ids if x not in set(special_ids.values())]
-        unk_count = sum(1 for x in non_special if x == special_ids["unk_token"])
+        eligible = eligible_token_ids(input_ids, special_ids)
+        unk_count = sum(1 for x in eligible if x == special_ids["unk_token"])
+        unk_rate = unk_count / max(1, len(eligible))
 
         # Best effort token display. Adjust if your APETokenizer has a different method.
         tokens = None
@@ -260,6 +273,7 @@ def preview_dataset_and_tokenizer(
             print(f"  tokens:      {tokens}", flush=True)
         print(f"  length:      {len(input_ids)}", flush=True)
         print(f"  unk count:   {unk_count}", flush=True)
+        print(f"  unk rate:    {unk_rate:.3f}", flush=True)
 
 
 def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[str]:
@@ -267,6 +281,7 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
         args.dataset_name,
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
+        data_dir=args.data_dir,
     )
 
     rows: list[str] = []
@@ -337,14 +352,22 @@ def load_and_validate_tokenizer(
     ethanol_encoded = encode_sequence(tokenizer, "[C][C][O]", args.max_seq_length)[
         "input_ids"
     ]
-    non_special_ethanol = [
-        x for x in ethanol_encoded if x not in set(special_ids.values())
-    ]
-    if not non_special_ethanol:
+    eligible_ethanol = eligible_token_ids(ethanol_encoded, special_ids)
+    if not eligible_ethanol:
         raise ValueError("Tokenizer produced no usable SELFIES tokens for [C][C][O]")
-    unk_ethanol = sum(1 for x in non_special_ethanol if x == special_ids["unk_token"])
-    if unk_ethanol / len(non_special_ethanol) > 0.05:
-        raise ValueError("Tokenizer encodes [C][C][O] mostly as <unk>")
+    unk_ethanol = sum(1 for x in eligible_ethanol if x == special_ids["unk_token"])
+    unk_ethanol_rate = unk_ethanol / len(eligible_ethanol)
+    if unk_ethanol_rate > 0.05:
+        tokens = (
+            tokenizer.convert_ids_to_tokens(ethanol_encoded)
+            if hasattr(tokenizer, "convert_ids_to_tokens")
+            else None
+        )
+        raise ValueError(
+            "Tokenizer is not SELFIES-compatible: "
+            f"[C][C][O] unk_rate={unk_ethanol_rate:.3f}, "
+            f"ids={ethanol_encoded}, tokens={tokens}"
+        )
 
     stats = compute_tokenization_stats(
         tokenizer=tokenizer,
@@ -384,6 +407,7 @@ def make_train_iterable_dataset(
         args.dataset_name,
         seed=args.seed + 100,
         buffer_size=args.shuffle_buffer_size,
+        data_dir=args.data_dir,
     )
 
     def keep_train(row: dict[str, Any]) -> bool:
@@ -414,6 +438,7 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Data
         args.dataset_name,
         seed=args.seed + 200,
         buffer_size=args.shuffle_buffer_size,
+        data_dir=args.data_dir,
     )
 
     rows: list[dict[str, list[int]]] = []

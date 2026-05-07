@@ -12,6 +12,7 @@ from modernmolbert.utils import (
     assert_metadata_representation,
     compute_tokenization_stats,
     default_selfies_tokenizer_path,
+    eligible_token_ids,
     encode_sequence,
     file_sha256,
     get_streaming_dataset,
@@ -92,14 +93,15 @@ def _assert_ethanol_not_unknown(
 ) -> None:
     ethanol = "[C][C][O]"
     encoded = encode_sequence(tokenizer, ethanol, max_seq_length=256)["input_ids"]
-    non_special = [x for x in encoded if x not in set(special_ids.values())]
-    if not non_special:
+    eligible = eligible_token_ids(encoded, special_ids)
+    if not eligible:
         raise ValueError("Tokenizer produced no usable tokens for ethanol SELFIES.")
     unk_id = special_ids["unk_token"]
-    unk_rate = sum(1 for x in non_special if x == unk_id) / len(non_special)
+    unk_rate = sum(1 for x in eligible if x == unk_id) / len(eligible)
     if unk_rate > 0.05:
         raise ValueError(
-            f"Tokenizer encodes [C][C][O] with high <unk> rate: {unk_rate:.4f}"
+            "Tokenizer is not SELFIES-compatible: "
+            f"[C][C][O] unk_rate={unk_rate:.3f}, ids={encoded}"
         )
 
 

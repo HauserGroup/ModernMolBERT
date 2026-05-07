@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from datasets import IterableDataset, load_dataset
+from datasets import Dataset, IterableDataset, load_dataset, load_from_disk
 from tqdm.auto import tqdm
 
 from modernmolbert.ape_tokenizer import APETokenizer
@@ -31,6 +31,24 @@ SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
+
+
+def find_local_dataset(data_dir: Path | None = None) -> Path | None:
+    """Return the first Arrow dataset directory to use, or None to stream from HF.
+
+    If *data_dir* is given, use it (returns it only if dataset_info.json exists).
+    Otherwise auto-detect: return the first subdirectory of ``data/`` in the
+    repo root that contains a ``dataset_info.json``.
+    """
+    if data_dir is not None:
+        return data_dir if (data_dir / "dataset_info.json").exists() else None
+    search_root = repo_root() / "data"
+    if not search_root.exists():
+        return None
+    for candidate in sorted(search_root.iterdir()):
+        if candidate.is_dir() and (candidate / "dataset_info.json").exists():
+            return candidate
+    return None
 
 
 def default_selfies_tokenizer_path() -> Path:
@@ -138,10 +156,21 @@ def normalize_sequence(example: dict[str, Any], representation: str) -> str | No
 
 
 def get_streaming_dataset(
-    dataset_name: str, seed: int, buffer_size: int
+    dataset_name: str,
+    seed: int,
+    buffer_size: int,
+    data_dir: Path | None = None,
 ) -> IterableDataset:
-    ds = load_dataset(dataset_name, split="train", streaming=True)
-    return ds.shuffle(seed=seed, buffer_size=buffer_size)
+    local = find_local_dataset(data_dir)
+    if local is not None:
+        print(f"[data] Loading dataset from disk: {local}", flush=True)
+        raw = load_from_disk(str(local))
+        if not isinstance(raw, Dataset):
+            raise ValueError(f"Expected a Dataset at {local}, got {type(raw).__name__}")
+        return raw.shuffle(seed=seed).to_iterable_dataset()
+    print(f"[data] Streaming dataset from HF Hub: {dataset_name}", flush=True)
+    hf_ds = load_dataset(dataset_name, split="train", streaming=True)
+    return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
 
 
 def collect_corpus_for_tokenizer(
@@ -150,8 +179,11 @@ def collect_corpus_for_tokenizer(
     n: int,
     seed: int,
     buffer_size: int,
+    data_dir: Path | None = None,
 ) -> list[str]:
-    ds = get_streaming_dataset(dataset_name, seed=seed, buffer_size=buffer_size)
+    ds = get_streaming_dataset(
+        dataset_name, seed=seed, buffer_size=buffer_size, data_dir=data_dir
+    )
     corpus: list[str] = []
 
     pbar = tqdm(total=n, desc=f"Collecting {representation} corpus for APE tokenizer")
@@ -260,6 +292,25 @@ def encode_sequence(
     }
 
 
+def ignored_special_token_ids(special_ids: dict[str, int]) -> set[int]:
+    """Special token IDs ignored for tokenization statistics.
+
+    Important: do NOT ignore unk_token. Unknown tokens must remain in the
+    denominator when computing unk_rate.
+    """
+    return {
+        special_ids["pad_token"],
+        special_ids["bos_token"],
+        special_ids["eos_token"],
+        special_ids["mask_token"],
+    }
+
+
+def eligible_token_ids(input_ids: list[int], special_ids: dict[str, int]) -> list[int]:
+    excluded = ignored_special_token_ids(special_ids)
+    return [tok for tok in input_ids if tok not in excluded]
+
+
 def compute_tokenization_stats(
     tokenizer: APETokenizer,
     sequences: list[str],
@@ -270,7 +321,6 @@ def compute_tokenization_stats(
         raise ValueError("Cannot compute tokenization stats on an empty sequence list.")
 
     unk_id = special_ids["unk_token"]
-    special_set = set(special_ids.values())
 
     lengths: list[int] = []
     truncations = 0
@@ -298,12 +348,12 @@ def compute_tokenization_stats(
         encoded = encode_sequence(tokenizer, seq, max_seq_length)["input_ids"]
         lengths.append(len(encoded))
 
-        non_special = [tok for tok in encoded if tok not in special_set]
-        if non_special:
-            unk_count = sum(1 for tok in non_special if tok == unk_id)
+        eligible = eligible_token_ids(encoded, special_ids)
+        if eligible:
+            unk_count = sum(1 for tok in eligible if tok == unk_id)
             unknown_tokens += unk_count
-            eligible_tokens += len(non_special)
-            if unk_count / len(non_special) > 0.8:
+            eligible_tokens += len(eligible)
+            if unk_count / len(eligible) > 0.8:
                 mostly_unknown += 1
 
     if not lengths:

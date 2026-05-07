@@ -23,6 +23,11 @@ dev = [
     "ruff>=0.15.12",
 ]
 
+[project.optional-dependencies]
+cuda = [
+    "flash-attn",
+]
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

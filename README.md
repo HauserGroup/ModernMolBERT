@@ -125,7 +125,7 @@ uv run tensorboard --logdir runs/mps_base_smoke_512
 This is the first meaningful pilot run. It is still much smaller than a final pretraining run, but large enough to check learning dynamics, throughput, checkpointing, and evaluation behavior.
 
 ```bash
-uv run python -m modernmolbert.train_selfies_ape_modernbert \
+uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert \
   --output_dir runs/cuda_base_pilot_512 \
   --device_backend cuda \
   --model_size base \
@@ -183,6 +183,32 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
   --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
+
+## Accelerate and FlashAttention
+
+For CUDA pilot and long runs, prefer Accelerate:
+
+```bash
+uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert ...
+```
+
+For multi-GPU CUDA training, configure Accelerate first:
+
+```bash
+uv run accelerate config
+
+```
+
+FlashAttention is optional and CUDA-oriented. Do not install it for Mac MPS.
+For CUDA environments, install it only if supported by your PyTorch/CUDA/GPU setup
+ModernBERT can run without FlashAttention, but CUDA training/inference may be slower and use more memory.
+
+```bash
+uv pip install flash-attn --no-build-isolation
+```
+
+
+
 
 ## Model-size selection
 

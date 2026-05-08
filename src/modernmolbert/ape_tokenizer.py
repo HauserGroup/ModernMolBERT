@@ -5,6 +5,7 @@ import json
 import os
 import re
 from typing import Any
+from pathlib import Path
 
 
 class APETokenizer:
@@ -48,6 +49,10 @@ class APETokenizer:
     @property
     def mask_token_id(self):
         return self.special_tokens[self.mask_token]
+
+    @property
+    def unk_token_id(self):
+        return self.special_tokens[self.unk_token]
 
     def __call__(
         self,
@@ -195,7 +200,7 @@ class APETokenizer:
                     self.save_pretrained(f"{checkpoint_path}/checkpoint_{batch}")
                     batch += checkpoint_increment
 
-            if len(vocabulary_frequency) > self.max_vocab_size:
+            if len(vocabulary_frequency) >= self.max_vocab_size:
                 print("\rMax vocabulary achieved", text_padding)
                 break
 
@@ -292,7 +297,8 @@ class APETokenizer:
 
             # Handle labels if they are present in the batch
             if "labels" in seq:
-                labels.append(seq["labels"])
+                padded_labels = seq["labels"] + ([-100] * padding_length)
+                labels.append(padded_labels)
 
         # Convert to tensors or the appropriate format
         if return_tensors == "pt":
@@ -320,16 +326,14 @@ class APETokenizer:
         :return: List[int], a list of the same length as token_ids, where 1 indicates a special token.
         """
         if already_has_special_tokens:
-            return [
-                1 if token in self.special_tokens.values() else 0 for token in token_ids
-            ]
-
-        # If the sequence doesn't have special tokens, we need to add them.
-        # This example assumes that the beginning and end of the sequence are special.
-        return [1] + ([0] * (len(token_ids) - 2)) + [1]
+            special_ids = set(self.special_tokens.values())
+            return [1 if token_id in special_ids else 0 for token_id in token_ids]
+        return [0] * len(token_ids)
 
     def train_from_iterator(self, iterator):
-        pass
+        raise NotImplementedError(
+            "train_from_iterator is not implemented for APETokenizer"
+        )
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):  # Single token
@@ -410,14 +414,17 @@ class APETokenizer:
         return encoded_tokens
 
     def save_vocabulary(self, file_path):
-        with open(file_path, "w", encoding="utf-8") as f:
+        path = Path(file_path)
+        freq_path = path.with_name(f"{path.stem}_freq.json")
+
+        with path.open("w", encoding="utf-8") as f:
             json.dump(
                 self.vocabulary,
                 f,
                 ensure_ascii=False,
                 indent=4,
             )
-        with open(f"{file_path.rstrip('.json')}_freq.json", "w", encoding="utf-8") as f:
+        with freq_path.open("w", encoding="utf-8") as f:
             json.dump(
                 self.vocabulary_frequency,
                 f,
@@ -491,6 +498,7 @@ class APETokenizer:
         tokenizer = cls()
         tokenizer.vocabulary = vocabulary
         tokenizer.special_tokens = special_tokens
+        tokenizer.update_reverse_vocabulary()
 
         # Load training state if it exists
         if os.path.isfile(training_state_file):

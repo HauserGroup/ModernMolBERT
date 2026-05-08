@@ -52,6 +52,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--data_files",
+        type=str,
+        default=None,
+        help=(
+            "Optional parquet file path or glob to stream directly. "
+            "When set, this takes precedence over --dataset_name/--data_dir."
+        ),
+    )
+    parser.add_argument(
         "--representation",
         type=str,
         choices=[SELFIES_REPRESENTATION],
@@ -86,6 +95,7 @@ def main() -> None:
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
+        data_files=args.data_files,
     )
     validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
 

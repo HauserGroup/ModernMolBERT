@@ -129,7 +129,11 @@ def find_local_dataset(
     dataset metadata looks compatible with *dataset_name*.
     """
     if data_dir is not None:
-        return data_dir if (data_dir / "dataset_info.json").exists() else None
+        if not (data_dir / "dataset_info.json").exists():
+            raise FileNotFoundError(
+                f"Invalid data_dir: {data_dir}. Missing dataset_info.json."
+            )
+        return data_dir
 
     search_root = repo_root() / "data"
     if not search_root.exists():
@@ -317,6 +321,7 @@ def collect_corpus_for_tokenizer(
     seed: int,
     buffer_size: int,
     data_dir: Path | None = None,
+    data_files: str | None = None,
 ) -> list[str]:
     ds = get_streaming_dataset(
         dataset_name,
@@ -324,6 +329,7 @@ def collect_corpus_for_tokenizer(
         seed=seed,
         buffer_size=buffer_size,
         data_dir=data_dir,
+        data_files=data_files,
     )
     corpus: list[str] = []
 
@@ -428,8 +434,8 @@ def encode_sequence(
         attention_mask = attention_mask[0]
 
     return {
-        "input_ids": list(map(int, input_ids[:max_seq_length])),
-        "attention_mask": list(map(int, attention_mask[:max_seq_length])),
+        "input_ids": list(map(int, input_ids)),
+        "attention_mask": list(map(int, attention_mask)),
     }
 
 

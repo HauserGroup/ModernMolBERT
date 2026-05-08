@@ -7,7 +7,9 @@ from modernmolbert.utils import (
     SELFIES_REPRESENTATION,
     ZINC20_CHEMBL36_DATASET,
     ZINC20_DATASET,
+    collect_corpus_for_tokenizer,
     compute_tokenization_stats,
+    find_local_dataset,
     eligible_token_ids,
     file_sha256,
     infer_selfies_column,
@@ -200,3 +202,48 @@ def test_normalize_sequence_supports_pubchem_and_zinc20_column_names():
     assert normalize_sequence({"SELFIES": "[C][O]"}, "SELFIES") == "[C][O]"
     assert normalize_sequence({"selfies": "[C][O]"}, "selfies") == "[C][O]"
     assert normalize_sequence({"SELFIES": "   "}, "SELFIES") is None
+
+
+def test_find_local_dataset_raises_for_invalid_explicit_dir(tmp_path: Path):
+    missing = tmp_path / "not_a_dataset"
+    missing.mkdir(parents=True, exist_ok=True)
+
+    try:
+        find_local_dataset(data_dir=missing, dataset_name=PUBCHEM10M_DATASET)
+        assert False, "Expected FileNotFoundError for explicit invalid data_dir"
+    except FileNotFoundError as exc:
+        assert "dataset_info.json" in str(exc)
+
+
+def test_collect_corpus_passes_data_files(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class _DummyStream:
+        def __iter__(self):
+            return iter(
+                [
+                    {"SELFIES": "[C][C][O]"},
+                    {"SELFIES": "[C][O][C]"},
+                ]
+            )
+
+    def _fake_get_streaming_dataset(*args, **kwargs):
+        captured.update(kwargs)
+        return _DummyStream()
+
+    monkeypatch.setattr(
+        "modernmolbert.utils.get_streaming_dataset",
+        _fake_get_streaming_dataset,
+    )
+
+    corpus = collect_corpus_for_tokenizer(
+        dataset_name=PUBCHEM10M_DATASET,
+        representation="SELFIES",
+        n=2,
+        seed=13,
+        buffer_size=100,
+        data_files="/tmp/data/*.parquet",
+    )
+
+    assert corpus == ["[C][C][O]", "[C][O][C]"]
+    assert captured.get("data_files") == "/tmp/data/*.parquet"

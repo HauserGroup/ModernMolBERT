@@ -1,0 +1,89 @@
+import argparse
+from pathlib import Path
+
+from modernmolbert.eval.moleculenet import ALL_SPECS, CORE_SPECS, EXTENDED_SPECS
+from modernmolbert.eval.moleculenet import prepare_many
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Prepare DeepChem/MoleculeNet datasets as local sanitized "
+            "SMILES/SELFIES Parquet files."
+        )
+    )
+
+    parser.add_argument(
+        "--datasets",
+        nargs="+",
+        default=list(CORE_SPECS),
+        choices=sorted(ALL_SPECS),
+        help=(
+            "Dataset names to prepare. Defaults to the core suite: "
+            + ", ".join(CORE_SPECS)
+        ),
+    )
+    parser.add_argument(
+        "--output_root",
+        type=Path,
+        default=Path("data/eval/moleculenet_sanitized"),
+        help="Directory where sanitized datasets will be written.",
+    )
+    parser.add_argument(
+        "--deepchem_data_dir",
+        type=Path,
+        default=Path("data/deepchem/raw"),
+        help="DeepChem raw data cache directory.",
+    )
+    parser.add_argument(
+        "--deepchem_save_dir",
+        type=Path,
+        default=Path("data/deepchem/processed"),
+        help="DeepChem processed/reload cache directory.",
+    )
+    parser.add_argument(
+        "--split",
+        default="scaffold",
+        choices=["scaffold", "random", "index"],
+        help="Local split to apply after sanitization.",
+    )
+    parser.add_argument(
+        "--keep_invalid",
+        action="store_true",
+        help="Keep rows that fail RDKit parsing or SELFIES conversion.",
+    )
+    parser.add_argument(
+        "--list_datasets",
+        action="store_true",
+        help="List supported datasets and exit.",
+    )
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+
+    if args.list_datasets:
+        print("Core datasets:")
+        for name in CORE_SPECS:
+            print(f"  {name}")
+
+        print("\nExtended datasets:")
+        for name in EXTENDED_SPECS:
+            print(f"  {name}")
+
+        return
+
+    prepare_many(
+        dataset_names=args.datasets,
+        output_root=args.output_root,
+        deepchem_data_dir=args.deepchem_data_dir,
+        deepchem_save_dir=args.deepchem_save_dir,
+        split=args.split,
+        keep_invalid=args.keep_invalid,
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -27,6 +27,14 @@ eval = [
     "rdkit>=2026.3.1",
     "selfies>=2.2.0",
 ]
+eval-prep = [
+    "deepchem>=2.8.0",
+    "pandas>=3.0.2",
+    "pyarrow>=24.0.0",
+    "rdkit>=2026.3.1",
+    "selfies>=2.2.0",
+    "tqdm>=4.67.3",
+]
 eval-transformers = [
     "torch>=2.11.0",
     "transformers>=5.8.0",

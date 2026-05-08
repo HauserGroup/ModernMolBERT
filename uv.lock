@@ -777,6 +777,14 @@ eval = [
     { name = "rdkit" },
     { name = "selfies" },
 ]
+eval-prep = [
+    { name = "deepchem" },
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "rdkit" },
+    { name = "selfies" },
+    { name = "tqdm" },
+]
 eval-transformers = [
     { name = "torch" },
     { name = "transformers" },
@@ -807,6 +815,14 @@ eval = [
     { name = "deepchem", specifier = ">=2.8.0" },
     { name = "rdkit", specifier = ">=2026.3.1" },
     { name = "selfies", specifier = ">=2.2.0" },
+]
+eval-prep = [
+    { name = "deepchem", specifier = ">=2.8.0" },
+    { name = "pandas", specifier = ">=3.0.2" },
+    { name = "pyarrow", specifier = ">=24.0.0" },
+    { name = "rdkit", specifier = ">=2026.3.1" },
+    { name = "selfies", specifier = ">=2.2.0" },
+    { name = "tqdm", specifier = ">=4.67.3" },
 ]
 eval-transformers = [
     { name = "torch", specifier = ">=2.11.0" },

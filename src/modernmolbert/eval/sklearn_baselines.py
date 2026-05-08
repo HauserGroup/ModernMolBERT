@@ -65,7 +65,7 @@ def fit_predict_sklearn(
     X_eval: NDArray[np.float64],
     task_type: str,
     model_name: str = "ridge_or_logreg",
-):
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
 
     if task_type == "classification":
         if model_name == "rf":

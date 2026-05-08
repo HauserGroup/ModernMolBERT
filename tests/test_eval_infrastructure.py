@@ -10,6 +10,7 @@ from modernmolbert.eval.datasets import EvalDataset, load_csv_eval_dataset
 from modernmolbert.eval.downstream import FrozenDownstreamConfig, fit_predict_downstream
 from modernmolbert.eval.featurizers.base import FeatureBatch
 from modernmolbert.eval.featurizers.dummy import DummyFeaturizer
+from modernmolbert.eval.metrics import compute_classification_metrics
 from modernmolbert.eval.registry import make_featurizer
 from modernmolbert.eval.runner import FrozenBenchmarkRunner
 
@@ -173,6 +174,7 @@ def test_frozen_runner_classification(tmp_path: Path) -> None:
     )
 
     assert len(result.task_results) == 1
+    assert result.skipped_tasks == []
 
     metrics = result.task_results[0].metrics
     assert "accuracy" in metrics
@@ -180,6 +182,12 @@ def test_frozen_runner_classification(tmp_path: Path) -> None:
 
     assert (tmp_path / "out" / "results.json").exists()
     assert (tmp_path / "out" / "results.csv").exists()
+
+    csv = pd.read_csv(tmp_path / "out" / "results.csv")
+    assert "train_feature_invalid_rate" in csv.columns
+    assert "eval_feature_invalid_rate" in csv.columns
+    assert "model_type" in csv.columns
+    assert "standardize" in csv.columns
 
 
 def test_frozen_runner_regression(tmp_path: Path) -> None:
@@ -262,6 +270,51 @@ def test_runner_cache_reuse(tmp_path: Path) -> None:
 
     cache_files = list((tmp_path / "cache").rglob("features.npy"))
     assert cache_files
+
+
+def test_runner_records_structured_skip_for_one_class_train(tmp_path: Path) -> None:
+    train = pd.DataFrame(
+        {
+            "smiles": ["CCO", "CCN", "CCC", "CCCC"],
+            "label": [1, 1, 1, 1],
+        }
+    )
+    test = pd.DataFrame(
+        {
+            "smiles": ["CO", "CCBr"],
+            "label": [1, 1],
+        }
+    )
+
+    ds = EvalDataset(
+        name="skip_test",
+        task_type="classification",
+        task_names=["label"],
+        train=train,
+        valid=None,
+        test=test,
+    )
+
+    runner = FrozenBenchmarkRunner(cache_dir=tmp_path / "cache", use_cache=False)
+    result = runner.run(dataset=ds, featurizer=DummyFeaturizer(n_features=8))
+
+    assert len(result.task_results) == 0
+    assert len(result.skipped_tasks) == 1
+    assert result.skipped_tasks[0].reason == "classification_train_has_single_class"
+
+
+def test_classification_metrics_one_class_returns_nans_for_rank_metrics() -> None:
+    y_true = np.array([1, 1, 1])
+    y_pred = np.array([1, 1, 1])
+    y_score = np.array([0.9, 0.8, 0.7])
+
+    metrics = compute_classification_metrics(
+        y_true=y_true, y_pred=y_pred, y_score=y_score
+    )
+
+    assert np.isnan(metrics["balanced_accuracy"])
+    assert np.isnan(metrics["roc_auc"])
+    assert np.isnan(metrics["average_precision"])
 
 
 def test_cli_run_frozen_benchmark_with_dummy_featurizer(tmp_path: Path) -> None:

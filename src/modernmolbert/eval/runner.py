@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,8 +32,22 @@ class TaskResult:
     n_eval: int
     n_train_total: int
     n_eval_total: int
+    n_train_feature_valid: int
+    n_eval_feature_valid: int
     downstream_metadata: dict[str, Any] = field(default_factory=dict)
     feature_metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class TaskSkip:
+    dataset: str
+    task: str
+    split: str
+    reason: str
+    n_train_label_valid_rows: int
+    n_eval_label_valid_rows: int
+    n_train_feature_valid_rows: int
+    n_eval_feature_valid_rows: int
 
 
 @dataclass(frozen=True)
@@ -43,12 +55,14 @@ class FrozenBenchmarkResult:
     dataset: str
     featurizer: str
     task_results: list[TaskResult]
+    skipped_tasks: list[TaskSkip] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "dataset": self.dataset,
             "featurizer": self.featurizer,
             "task_results": [asdict(x) for x in self.task_results],
+            "skipped_tasks": [asdict(x) for x in self.skipped_tasks],
         }
 
 
@@ -101,9 +115,10 @@ class FrozenBenchmarkRunner:
         )
 
         task_results: list[TaskResult] = []
+        skipped_tasks: list[TaskSkip] = []
 
         for task in dataset.task_names:
-            task_result = self._run_single_task(
+            task_result, task_skip = self._run_single_task(
                 dataset=dataset,
                 task=task,
                 eval_split=eval_split,
@@ -115,11 +130,14 @@ class FrozenBenchmarkRunner:
             )
             if task_result is not None:
                 task_results.append(task_result)
+            if task_skip is not None:
+                skipped_tasks.append(task_skip)
 
         result = FrozenBenchmarkResult(
             dataset=dataset.name,
             featurizer=featurizer.name,
             task_results=task_results,
+            skipped_tasks=skipped_tasks,
         )
 
         if output_dir is not None:
@@ -168,25 +186,46 @@ class FrozenBenchmarkRunner:
         eval_frame: pd.DataFrame,
         train_features: FeatureBatch,
         eval_features: FeatureBatch,
-    ) -> TaskResult | None:
-        train_keep_original = (
-            _valid_label_mask(train_frame, task) & train_features.valid_mask
-        )
-        eval_keep_original = (
-            _valid_label_mask(eval_frame, task) & eval_features.valid_mask
-        )
+    ) -> tuple[TaskResult | None, TaskSkip | None]:
+        train_label_mask = _valid_label_mask(train_frame, task)
+        eval_label_mask = _valid_label_mask(eval_frame, task)
 
-        if int(train_keep_original.sum()) == 0 or int(eval_keep_original.sum()) == 0:
-            return None
+        train_keep_original = train_label_mask & train_features.valid_mask
+        eval_keep_original = eval_label_mask & eval_features.valid_mask
+
+        n_train_label_valid = int(train_label_mask.sum())
+        n_eval_label_valid = int(eval_label_mask.sum())
+        n_train_feature_valid = int(train_features.valid_mask.sum())
+        n_eval_feature_valid = int(eval_features.valid_mask.sum())
+
+        if int(train_keep_original.sum()) == 0:
+            return None, TaskSkip(
+                dataset=dataset.name,
+                task=task,
+                split=eval_split,
+                reason="no_train_rows_after_label_and_feature_filtering",
+                n_train_label_valid_rows=n_train_label_valid,
+                n_eval_label_valid_rows=n_eval_label_valid,
+                n_train_feature_valid_rows=n_train_feature_valid,
+                n_eval_feature_valid_rows=n_eval_feature_valid,
+            )
+
+        if int(eval_keep_original.sum()) == 0:
+            return None, TaskSkip(
+                dataset=dataset.name,
+                task=task,
+                split=eval_split,
+                reason="no_eval_rows_after_label_and_feature_filtering",
+                n_train_label_valid_rows=n_train_label_valid,
+                n_eval_label_valid_rows=n_eval_label_valid,
+                n_train_feature_valid_rows=n_train_feature_valid,
+                n_eval_feature_valid_rows=n_eval_feature_valid,
+            )
 
         # FeatureBatch.X only contains valid featurized rows, so we must project
         # original-frame masks down to feature-matrix masks.
-        train_label_mask_among_valid = _valid_label_mask(train_frame, task)[
-            train_features.valid_mask
-        ]
-        eval_label_mask_among_valid = _valid_label_mask(eval_frame, task)[
-            eval_features.valid_mask
-        ]
+        train_label_mask_among_valid = train_label_mask[train_features.valid_mask]
+        eval_label_mask_among_valid = eval_label_mask[eval_features.valid_mask]
 
         X_train = train_features.X[train_label_mask_among_valid]
         X_eval = eval_features.X[eval_label_mask_among_valid]
@@ -198,7 +237,16 @@ class FrozenBenchmarkRunner:
             y_train = y_train.astype(int)
             y_eval = y_eval.astype(int)
             if len(np.unique(y_train)) < 2:
-                return None
+                return None, TaskSkip(
+                    dataset=dataset.name,
+                    task=task,
+                    split=eval_split,
+                    reason="classification_train_has_single_class",
+                    n_train_label_valid_rows=n_train_label_valid,
+                    n_eval_label_valid_rows=n_eval_label_valid,
+                    n_train_feature_valid_rows=n_train_feature_valid,
+                    n_eval_feature_valid_rows=n_eval_feature_valid,
+                )
 
         pred = fit_predict_downstream(
             task_type=dataset.task_type,
@@ -226,12 +274,14 @@ class FrozenBenchmarkRunner:
             n_eval=int(len(y_eval)),
             n_train_total=int(len(train_frame)),
             n_eval_total=int(len(eval_frame)),
+            n_train_feature_valid=n_train_feature_valid,
+            n_eval_feature_valid=n_eval_feature_valid,
             downstream_metadata=pred.metadata,
             feature_metadata={
                 "train": train_features.metadata,
                 "eval": eval_features.metadata,
             },
-        )
+        ), None
 
     def write_outputs(
         self,
@@ -252,9 +302,24 @@ class FrozenBenchmarkRunner:
                 "featurizer": task_result.featurizer,
                 "n_train": task_result.n_train,
                 "n_eval": task_result.n_eval,
+                "train_feature_invalid_rate": 1.0
+                - (
+                    task_result.n_train_feature_valid
+                    / max(1, task_result.n_train_total)
+                ),
+                "eval_feature_invalid_rate": 1.0
+                - (task_result.n_eval_feature_valid / max(1, task_result.n_eval_total)),
             }
             for metric_name, metric_value in task_result.metrics.items():
                 base[metric_name] = metric_value
+
+            base["model_type"] = task_result.downstream_metadata.get("downstream_model")
+            base["standardize"] = task_result.downstream_metadata.get("standardize")
+            for key, value in task_result.downstream_metadata.items():
+                if key in {"downstream_model", "standardize"}:
+                    continue
+                base[f"downstream_{key}"] = value
+
             rows.append(base)
 
         if rows:

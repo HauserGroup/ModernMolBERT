@@ -489,13 +489,19 @@ def split_sanitized_frame(
         )
 
     if split == "scaffold":
-        return scaffold_split_frame(
+        splits = scaffold_split_frame(
             frame,
             seed=seed,
             frac_train=frac_train,
             frac_valid=frac_valid,
             frac_test=frac_test,
         )
+        if len(splits["valid"]) == 0 or len(splits["test"]) == 0:
+            raise RuntimeError(
+                "Scaffold split produced an empty valid or test split. "
+                "Use random split or adjust fractions."
+            )
+        return splits
 
     if split == "index":
         return index_split_frame(

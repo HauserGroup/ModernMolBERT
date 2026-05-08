@@ -5,7 +5,11 @@ import pandas as pd
 import pytest
 
 from modernmolbert.eval.datasets import load_prepared_moleculenet_dataset
-from modernmolbert.eval.moleculenet import canonicalize_and_selfies, sanitize_frame
+from modernmolbert.eval.moleculenet import (
+    canonicalize_and_selfies,
+    sanitize_frame,
+    split_sanitized_frame,
+)
 
 
 def test_canonicalize_and_selfies_valid_smiles() -> None:
@@ -90,6 +94,61 @@ def test_load_prepared_moleculenet_dataset(tmp_path: Path) -> None:
     assert ds.selfies_column == "selfies"
     assert len(ds.train) == 2
     assert len(ds.test) == 2
+    assert ds.metadata["eval_split"] == "test"
+
+
+def test_load_prepared_moleculenet_dataset_with_valid_eval_split(
+    tmp_path: Path,
+) -> None:
+    dataset_dir = tmp_path / "tox21"
+    dataset_dir.mkdir()
+
+    metadata = {
+        "name": "tox21",
+        "task_type": "classification",
+        "tasks": ["nr-ar"],
+    }
+    (dataset_dir / "metadata.json").write_text(
+        json.dumps(metadata) + "\n",
+        encoding="utf-8",
+    )
+
+    frame = pd.DataFrame(
+        {
+            "smiles_raw": ["CCO", "CCN"],
+            "smiles_canonical": ["CCO", "CCN"],
+            "selfies": ["[C][C][O]", "[C][C][N]"],
+            "is_valid": [True, True],
+            "sanitize_error": [None, None],
+            "nr-ar": [0, 1],
+        }
+    )
+
+    frame.to_parquet(dataset_dir / "train.parquet", index=False)
+    frame.to_parquet(dataset_dir / "valid.parquet", index=False)
+    frame.to_parquet(dataset_dir / "test.parquet", index=False)
+
+    ds = load_prepared_moleculenet_dataset(dataset_dir=dataset_dir, eval_split="valid")
+
+    assert ds.metadata["eval_split"] == "valid"
+    assert len(ds.test) == len(frame)
+
+
+def test_scaffold_split_raises_on_empty_valid_or_test() -> None:
+    frame = pd.DataFrame(
+        {
+            "smiles_canonical": ["CCO"],
+            "selfies": ["[C][C][O]"],
+            "is_valid": [True],
+        }
+    )
+
+    with pytest.raises(
+        RuntimeError, match="Scaffold split produced an empty valid or test split"
+    ):
+        split_sanitized_frame(
+            frame, split="scaffold", frac_train=0.8, frac_valid=0.1, frac_test=0.1
+        )
 
 
 @pytest.mark.model

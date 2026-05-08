@@ -39,8 +39,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--eval_split", choices=["valid", "test"], default="test")
 
-    parser.add_argument("--standardize", action="store_true", default=True)
-    parser.add_argument("--no_standardize", action="store_false", dest="standardize")
+    parser.add_argument(
+        "--standardize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
 
     parser.add_argument("--ridge_alpha", type=float, default=1.0)
     parser.add_argument("--ridge_cv", action="store_true")

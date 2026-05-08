@@ -1,7 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
-from typing import Iterator, Literal
+from typing import Any, Iterator, Literal
 
 import pandas as pd
 
@@ -29,6 +29,7 @@ class EvalDataset:
     test: pd.DataFrame
     smiles_column: str = "smiles"
     selfies_column: str = "selfies"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def label_columns(self) -> list[str]:
@@ -114,6 +115,7 @@ def load_csv_eval_dataset(
         test=test,
         smiles_column=smiles_column,
         selfies_column=selfies_column,
+        metadata={},
     )
     dataset.check()
     return dataset
@@ -154,6 +156,7 @@ def load_single_csv_with_split_column(
         test=test,
         smiles_column=smiles_column,
         selfies_column=selfies_column,
+        metadata={},
     )
     dataset.check()
     return dataset
@@ -232,6 +235,10 @@ def load_prepared_moleculenet_dataset(
         test=test,
         smiles_column=smiles_column,
         selfies_column=selfies_column,
+        metadata={
+            "eval_split": eval_split,
+            "dataset_dir": str(dataset_dir),
+        },
     )
     dataset.check()
     return dataset

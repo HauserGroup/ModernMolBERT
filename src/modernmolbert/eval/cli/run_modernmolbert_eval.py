@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import argparse
 import json
 from pathlib import Path
@@ -15,8 +13,8 @@ from modernmolbert.eval.sklearn_baselines import compute_metrics, fit_predict_sk
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Evaluate a ModernMolBERT checkpoint on a locally prepared "
-            "MoleculeNet dataset."
+            "[legacy] Evaluate a ModernMolBERT checkpoint on a locally prepared "
+            "MoleculeNet dataset. Prefer run_frozen_benchmark.py for new runs."
         )
     )
     parser.add_argument(

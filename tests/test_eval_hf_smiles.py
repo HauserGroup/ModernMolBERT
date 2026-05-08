@@ -6,6 +6,7 @@ import torch
 
 from modernmolbert.eval.featurizers.hf_smiles import HuggingFaceSmilesFeaturizer
 from modernmolbert.eval.registry import make_featurizer
+from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 
 
 def _hf_enabled() -> bool:
@@ -107,18 +108,17 @@ def test_sanitize_modernbert_rope_config_handles_rope_scaling() -> None:
 
 
 def test_mean_pool_excludes_special_tokens() -> None:
-    from modernmolbert.eval.featurizers.hf_smiles import _mean_pool
 
     # shape: [1, 3 tokens, 2 dims]
     hidden = torch.tensor([[[10.0, 10.0], [2.0, 2.0], [20.0, 20.0]]])
     attention = torch.tensor([[1, 1, 1]])
     input_ids = torch.tensor([[0, 7, 2]])
 
-    pooled = _mean_pool(
-        hidden,
-        attention,
+    pooled = mean_pool_excluding_token_ids(
+        last_hidden_state=hidden,
+        attention_mask=attention,
         input_ids=input_ids,
-        special_token_ids=[0, 2],
+        excluded_token_ids={0, 2},
     )
 
     assert torch.allclose(pooled, torch.tensor([[2.0, 2.0]]))

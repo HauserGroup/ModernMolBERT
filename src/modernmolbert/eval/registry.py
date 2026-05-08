@@ -77,8 +77,12 @@ def make_featurizer_from_config(path: str | Path) -> RepresentationFeaturizer:
     config_path = Path(path)
     config = json.loads(config_path.read_text(encoding="utf-8"))
 
-    if "type" not in config:
-        raise ValueError(f"Featurizer config {config_path} is missing 'type'")
+    featurizer_type = config.get("type") or config.get("name")
+    if featurizer_type is None:
+        raise ValueError(f"Featurizer config {config_path} is missing 'type' or 'name'")
 
-    featurizer_type = config.pop("type")
-    return make_featurizer(featurizer_type, **config)
+    kwargs = {
+        key: value for key, value in config.items() if key not in {"type", "name"}
+    }
+
+    return make_featurizer(featurizer_type, **kwargs)

@@ -110,7 +110,6 @@ def test_collator_forces_at_least_one_mask_when_probability_nonzero():
     assert int((labels != -100).sum()) >= 1
 
 
-@pytest.mark.skip(reason="Temporarily skipped because it is slow in the current run.")
 def test_collator_special_tokens_never_masked_and_vocab_bounds():
     torch.manual_seed(1)
     collator = MolecularMLMCollator(
@@ -135,3 +134,29 @@ def test_collator_special_tokens_never_masked_and_vocab_bounds():
 
     # With enough masked tokens and fixed seed, at least one <mask> should appear.
     assert int((input_ids == 4).sum()) > 0
+
+
+def test_collator_random_replacement_candidates_exclude_special_ids():
+
+    collator = MolecularMLMCollator(
+        pad_token_id=1,
+        mask_token_id=4,
+        vocab_size=11,
+        mlm_probability=0.15,
+        special_token_ids=[0, 1, 2, 3, 4],
+    )
+
+    assert collator.eligible_random_token_ids().tolist() == [5, 6, 7, 8, 9, 10]
+
+
+def test_collator_random_replacement_candidates_require_content_tokens():
+    collator = MolecularMLMCollator(
+        pad_token_id=1,
+        mask_token_id=4,
+        vocab_size=5,
+        mlm_probability=0.15,
+        special_token_ids=[0, 1, 2, 3, 4],
+    )
+
+    with pytest.raises(ValueError, match="No eligible non-special token IDs"):
+        collator.eligible_random_token_ids()

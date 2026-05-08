@@ -604,8 +604,10 @@ class MolecularMLMCollator:
                 as_tuple=False
             )
             if len(eligible_positions) > 0:
-                idx = torch.randint(len(eligible_positions), (1,)).item()
-                row, col = eligible_positions[idx].tolist()
+                idx = int(torch.randint(len(eligible_positions), (1,)).item())
+                row_pos = eligible_positions[idx]
+                row = int(row_pos[0].item())
+                col = int(row_pos[1].item())
                 masked_indices[row, col] = True
 
         labels[~masked_indices] = -100
@@ -623,10 +625,16 @@ class MolecularMLMCollator:
             & ~replace_with_mask
         )
         if replace_with_random.any():
-            random_idx = torch.randint(
-                len(self._eligible_replacement_ids), labels.shape, dtype=torch.long
+            eligible_random_ids = self.eligible_random_token_ids(
+                device=input_ids.device
             )
-            random_words = self._eligible_replacement_ids[random_idx]
+            random_indices = torch.randint(
+                low=0,
+                high=len(eligible_random_ids),
+                size=labels.shape,
+                device=input_ids.device,
+            )
+            random_words = self._eligible_replacement_ids[random_indices]
             input_ids[replace_with_random] = random_words[replace_with_random]
 
         # Remaining 10% stay unchanged.
@@ -635,6 +643,35 @@ class MolecularMLMCollator:
             "attention_mask": attention_mask,
             "labels": labels,
         }
+
+    def eligible_random_token_ids(
+        self, device: torch.device | None = None
+    ) -> torch.Tensor:
+        """Return vocabulary IDs eligible for random MLM replacement.
+
+        Special tokens are excluded so the random-replacement branch cannot insert
+
+        padding, BOS, EOS, UNK, MASK, or any other configured special token.
+
+        """
+
+        special_ids = {int(token_id) for token_id in self.special_token_ids}
+
+        eligible = [
+            token_id
+            for token_id in range(self.vocab_size)
+            if token_id not in special_ids
+        ]
+
+        if not eligible:
+            raise ValueError(
+                "No eligible non-special token IDs available for MLM random replacement."
+            )
+
+        if device is None:
+            device = torch.device("cpu")
+
+        return torch.tensor(eligible, dtype=torch.long, device=device)
 
 
 MODERNBERT_CONFIGS = {
@@ -944,7 +981,6 @@ def main() -> None:
         prediction_loss_only=not args.compute_masked_accuracy,
         report_to=report_to,
         load_best_model_at_end=False,
-        overwrite_output_dir=True,
     )
 
     world_size = training_args.world_size if hasattr(training_args, "world_size") else 1

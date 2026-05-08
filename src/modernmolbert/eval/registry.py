@@ -7,6 +7,9 @@ from modernmolbert.eval.featurizers.base import RepresentationFeaturizer
 from modernmolbert.eval.featurizers.dummy import DummyFeaturizer
 from modernmolbert.eval.featurizers.rdkit_ecfp import ECFP4Featurizer
 from modernmolbert.eval.featurizers.hf_smiles import HuggingFaceSmilesFeaturizer
+from modernmolbert.eval.featurizers.modernmolbert_selfies import (
+    ModernMolBERTSelfiesFeaturizer,
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +37,12 @@ FEATURIZER_REGISTRY: dict[str, FeaturizerSpec] = {
         name="hf_smiles",
         factory=HuggingFaceSmilesFeaturizer,
         description="Generic Hugging Face SMILES encoder featurizer.",
+        required_extra="eval-transformers",
+    ),
+    "modernmolbert_selfies": FeaturizerSpec(
+        name="modernmolbert_selfies",
+        factory=ModernMolBERTSelfiesFeaturizer,
+        description="Trained ModernMolBERT SELFIES encoder.",
         required_extra="eval-transformers",
     ),
 }

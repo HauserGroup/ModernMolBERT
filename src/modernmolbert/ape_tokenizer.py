@@ -59,9 +59,11 @@ class APETokenizer:
         text,
         padding=False,
         max_length=None,
-        add_special_tokens=False,
         return_tensors=None,
-    ):
+        add_special_tokens=False,
+        truncation: bool | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         Tokenize and prepare the input text.
 

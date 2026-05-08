@@ -1,34 +1,91 @@
-# ModernMolBERT SELFIES Training
+# ModernMolBERT
+[![Orcid: Jakob](https://img.shields.io/badge/Jakob-bar?style=flat&logo=orcid&labelColor=white&color=grey)](https://orcid.org/0000-0002-2841-7284)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
-This repository trains a ModernBERT masked-language model on SELFIES strings only.
 
-Core policy:
+ModernMolBERT is a SELFIES-native molecular representation project. It trains a ModernBERT masked-language model on SELFIES strings and evaluates the resulting encoder as a frozen molecular featuriser against existing molecular representations through one shared benchmark pipeline.
 
-- Tokenizer training is a separate step.
-- Model training only loads a vetted tokenizer + metadata pair.
-- Every run copies tokenizer artifacts into both `output_dir/` and `final_model/`.
-- The public model-size interface is restricted to official ModernBERT sizes: `base` and `large`.
+The core objective is not to maintain a collection of separate scripts. The core objective is to support a reliable path from tokenizer training to model pretraining to frozen-feature benchmarking:
 
-## Scope
+```text
+SELFIES tokenizer
+-> ModernBERT masked-language pretraining
+-> saved checkpoint
+-> ModernMolBERTSelfiesFeaturizer
+-> FrozenBenchmarkRunner
+-> shared downstream models and metrics
+```
 
-- Dataset: `mikemayuare/PubChem10M_SMILES_SELFIES`
-- Representation: `SELFIES` only
-- Tokenizer: `APETokenizer`
-- Model objective: masked language modeling (MLM)
-- Model sizes:
-  - `base`: official `answerdotai/ModernBERT-base` architecture
-  - `large`: official `answerdotai/ModernBERT-large` architecture
+## Project scope
 
-The model is trained from scratch with the SELFIES tokenizer vocabulary. The Answer.AI checkpoints are used only as architecture/config references, not as English/code pretrained weights.
+ModernMolBERT focuses on the following:
 
-## Canonical tokenizer artifacts
+- **Input representation:** SELFIES.
+- **Tokenizer:** custom `APETokenizer` trained separately from model training.
+- **Model:** ModernBERT architecture trained from scratch with the SELFIES tokenizer vocabulary.
+- **Objective:** masked language modeling.
+- **Primary use:** frozen molecular featurisation.
+- **Primary benchmark path:** shared frozen benchmark runner used for ModernMolBERT and baselines.
 
-- `tokenizer/selfies_ape_tokenizer.json`
-- `tokenizer/selfies_ape_tokenizer.metadata.json`
+The Answer.AI ModernBERT checkpoints are used as architecture/config references. The model is not initialized from English/code pretrained weights for the main SELFIES pretraining run.
 
-The metadata includes the tokenizer representation and SHA256 hash. Training validates both before model construction.
+Supported public model-size choices are:
+
+```bash
+--model_size base
+--model_size large
+```
+
+Use `base` for development, debugging, and pilot runs. Do not use `large` until the tokenizer, training loop, checkpoint reload, featuriser, and frozen benchmark path are stable.
+
+---
+
+## Repository layout
+
+```text
+src/modernmolbert/
+  ape_tokenizer.py                     # SELFIES APE tokenizer
+  train_ape_tokenizer.py               # tokenizer training CLI
+  validate_tokenizer.py                # tokenizer validation CLI
+  train_selfies_ape_modernbert.py      # MLM pretraining CLI
+  utils.py                             # shared dataset/tokenizer helpers
+
+src/modernmolbert/eval/
+  featurizers/                         # frozen representation featurisers
+    base.py                            # FeatureBatch and protocol
+    rdkit_ecfp.py                      # ECFP4 baseline
+    hf_smiles.py                       # Hugging Face SMILES encoder baseline
+    modernmolbert_selfies.py           # trained ModernMolBERT SELFIES featuriser
+  cache.py                             # feature cache
+  datasets.py                          # evaluation dataset loading
+  downstream.py                        # shared downstream learners
+  metrics.py                           # shared metrics
+  pooling.py                           # shared pooling utilities
+  registry.py                          # config-driven featuriser registry
+  runner.py                            # canonical frozen benchmark runner
+  moleculenet.py                       # MoleculeNet preparation utilities
+  cli/
+    run_frozen_benchmark.py            # canonical benchmark CLI
+    run_modernmolbert_eval.py          # optional wrapper around shared runner
+
+configs/featurizers/
+  ecfp4_2048.json
+  chemberta_77m_mlm.json
+  molformer_xl_both_10pct_cpu.json
+  modernmolbert_selfies.json
+
+tests/
+  ...
+```
+
+The retired early evaluation helpers should not be used for benchmark results. ModernMolBERT should be evaluated through `ModernMolBERTSelfiesFeaturizer` and `FrozenBenchmarkRunner`, not through a separate embedding/sklearn path.
+
+---
 
 ## Installation
+
+Create a Python 3.13 environment and install the project dependencies with `uv`:
 
 ```bash
 uv venv .venv --python 3.13
@@ -36,11 +93,38 @@ source .venv/bin/activate
 uv sync
 ```
 
-## Commands
+For CUDA training, install the CUDA optional dependencies appropriate for your machine:
 
-### 1) Train/update tokenizer (separate stage)
+```bash
+uv sync --extra cuda
+```
 
-Tokenizer training is intentionally separate from model training.
+FlashAttention is optional and CUDA-oriented. Do not install it for Mac MPS. Install it only if your PyTorch, CUDA, and GPU setup support it:
+
+```bash
+uv pip install flash-attn --no-build-isolation
+```
+
+---
+
+## Canonical tokenizer artifacts
+
+Tokenizer training is intentionally separate from model training. Model training should only use a validated tokenizer plus matching metadata.
+
+Canonical artifacts:
+
+```text
+tokenizer/selfies_ape_tokenizer.json
+tokenizer/selfies_ape_tokenizer.metadata.json
+```
+
+The metadata records the tokenizer representation, vocabulary hash, special token IDs, and training provenance. The training script validates the metadata and SHA256 hash before model construction.
+
+---
+
+## 1. Train the SELFIES tokenizer
+
+Example tokenizer training command:
 
 ```bash
 uv run python -m modernmolbert.train_ape_tokenizer \
@@ -51,7 +135,19 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --min_freq_for_merge 2000
 ```
 
-### 2) Validate tokenizer (mandatory gate)
+The tokenizer stage should produce:
+
+```text
+tokenizer/selfies_ape_tokenizer.json
+tokenizer/selfies_ape_tokenizer_freq.json
+tokenizer/selfies_ape_tokenizer.metadata.json
+```
+
+---
+
+## 2. Validate the tokenizer
+
+Tokenizer validation is a mandatory gate before model training.
 
 ```bash
 uv run python -m modernmolbert.validate_tokenizer \
@@ -61,7 +157,7 @@ uv run python -m modernmolbert.validate_tokenizer \
   --n 1000
 ```
 
-Example expected output:
+Expected output includes:
 
 ```text
 representation: SELFIES
@@ -73,7 +169,7 @@ truncation_rate@256: ...
 special_ids: ...
 ```
 
-### 2b) Inspect one row from zpn/zinc20
+For an alternate dataset such as `zpn/zinc20`, first inspect one row:
 
 ```bash
 uv run python - <<'PY'
@@ -85,7 +181,7 @@ print("selfies:", row["selfies"][:200])
 PY
 ```
 
-### 2c) Validate tokenizer on zpn/zinc20
+Then validate:
 
 ```bash
 uv run python -m modernmolbert.validate_tokenizer \
@@ -95,9 +191,20 @@ uv run python -m modernmolbert.validate_tokenizer \
   --n 1000
 ```
 
-### 3) Debug training run
+---
 
-This is a tiny end-to-end check. It validates the training loop, model save, tokenizer artifact copying, and final reload path.
+## 3. Debug model training
+
+The debug run is a tiny end-to-end check. It validates:
+
+- tokenizer metadata validation
+- dataset loading
+- MLM collator behavior
+- model construction
+- training loop
+- checkpoint save
+- tokenizer artifact copying
+- final model reloadability
 
 ```bash
 uv run python -m modernmolbert.train_selfies_ape_modernbert \
@@ -108,9 +215,13 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
 
-### 4) Slightly larger MPS smoke run
+Use this before any pilot or long run.
 
-This is larger than `--debug`, but still intended as a Mac smoke test rather than a useful model.
+---
+
+## 4. MPS smoke run
+
+This is a Mac smoke test, not a useful model.
 
 ```bash
 uv run python -m modernmolbert.train_selfies_ape_modernbert \
@@ -136,36 +247,17 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
 
-### 4b) Short zpn/zinc20 base pilot
-
-```bash
-uv run python -m modernmolbert.train_selfies_ape_modernbert \
-  --output_dir runs/zinc20_base_pilot_256 \
-  --dataset_name zpn/zinc20 \
-  --use_validation_split \
-  --model_size base \
-  --max_seq_length 256 \
-  --max_steps 200 \
-  --eval_size 64 \
-  --max_eval_batches 4 \
-  --per_device_train_batch_size 1 \
-  --per_device_eval_batch_size 1 \
-  --gradient_accumulation_steps 16 \
-  --num_workers 0 \
-  --report_to tensorboard \
-  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
-  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
-```
-
-Follow with TensorBoard:
+View logs:
 
 ```bash
 uv run tensorboard --logdir runs/mps_base_smoke_512
 ```
 
-### 5) CUDA pilot run
+---
 
-This is the first meaningful pilot run. It is still much smaller than a final pretraining run, but large enough to check learning dynamics, throughput, checkpointing, and evaluation behavior.
+## 5. CUDA pilot run
+
+This is the first meaningful training pilot. It is still smaller than a final pretraining run, but it is large enough to check learning dynamics, throughput, checkpointing, and evaluation behavior.
 
 ```bash
 uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert \
@@ -192,18 +284,26 @@ uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert \
   --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
 
-Follow with TensorBoard:
+If the CUDA device does not support bf16, disable it:
+
+```bash
+--no-bf16
+```
+
+View logs:
 
 ```bash
 uv run tensorboard --logdir runs/cuda_base_pilot_512
 ```
 
-### 6) Larger training run
+---
 
-Use this only after the readiness gate and pilot run pass.
+## 6. Larger training run
+
+Only launch a long run after the readiness gate, debug run, checkpoint reload test, and CUDA pilot run pass.
 
 ```bash
-uv run python -m modernmolbert.train_selfies_ape_modernbert \
+uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert \
   --output_dir runs/selfies_main \
   --device_backend cuda \
   --model_size base \
@@ -227,153 +327,11 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
 
-## Accelerate and FlashAttention
+---
 
-For CUDA pilot and long runs, prefer Accelerate:
+## Training output layout
 
-```bash
-uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert ...
-```
-
-For multi-GPU CUDA training, configure Accelerate first:
-
-```bash
-uv run accelerate config
-
-```
-
-FlashAttention is optional and CUDA-oriented. Do not install it for Mac MPS.
-For CUDA environments, install it only if supported by your PyTorch/CUDA/GPU setup
-ModernBERT can run without FlashAttention, but CUDA training/inference may be slower and use more memory.
-
-```bash
-uv pip install flash-attn --no-build-isolation
-```
-
-
-
-
-## Model-size selection
-
-Only two official model-size choices are supported:
-
-```bash
---model_size base
---model_size large
-```
-
-`base` uses the official ModernBERT-base architecture. `large` uses the official ModernBERT-large architecture.
-
-The training script should not expose arbitrary architecture knobs such as hidden size, number of layers, attention heads, or intermediate size.
-
-For development and pilot runs, start with:
-
-```bash
---model_size base
-```
-
-Do not start with `large` until the pipeline, tokenizer, checkpoint reload, and CUDA pilot run are stable.
-
-## SMILES to SELFIES inference conversion
-
-Checkpoints produced here expect SELFIES input. Convert SMILES before tokenization.
-
-```python
-import selfies as sf
-
-
-def smiles_to_selfies(smiles: str) -> str:
-    # Keep conversion behavior explicit so invalid inputs can be handled upstream.
-    return sf.encoder(smiles)
-```
-
-Guidance:
-
-- Canonicalize SMILES in your serving pipeline if deterministic behavior matters.
-- Preserve stereochemistry upstream; conversion should operate on stereochemically complete strings.
-- Handle invalid SMILES explicitly (exception/log/drop) before tokenizer use.
-
-## Important options
-
-| Option | Default | Purpose |
-|---|---:|---|
-| `--model_size` | `base` | Official ModernBERT architecture size: `base` or `large` |
-| `--tokenizer_vocab_path` | `tokenizer/selfies_ape_tokenizer.json` | Canonical SELFIES tokenizer vocabulary |
-| `--tokenizer_metadata_path` | `<vocab>.metadata.json` | Metadata with representation/hash checks |
-| `--unk_rate_threshold` | `0.001` | Fail if unknown-token rate is too high |
-| `--max_seq_length` | script default | Maximum tokenized SELFIES length used by the model |
-| `--max_eval_batches` | `20` | Cap evaluation batches for memory safety |
-| `--report_to` | `none` | Logging backend: `none` or `tensorboard` |
-| `--val_split_mod` | `100` | Deterministic non-overlapping split modulus |
-| `--val_split_bucket` | `0` | Validation bucket for deterministic split |
-| `--device_backend` | `auto` | Runtime backend: `auto`, `cuda`, `mps`, or `cpu` |
-| `--num_workers` | script default | DataLoader workers; use `0` on Mac/MPS |
-
-## Following training
-
-### Console output
-
-The script prints:
-
-- backend and precision mode
-- tokenizer vocabulary size
-- special token IDs
-- tokenizer validation statistics
-- dataset/tokenization preview
-- model size and parameter count
-- training plan
-- checkpoint and final model locations
-
-### TensorBoard
-
-Enable TensorBoard with:
-
-```bash
---report_to tensorboard
-```
-
-Then run:
-
-```bash
-uv run tensorboard --logdir runs
-```
-
-or for a specific run:
-
-```bash
-uv run tensorboard --logdir runs/cuda_base_pilot_512
-```
-
-### Checkpointing
-
-The script checkpoints automatically when these options are set:
-
-```bash
---save_steps 1000
---save_total_limit 3
-```
-
-This creates intermediate checkpoints:
-
-```text
-output_dir/
-  checkpoint-1000/
-  checkpoint-2000/
-  checkpoint-3000/
-  ...
-```
-
-Only the most recent `save_total_limit` checkpoints are kept.
-
-At the end of training, the script writes:
-
-```text
-output_dir/final_model/
-```
-
-## Output layout
-
-Each run writes:
+Each training run writes:
 
 ```text
 output_dir/
@@ -391,9 +349,11 @@ output_dir/
     README.checkpoint.md
 ```
 
-`final_model/` should be self-contained for inference, aside from installed Python package dependencies.
+`final_model/` should be self-contained for inference and frozen featurisation, aside from installed Python package dependencies.
 
-## Reloading a checkpoint
+---
+
+## Reload a trained checkpoint
 
 ```python
 from transformers import AutoModelForMaskedLM
@@ -401,9 +361,7 @@ from modernmolbert.ape_tokenizer import APETokenizer
 import torch
 
 model = AutoModelForMaskedLM.from_pretrained("runs/cuda_base_pilot_512/final_model")
-
-tokenizer = APETokenizer()
-tokenizer.load_vocabulary("runs/cuda_base_pilot_512/final_model/tokenizer.json")
+tokenizer = APETokenizer.from_pretrained("runs/cuda_base_pilot_512/final_model")
 
 batch = tokenizer("[C][C][O]", add_special_tokens=True, return_tensors="pt")
 
@@ -414,115 +372,219 @@ assert torch.isfinite(out.logits).all()
 print(out.logits.shape)
 ```
 
-## Readiness gate
+---
 
-Do not launch long training until all pass:
+## SMILES to SELFIES conversion
 
-```bash
-uv run pytest
-uv run ruff check .
+Checkpoints produced by this project expect SELFIES input. Benchmark datasets may store SMILES, so the ModernMolBERT featuriser converts SMILES to SELFIES before tokenization.
 
-uv run python -m modernmolbert.validate_tokenizer \
-  --representation SELFIES \
-  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
-  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json \
-  --n 1000
+```python
+import selfies as sf
 
-uv run python -m modernmolbert.train_selfies_ape_modernbert \
-  --debug \
-  --output_dir runs/debug_selfies \
-  --model_size base \
-  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
-  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
+
+def smiles_to_selfies(smiles: str) -> str:
+    return sf.encoder(smiles)
 ```
 
-## Optional smoke test on Mac
+Guidance:
 
-The optional pytest smoke test is skipped unless explicitly enabled.
+- Canonicalize SMILES upstream if deterministic behavior matters.
+- Preserve stereochemistry upstream; conversion should operate on stereochemically complete strings.
+- Handle invalid SMILES explicitly.
+- Benchmark featurisers should mark invalid molecules through `FeatureBatch.valid_mask`.
 
-```bash
-MODERNMOLBERT_RUN_SMOKE=1 MODERNMOLBERT_RUN_MPS=1 \
-  uv run pytest -m "smoke and mps" -s
+---
+
+# Frozen benchmark evaluation
+
+All frozen-representation evaluations should use the shared benchmark runner.
+
+This is the canonical architecture:
+
+```text
+SMILES dataset
+-> RepresentationFeaturizer
+-> FeatureBatch(X, valid_mask, metadata)
+-> FrozenBenchmarkRunner
+-> shared downstream learner
+-> shared metrics
+-> results.json / results.csv
 ```
 
-The smoke test is intentionally tiny. It validates the full pipeline but does not train a useful model.
+ModernMolBERT is evaluated as a featuriser, not through a separate embedding script.
 
-## Troubleshooting
+This ensures ModernMolBERT and baselines share:
 
-### MPS DataLoader workers crash
+- the same invalid-molecule handling
+- the same label masking
+- the same downstream models
+- the same standardization behavior
+- the same metrics
+- the same cache semantics
+- the same output format
 
-Use:
+## ModernMolBERT featuriser config
 
-```bash
---num_workers 0
+Canonical config:
+
+```json
+{
+  "batch_size": 32,
+  "device": "auto",
+  "max_seq_length": 256,
+  "model_dir": "outputs/modernmolbert/final_model",
+  "pooling": "mean",
+  "tokenizer_path": "outputs/modernmolbert/final_model",
+  "type": "modernmolbert_selfies"
+}
 ```
 
-### High truncation rate
+Save this as:
 
-Increase:
-
-```bash
---max_seq_length 512
+```text
+configs/featurizers/modernmolbert_selfies.json
 ```
 
-or inspect tokenized length percentiles in the tokenizer validation output.
+`model_dir` and `tokenizer_path` may point to the same `final_model/` directory if tokenizer artifacts were copied there during training.
 
-### TensorBoard is not logging
+## Run the canonical frozen benchmark
 
-Ensure the run uses:
-
-```bash
---report_to tensorboard
-```
-
-and that `tensorboard` is installed through `uv sync`.
-
-### Reload fails because of config serialization
-
-The training script should save a reloadable `final_model/`. Always test:
+Example classification benchmark:
 
 ```bash
-uv run python - <<'PY'
-from transformers import AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
-import torch
-
-model = AutoModelForMaskedLM.from_pretrained("runs/debug_selfies/final_model")
-tok = APETokenizer()
-tok.load_vocabulary("runs/debug_selfies/final_model/tokenizer.json")
-batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
-
-with torch.no_grad():
-    out = model(**batch)
-
-assert torch.isfinite(out.logits).all()
-print("reload ok", out.logits.shape)
-PY
+uv run python -m modernmolbert.eval.cli.run_frozen_benchmark \
+  --name modernmolbert_smoke \
+  --task_type classification \
+  --task_names label \
+  --train_csv path/to/train.csv \
+  --test_csv path/to/test.csv \
+  --featurizer_config configs/featurizers/modernmolbert_selfies.json \
+  --output_dir outputs/eval/modernmolbert_smoke \
+  --cache_dir outputs/eval/cache \
+  --batch_size 32
 ```
 
-## MoLFormer evaluation baseline
+Example regression benchmark:
 
-MoLFormer is included as a frozen SMILES-encoder baseline. In the main benchmark, its embeddings should be evaluated with the same downstream models as the other representations:
+```bash
+uv run python -m modernmolbert.eval.cli.run_frozen_benchmark \
+  --name esol_modernmolbert \
+  --task_type regression \
+  --task_names solubility \
+  --train_csv data/eval/esol/train.csv \
+  --test_csv data/eval/esol/test.csv \
+  --featurizer_config configs/featurizers/modernmolbert_selfies.json \
+  --output_dir outputs/eval/esol_modernmolbert \
+  --cache_dir outputs/eval/cache \
+  --batch_size 32
+```
+
+Use the same runner for ECFP4, Hugging Face SMILES encoders, MoLFormer, and ModernMolBERT.
+
+## Optional ModernMolBERT wrapper CLI
+
+If retained, the ModernMolBERT-specific CLI should be only a wrapper around `FrozenBenchmarkRunner`.
+
+Example:
+
+```bash
+uv run python -m modernmolbert.eval.cli.run_modernmolbert_eval \
+  --dataset_dir data/eval/moleculenet_sanitized/bbbp \
+  --model_dir outputs/modernmolbert/final_model \
+  --tokenizer_path outputs/modernmolbert/final_model \
+  --output_dir outputs/eval/bbbp_modernmolbert \
+  --cache_dir outputs/eval/cache \
+  --eval_split test \
+  --pooling mean \
+  --batch_size 32
+```
+
+This wrapper must delegate to the same shared benchmark machinery. It should not implement its own embedding, sklearn, masking, or metric path.
+
+---
+
+## MoleculeNet preparation
+
+Prepared MoleculeNet datasets should contain train/valid/test splits and metadata. The benchmark runner can then consume CSV or prepared parquet-style datasets depending on the CLI used.
+
+Typical prepared layout:
+
+```text
+data/eval/moleculenet_sanitized/<dataset>/
+  metadata.json
+  train.parquet
+  valid.parquet
+  test.parquet
+```
+
+The important requirement is that every featuriser sees the same molecules, labels, and splits.
+
+---
+
+## Supported featurisers
+
+### ModernMolBERT SELFIES
+
+```json
+{
+  "type": "modernmolbert_selfies",
+  "model_dir": "outputs/modernmolbert/final_model",
+  "tokenizer_path": "outputs/modernmolbert/final_model",
+  "max_seq_length": 256,
+  "pooling": "mean",
+  "device": "auto",
+  "batch_size": 32
+}
+```
+
+### ECFP4
+
+```json
+{
+  "type": "ecfp4",
+  "name": "ecfp4_2048",
+  "n_bits": 2048,
+  "radius": 2
+}
+```
+
+### Hugging Face SMILES encoder
+
+```json
+{
+  "type": "hf_smiles",
+  "name": "chemberta_77m_mlm",
+  "model_name_or_path": "DeepChem/ChemBERTa-77M-MLM",
+  "max_seq_length": 256,
+  "pooling": "mean",
+  "device": "auto",
+  "trust_remote_code": false
+}
+```
+
+---
+
+## MoLFormer baseline
+
+MoLFormer is included as a frozen SMILES-encoder baseline. It should be evaluated with the same downstream learners as every other representation:
 
 - classification: logistic regression
-- regression: ridge / RidgeCV
+- regression: ridge or RidgeCV
 
-We do not fine-tune MoLFormer for the primary benchmark.
+Do not fine-tune MoLFormer for the primary frozen benchmark.
 
-### Checkpoint
-
-Use the pinned Hugging Face checkpoint:
+Pinned checkpoint:
 
 ```text
 ibm-research/MoLFormer-XL-both-10pct
 revision: 7b12d946c181a37f6012b9dc3b002275de070314
 ```
 
-The checkpoint requires `trust_remote_code=True`, so the revision is pinned for reproducibility.
+MoLFormer requires `trust_remote_code=True`, so the revision is pinned for reproducibility.
 
 ### Separate MoLFormer-only environment
 
-MoLFormer currently needs a Transformers 4.x environment because its Hugging Face remote code depends on older Transformers APIs. Keep this separate from the main ModernMolBERT training environment.
+MoLFormer currently needs a Transformers 4.x environment because its remote code depends on older Transformers APIs. Keep this environment separate from the main ModernMolBERT training environment.
 
 Create `environment-molformer-only.yml`:
 
@@ -555,15 +617,13 @@ conda env create -f environment-molformer-only.yml
 conda activate molformer-only
 ```
 
-Do not install the package with `pip install -e .` in this environment. Instead, run MoLFormer commands from the repo root with:
+Do not install the package with `pip install -e .` in this environment. Instead, run from the repo root with:
 
 ```bash
 export PYTHONPATH="$PWD/src"
 ```
 
-### Featurizer config
-
-Create `configs/featurizers/molformer_xl_both_10pct_cpu.json`:
+### MoLFormer featuriser config
 
 ```json
 {
@@ -578,7 +638,7 @@ Create `configs/featurizers/molformer_xl_both_10pct_cpu.json`:
 }
 ```
 
-### Smoke test
+### MoLFormer smoke test
 
 ```bash
 PYTHONPATH="$PWD/src" python - <<'PY'
@@ -609,51 +669,217 @@ valid_mask [ True  True  True]
 X (3, 768) float32
 ```
 
-### Optional pytest
-
-MoLFormer tests are skipped by default. Run them explicitly inside the `molformer-only` environment:
+Run optional tests inside the MoLFormer environment:
 
 ```bash
 PYTHONPATH="$PWD/src" MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 \
   python -m pytest tests/test_eval_molformer.py -q -s
 ```
 
-A registry-only test can be run without loading the model:
+---
+
+## Readiness gate
+
+Do not launch long training until all of the following pass.
 
 ```bash
-PYTHONPATH="$PWD/src" python -m pytest tests/test_eval_molformer.py -q -k registry
+uv run ruff check .
+uv run pytest
 ```
 
-Register these markers in `pyproject.toml` if they are not already present:
-
-```toml
-[tool.pytest.ini_options]
-markers = [
-    "smoke: optional smoke tests",
-    "mps: tests requiring Apple MPS",
-    "model: tests that load trained model checkpoints or external pretrained models",
-    "molformer: tests requiring the separate molformer-only environment",
-]
-```
-
-### CLI example
+Validate tokenizer:
 
 ```bash
-PYTHONPATH="$PWD/src" python -m modernmolbert.eval.cli.run_frozen_benchmark \
-  --name tiny_molformer_demo \
-  --task_type classification \
-  --task_names label \
-  --train_csv tmp_eval/train.csv \
-  --test_csv tmp_eval/test.csv \
-  --featurizer_config configs/featurizers/molformer_xl_both_10pct_cpu.json \
-  --output_dir tmp_eval/results_molformer \
-  --cache_dir tmp_eval/cache \
-  --batch_size 4
+uv run python -m modernmolbert.validate_tokenizer \
+  --representation SELFIES \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json \
+  --n 1000
 ```
 
-Notes:
+Run debug training:
 
-- Use this environment only for MoLFormer evaluation.
-- Use the main `uv`/ModernMolBERT environment for training and normal tests.
-- MoLFormer consumes SMILES, not SELFIES.
-- The embedding is mean-pooled from `last_hidden_state` using the attention mask.
+```bash
+uv run python -m modernmolbert.train_selfies_ape_modernbert \
+  --debug \
+  --output_dir runs/debug_selfies \
+  --model_size base \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
+```
+
+Reload the debug checkpoint:
+
+```bash
+uv run python - <<'PY'
+from transformers import AutoModelForMaskedLM
+from modernmolbert.ape_tokenizer import APETokenizer
+import torch
+
+model = AutoModelForMaskedLM.from_pretrained("runs/debug_selfies/final_model")
+tok = APETokenizer.from_pretrained("runs/debug_selfies/final_model")
+batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
+
+with torch.no_grad():
+    out = model(**batch)
+
+assert torch.isfinite(out.logits).all()
+print("reload ok", out.logits.shape)
+PY
+```
+
+Run focused core tests:
+
+```bash
+uv run pytest \
+  tests/test_tokenizer_training.py \
+  tests/test_collator.py \
+  tests/test_training_cli.py \
+  tests/test_tokenizer_validation.py \
+  tests/test_smoke_training.py \
+  tests/test_checkpoint_reload.py \
+  tests/test_eval_modernmolbert_selfies.py \
+  tests/test_frozen_benchmark_modernmolbert_smoke.py \
+  -q
+```
+
+---
+
+## Optional Mac smoke tests
+
+The optional pytest smoke test is skipped unless explicitly enabled.
+
+```bash
+MODERNMOLBERT_RUN_SMOKE=1 MODERNMOLBERT_RUN_MPS=1 \
+  uv run pytest -m "smoke and mps" -s
+```
+
+Use `--num_workers 0` for MPS runs.
+
+---
+
+## Important training options
+
+| Option | Typical value | Purpose |
+|---|---:|---|
+| `--model_size` | `base` | Official ModernBERT architecture size: `base` or `large` |
+| `--tokenizer_vocab_path` | `tokenizer/selfies_ape_tokenizer.json` | SELFIES tokenizer vocabulary |
+| `--tokenizer_metadata_path` | `<vocab>.metadata.json` | Metadata with representation/hash checks |
+| `--unk_rate_threshold` | `0.001` | Fail if unknown-token rate is too high |
+| `--max_seq_length` | `256` or `512` | Maximum tokenized SELFIES length |
+| `--max_eval_batches` | `20` or higher | Cap evaluation batches for memory safety |
+| `--report_to` | `tensorboard` | Logging backend |
+| `--val_split_mod` | `100` | Deterministic split modulus |
+| `--val_split_bucket` | `0` | Validation bucket for deterministic split |
+| `--device_backend` | `auto`, `cuda`, `mps`, `cpu` | Runtime backend |
+| `--num_workers` | `0` on Mac/MPS | DataLoader workers |
+| `--bf16` / `--no-bf16` | backend-dependent | Enable or disable bf16 |
+
+---
+
+## TensorBoard
+
+Enable TensorBoard logging with:
+
+```bash
+--report_to tensorboard
+```
+
+Then run:
+
+```bash
+uv run tensorboard --logdir runs
+```
+
+or for a specific run:
+
+```bash
+uv run tensorboard --logdir runs/cuda_base_pilot_512
+```
+
+---
+
+## Troubleshooting
+
+### MPS DataLoader workers crash
+
+Use:
+
+```bash
+--num_workers 0
+```
+
+### High truncation rate
+
+Increase sequence length:
+
+```bash
+--max_seq_length 512
+```
+
+Also inspect tokenized length percentiles in the tokenizer validation output.
+
+### CUDA bf16 failure
+
+Disable bf16:
+
+```bash
+--no-bf16
+```
+
+or use a CUDA device that supports bf16.
+
+### TensorBoard is not logging
+
+Ensure the run uses:
+
+```bash
+--report_to tensorboard
+```
+
+and that TensorBoard is installed through `uv sync`.
+
+### Checkpoint reload fails
+
+Test the final model directory directly:
+
+```bash
+uv run python - <<'PY'
+from transformers import AutoModelForMaskedLM
+from modernmolbert.ape_tokenizer import APETokenizer
+import torch
+
+model = AutoModelForMaskedLM.from_pretrained("runs/debug_selfies/final_model")
+tok = APETokenizer.from_pretrained("runs/debug_selfies/final_model")
+batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
+
+with torch.no_grad():
+    out = model(**batch)
+
+assert torch.isfinite(out.logits).all()
+print("reload ok", out.logits.shape)
+PY
+```
+
+### Benchmark results differ between scripts
+
+Use only the shared benchmark runner for benchmark results:
+
+```bash
+python -m modernmolbert.eval.cli.run_frozen_benchmark
+```
+
+If `run_modernmolbert_eval.py` is retained, it must delegate to the shared runner. Do not compare results from a separate direct embedding/sklearn path.
+
+---
+
+## Development principles
+
+- Keep tokenizer training separate from model training.
+- Treat tokenizer validation as a mandatory gate.
+- Copy tokenizer artifacts into every final model directory.
+- Evaluate ModernMolBERT as a normal featuriser.
+- Use one benchmark runner for all frozen representations.
+- Avoid adding new benchmark scope until the core tokenizer, model, featuriser, and runner path are stable.
+- Prefer small smoke tests before expensive training.
+- Record enough metadata to reproduce every run.

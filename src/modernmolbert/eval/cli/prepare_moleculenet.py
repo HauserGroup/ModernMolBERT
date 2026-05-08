@@ -57,6 +57,30 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="List supported datasets and exit.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed used for local random/scaffold splitting.",
+    )
+    parser.add_argument(
+        "--frac_train",
+        type=float,
+        default=0.8,
+        help="Fraction of rows assigned to the training split.",
+    )
+    parser.add_argument(
+        "--frac_valid",
+        type=float,
+        default=0.1,
+        help="Fraction of rows assigned to the validation split.",
+    )
+    parser.add_argument(
+        "--frac_test",
+        type=float,
+        default=0.1,
+        help="Fraction of rows assigned to the test split.",
+    )
 
     return parser.parse_args()
 
@@ -64,14 +88,21 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    if args.keep_invalid and args.split == "scaffold":
+        raise SystemExit(
+            "--keep_invalid cannot be used with --split scaffold because invalid "
+            "molecules do not have meaningful scaffolds. Use --split random/index "
+            "or omit --keep_invalid."
+        )
+
     if args.list_datasets:
         print("Core datasets:")
-        for name in CORE_SPECS:
-            print(f"  {name}")
+        for name, spec in CORE_SPECS.items():
+            print(f"  {name:14s} {spec.task_type:14s} metric={spec.preferred_metric}")
 
         print("\nExtended datasets:")
-        for name in EXTENDED_SPECS:
-            print(f"  {name}")
+        for name, spec in EXTENDED_SPECS.items():
+            print(f"  {name:14s} {spec.task_type:14s} metric={spec.preferred_metric}")
 
         return
 
@@ -81,6 +112,10 @@ def main() -> None:
         deepchem_data_dir=args.deepchem_data_dir,
         deepchem_save_dir=args.deepchem_save_dir,
         split=args.split,
+        seed=args.seed,
+        frac_train=args.frac_train,
+        frac_valid=args.frac_valid,
+        frac_test=args.frac_test,
         keep_invalid=args.keep_invalid,
     )
 

@@ -109,13 +109,19 @@ def prepare_many(
     deepchem_data_dir: Path,
     deepchem_save_dir: Path,
     split: str = "scaffold",
+    frac_train: float = 0.8,
+    frac_valid: float = 0.1,
+    frac_test: float = 0.1,
     keep_invalid: bool = False,
+    seed: int = 42,
 ) -> None:
     """Prepare several MoleculeNet datasets as local sanitized Parquet files."""
 
     output_root.mkdir(parents=True, exist_ok=True)
     deepchem_data_dir.mkdir(parents=True, exist_ok=True)
     deepchem_save_dir.mkdir(parents=True, exist_ok=True)
+
+    prepared: list[dict[str, Any]] = []
 
     for dataset_name in dataset_names:
         if dataset_name not in ALL_SPECS:
@@ -130,8 +136,37 @@ def prepare_many(
             deepchem_data_dir=deepchem_data_dir,
             deepchem_save_dir=deepchem_save_dir,
             split=split,
+            frac_train=frac_train,
+            frac_valid=frac_valid,
+            frac_test=frac_test,
             keep_invalid=keep_invalid,
+            seed=seed,
         )
+
+        prepared.append(
+            {
+                "name": dataset_name,
+                "path": str(deepchem_save_dir / dataset_name / "example.tsv"),
+            }
+        )
+
+    manifest = {
+        "datasets": prepared,
+        "split": split,
+        "split_seed": seed,
+        "split_fractions": {
+            "train": frac_train,
+            "valid": frac_valid,
+            "test": frac_test,
+        },
+        "keep_invalid": keep_invalid,
+        "versions": collect_preparation_versions(),
+    }
+
+    (output_root / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def prepare_dataset(
@@ -141,8 +176,12 @@ def prepare_dataset(
     deepchem_data_dir: Path,
     deepchem_save_dir: Path,
     split: str = "scaffold",
+    frac_train: float = 0.8,
+    frac_valid: float = 0.1,
+    frac_test: float = 0.1,
+    seed: int = 42,
     keep_invalid: bool = False,
-) -> None:
+) -> Path:
     """Prepare one MoleculeNet dataset.
 
     We load unsplit data from DeepChem, sanitize once, then split locally.
@@ -160,10 +199,18 @@ def prepare_dataset(
         save_dir=deepchem_save_dir,
     )
 
+    tasks = [str(task) for task in tasks]
+
     if len(datasets) != 1:
         raise ValueError(
             f"Expected unsplit DeepChem loader to return one dataset for {spec.name}, "
             f"got {len(datasets)}"
+        )
+
+    if keep_invalid and split == "scaffold":
+        raise ValueError(
+            "keep_invalid=True is not supported with scaffold split. "
+            "Use keep_invalid=False or split='random'."
         )
 
     print(f"[{spec.name}] extracting labels and SMILES...")
@@ -190,10 +237,10 @@ def prepare_dataset(
     splits = split_sanitized_frame(
         split_frame,
         split=split,
-        seed=13,
-        frac_train=0.8,
-        frac_valid=0.1,
-        frac_test=0.1,
+        seed=seed,
+        frac_train=frac_train,
+        frac_valid=frac_valid,
+        frac_test=frac_test,
     )
 
     split_counts: dict[str, dict[str, Any]] = {}
@@ -242,12 +289,39 @@ def prepare_dataset(
             "sanitize_error": "error label for invalid rows",
         },
         "splits": split_counts,
+        "split_fractions": {
+            "train": frac_train,
+            "valid": frac_valid,
+            "test": frac_test,
+        },
+        "scaffold_stats": compute_scaffold_stats(split_frame)
+        if split == "scaffold"
+        else None,
+        "split_scaffold_stats": {
+            split_name: compute_scaffold_stats(split_df)
+            for split_name, split_df in splits.items()
+        }
+        if split == "scaffold"
+        else None,
+        "label_stats": compute_task_label_stats(
+            splits=splits,
+            tasks=tasks,
+            task_type=spec.task_type,
+        ),
+        "duplicate_stats": compute_duplicate_stats(split_frame),
+        "split_overlap_stats": compute_split_overlap_stats(
+            splits,
+            key="smiles_canonical",
+        ),
+        "versions": collect_preparation_versions(),
+        "split_seed": seed,
     }
 
     metadata_path = dataset_out / "metadata.json"
     metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
 
     print(f"[{spec.name}] wrote {dataset_out}")
+    return dataset_out
 
 
 def load_deepchem_molnet_unsplit(
@@ -281,18 +355,6 @@ def load_deepchem_molnet_unsplit(
     return list(tasks), datasets, transformers
 
 
-def infer_split_names(n_splits: int) -> list[str]:
-    """Infer conventional split names from DeepChem loader output length."""
-
-    if n_splits == 3:
-        return ["train", "valid", "test"]
-
-    if n_splits == 1:
-        return ["all"]
-
-    return [f"split_{i}" for i in range(n_splits)]
-
-
 def deepchem_dataset_to_frame(dataset: Any, tasks: Sequence[str]) -> pd.DataFrame:
     """Convert a DeepChem Dataset to a pandas DataFrame.
 
@@ -318,8 +380,14 @@ def deepchem_dataset_to_frame(dataset: Any, tasks: Sequence[str]) -> pd.DataFram
 
     rows: list[dict[str, Any]] = []
 
+    dataset_ids = list(getattr(dataset, "ids", [None] * len(smiles_raw)))
+
     for i, smi in enumerate(smiles_raw):
-        row: dict[str, Any] = {"smiles_raw": smi}
+        row: dict[str, Any] = {
+            "molnet_row_id": i,
+            "deepchem_id": str(dataset_ids[i]) if dataset_ids[i] is not None else None,
+            "smiles_raw": smi,
+        }
 
         for j, task in enumerate(tasks):
             value = y[i, j]
@@ -327,7 +395,7 @@ def deepchem_dataset_to_frame(dataset: Any, tasks: Sequence[str]) -> pd.DataFram
             if _label_is_missing(w=w, row_idx=i, task_idx=j):
                 row[task] = np.nan
             else:
-                row[task] = value
+                row[task] = float(value)
 
         rows.append(row)
 
@@ -473,6 +541,7 @@ def split_sanitized_frame(
     frac_train: float = 0.8,
     frac_valid: float = 0.1,
     frac_test: float = 0.1,
+    group_duplicates: bool = True,
 ) -> dict[str, pd.DataFrame]:
     """Split a sanitized valid-only frame into train/valid/test."""
 
@@ -486,6 +555,7 @@ def split_sanitized_frame(
             frac_train=frac_train,
             frac_valid=frac_valid,
             frac_test=frac_test,
+            group_duplicates=group_duplicates,
         )
 
     if split == "scaffold":
@@ -522,7 +592,18 @@ def random_split_frame(
     frac_train: float,
     frac_valid: float,
     frac_test: float,
+    group_duplicates: bool = True,
 ) -> dict[str, pd.DataFrame]:
+    if group_duplicates and "smiles_canonical" in frame.columns:
+        return grouped_random_split_frame(
+            frame,
+            group_column="smiles_canonical",
+            seed=seed,
+            frac_train=frac_train,
+            frac_valid=frac_valid,
+            frac_test=frac_test,
+        )
+
     shuffled = frame.sample(frac=1.0, random_state=seed).reset_index(drop=True)
     return index_split_frame(
         shuffled,
@@ -562,18 +643,22 @@ def scaffold_split_frame(
 ) -> dict[str, pd.DataFrame]:
     """Scaffold split after sanitization.
 
-    This uses smiles_canonical, so invalid molecules have already been removed.
+    Splits molecules by Bemis-Murcko scaffold using canonical SMILES.
+    Scaffold groups are assigned greedily to the currently most underfilled
+    split relative to the requested target sizes.
     """
 
     from rdkit import Chem
     from rdkit.Chem.Scaffolds import MurckoScaffold
 
+    if "smiles_canonical" not in frame.columns:
+        raise ValueError("Expected column 'smiles_canonical' for scaffold split")
+
     scaffold_to_indices: dict[str, list[int]] = {}
 
     for idx, smiles in enumerate(frame["smiles_canonical"].tolist()):
-        mol = Chem.MolFromSmiles(smiles)
+        mol = Chem.MolFromSmiles(str(smiles))
         if mol is None:
-            # Should not happen after sanitization, but keep a fallback.
             scaffold = f"invalid_{idx}"
         else:
             scaffold = MurckoScaffold.MurckoScaffoldSmiles(
@@ -585,21 +670,177 @@ def scaffold_split_frame(
 
     rng = np.random.default_rng(seed)
 
-    scaffold_groups = list(scaffold_to_indices.values())
-    scaffold_groups.sort(key=len, reverse=True)
+    groups = list(scaffold_to_indices.values())
 
-    # Shuffle groups of equal-ish size lightly while preserving the basic
-    # large-scaffold-first behavior.
-    # This avoids completely deterministic dataset-order artifacts.
-    grouped_by_size: dict[int, list[list[int]]] = {}
-    for group in scaffold_groups:
-        grouped_by_size.setdefault(len(group), []).append(group)
+    # Shuffle before sorting so equal-sized groups are randomized reproducibly.
+    rng.shuffle(groups)
+    groups.sort(key=len, reverse=True)
 
-    shuffled_groups: list[list[int]] = []
-    for size in sorted(grouped_by_size, reverse=True):
-        groups = grouped_by_size[size]
-        rng.shuffle(groups)
-        shuffled_groups.extend(groups)
+    n_total = len(frame)
+    targets = {
+        "train": frac_train * n_total,
+        "valid": frac_valid * n_total,
+        "test": frac_test * n_total,
+    }
+
+    assigned: dict[str, list[int]] = {
+        "train": [],
+        "valid": [],
+        "test": [],
+    }
+
+    for group in groups:
+        # Choose the split with the largest relative remaining capacity.
+        def remaining_fraction(split_name: str) -> float:
+            target = targets[split_name]
+            if target <= 0:
+                return -np.inf
+            return (target - len(assigned[split_name])) / target
+
+        split_name = max(("train", "valid", "test"), key=remaining_fraction)
+        assigned[split_name].extend(group)
+
+    return {
+        split_name: frame.iloc[indices].reset_index(drop=True)
+        for split_name, indices in assigned.items()
+    }
+
+
+def compute_task_label_stats(
+    *,
+    splits: dict[str, pd.DataFrame],
+    tasks: Sequence[str],
+    task_type: TaskType,
+) -> dict[str, Any]:
+    """Compute per-task label availability and class/regression summaries."""
+
+    stats: dict[str, Any] = {}
+
+    for split_name, split_df in splits.items():
+        split_stats: dict[str, Any] = {}
+
+        for task in tasks:
+            if task not in split_df.columns:
+                split_stats[task] = {"error": "missing_task_column"}
+                continue
+
+            values = split_df[task]
+            observed = values.dropna()
+
+            task_stats: dict[str, Any] = {
+                "n_rows": int(len(values)),
+                "n_observed": int(observed.shape[0]),
+                "n_missing": int(values.isna().sum()),
+                "missing_fraction": float(values.isna().mean()) if len(values) else 0.0,
+            }
+
+            if task_type == "classification":
+                counts = observed.value_counts(dropna=True).sort_index()
+                task_stats["class_counts"] = {str(k): int(v) for k, v in counts.items()}
+                task_stats["n_classes_observed"] = int(counts.shape[0])
+            else:
+                if len(observed):
+                    task_stats["mean"] = float(observed.mean())
+                    task_stats["std"] = float(observed.std(ddof=0))
+                    task_stats["min"] = float(observed.min())
+                    task_stats["max"] = float(observed.max())
+                else:
+                    task_stats["mean"] = None
+                    task_stats["std"] = None
+                    task_stats["min"] = None
+                    task_stats["max"] = None
+
+            split_stats[task] = task_stats
+
+        stats[split_name] = split_stats
+
+    return stats
+
+
+def compute_scaffold_stats(frame: pd.DataFrame) -> dict[str, Any]:
+    """Compute scaffold-size summaries for a sanitized frame."""
+
+    from rdkit import Chem
+    from rdkit.Chem.Scaffolds import MurckoScaffold
+
+    if "smiles_canonical" not in frame.columns:
+        return {"error": "missing_smiles_canonical"}
+
+    scaffold_counts: dict[str, int] = {}
+
+    for smiles in frame["smiles_canonical"].dropna().tolist():
+        mol = Chem.MolFromSmiles(str(smiles))
+        if mol is None:
+            scaffold = "__invalid__"
+        else:
+            scaffold = MurckoScaffold.MurckoScaffoldSmiles(
+                mol=mol,
+                includeChirality=False,
+            )
+        scaffold_counts[scaffold] = scaffold_counts.get(scaffold, 0) + 1
+
+    sizes = np.asarray(list(scaffold_counts.values()), dtype=int)
+
+    if sizes.size == 0:
+        return {
+            "n_scaffolds": 0,
+            "largest_scaffold_size": 0,
+            "largest_scaffold_fraction": 0.0,
+        }
+
+    return {
+        "n_scaffolds": int(sizes.size),
+        "largest_scaffold_size": int(sizes.max()),
+        "largest_scaffold_fraction": float(sizes.max() / len(frame)),
+        "mean_scaffold_size": float(sizes.mean()),
+        "median_scaffold_size": float(np.median(sizes)),
+        "top_10_scaffold_sizes": [int(x) for x in sorted(sizes, reverse=True)[:10]],
+    }
+
+
+def compute_duplicate_stats(frame: pd.DataFrame) -> dict[str, Any]:
+    """Compute duplicate statistics based on canonical SMILES."""
+
+    if "smiles_canonical" not in frame.columns:
+        return {"error": "missing_smiles_canonical"}
+
+    valid = frame.loc[frame["smiles_canonical"].notna(), "smiles_canonical"]
+
+    n_valid = int(valid.shape[0])
+    n_unique = int(valid.nunique())
+    n_duplicate_rows = int(n_valid - n_unique)
+
+    duplicated_values = valid[valid.duplicated(keep=False)]
+    duplicate_group_sizes = (
+        duplicated_values.value_counts().sort_values(ascending=False).tolist()
+    )
+
+    return {
+        "n_valid_rows": n_valid,
+        "n_unique_canonical_smiles": n_unique,
+        "n_duplicate_rows": n_duplicate_rows,
+        "duplicate_fraction": float(n_duplicate_rows / n_valid) if n_valid else 0.0,
+        "top_10_duplicate_group_sizes": [int(x) for x in duplicate_group_sizes[:10]],
+    }
+
+
+def grouped_random_split_frame(
+    frame: pd.DataFrame,
+    *,
+    group_column: str,
+    seed: int,
+    frac_train: float,
+    frac_valid: float,
+    frac_test: float,
+) -> dict[str, pd.DataFrame]:
+    rng = np.random.default_rng(seed)
+
+    groups = [
+        indices.to_list()
+        for _, indices in frame.groupby(group_column, sort=False).groups.items()
+    ]
+
+    rng.shuffle(groups)
 
     n_total = len(frame)
     n_train_target = int(frac_train * n_total)
@@ -609,7 +850,7 @@ def scaffold_split_frame(
     valid_idx: list[int] = []
     test_idx: list[int] = []
 
-    for group in shuffled_groups:
+    for group in groups:
         if len(train_idx) + len(group) <= n_train_target:
             train_idx.extend(group)
         elif len(valid_idx) + len(group) <= n_valid_target:
@@ -618,10 +859,61 @@ def scaffold_split_frame(
             test_idx.extend(group)
 
     return {
-        "train": frame.iloc[train_idx].reset_index(drop=True),
-        "valid": frame.iloc[valid_idx].reset_index(drop=True),
-        "test": frame.iloc[test_idx].reset_index(drop=True),
+        "train": frame.loc[train_idx].reset_index(drop=True),
+        "valid": frame.loc[valid_idx].reset_index(drop=True),
+        "test": frame.loc[test_idx].reset_index(drop=True),
     }
+
+
+def compute_split_overlap_stats(
+    splits: dict[str, pd.DataFrame],
+    *,
+    key: str = "smiles_canonical",
+) -> dict[str, Any]:
+    """Compute overlap in molecule keys across train/valid/test."""
+
+    key_sets: dict[str, set[str]] = {}
+
+    for split_name, split_df in splits.items():
+        if key not in split_df.columns:
+            key_sets[split_name] = set()
+            continue
+
+        key_sets[split_name] = {str(x) for x in split_df[key].dropna().tolist()}
+
+    pairs = [
+        ("train", "valid"),
+        ("train", "test"),
+        ("valid", "test"),
+    ]
+
+    out: dict[str, Any] = {}
+
+    for left, right in pairs:
+        overlap = key_sets.get(left, set()) & key_sets.get(right, set())
+        out[f"{left}_{right}"] = {
+            "n_overlap": int(len(overlap)),
+            "examples": sorted(overlap)[:20],
+        }
+
+    return out
+
+
+def collect_preparation_versions() -> dict[str, str | None]:
+    """Collect relevant package versions for prepared dataset provenance."""
+
+    versions: dict[str, str | None] = {}
+
+    for package_name in ["deepchem", "rdkit", "selfies", "pandas", "numpy"]:
+        try:
+            module = __import__(package_name)
+
+            versions[package_name] = getattr(module, "__version__", None)
+
+        except Exception:
+            versions[package_name] = None
+
+    return versions
 
 
 def write_example_tsv(

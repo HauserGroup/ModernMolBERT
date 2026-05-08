@@ -1,0 +1,9 @@
+{
+  "device": "auto",
+  "max_seq_length": 256,
+  "model_name_or_path": "fabikru/MolEncoder",
+  "name": "molencoder",
+  "pooling": "mean",
+  "trust_remote_code": false,
+  "type": "hf_smiles"
+}

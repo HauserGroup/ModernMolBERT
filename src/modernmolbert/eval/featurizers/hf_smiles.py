@@ -1,4 +1,10 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+import json
+from pathlib import Path
+import shutil
+import tempfile
 from typing import Literal, Sequence
 
 import numpy as np
@@ -7,21 +13,12 @@ from modernmolbert.eval.featurizers.base import FeatureBatch
 
 
 PoolingMode = Literal["mean", "cls"]
+_ATTENTION_ROPE_KEYS = frozenset({"sliding_attention", "full_attention"})
 
 
 @dataclass(frozen=True)
 class HuggingFaceSmilesFeaturizer:
-    """Hugging Face encoder featurizer for SMILES language models.
-
-    This is intended for frozen embedding benchmarks using models such as:
-
-      - DeepChem/ChemBERTa-77M-MLM
-      - DeepChem/ChemBERTa-10M-MLM
-      - DeepChem/ChemBERTa-5M-MLM
-      - other AutoTokenizer/AutoModel-compatible SMILES encoders
-
-    It returns one fixed-size vector per valid SMILES string.
-    """
+    """Hugging Face encoder featurizer for SMILES language models."""
 
     name: str
     model_name_or_path: str
@@ -30,6 +27,10 @@ class HuggingFaceSmilesFeaturizer:
     device: str = "auto"
     trust_remote_code: bool = False
     revision: str | None = None
+
+    # Compatibility shim for ModernBERT checkpoints such as MolEncoder whose
+    # config contains legacy/extra RoPE keys rejected by strict HF validation.
+    sanitize_modernbert_rope: bool = True
 
     def featurize_smiles(
         self,
@@ -45,16 +46,23 @@ class HuggingFaceSmilesFeaturizer:
 
         device = _resolve_device(self.device)
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            self.model_name_or_path,
-            trust_remote_code=self.trust_remote_code,
+        model_path = _maybe_prepare_sanitized_model_dir(
+            model_name_or_path=self.model_name_or_path,
             revision=self.revision,
+            sanitize_modernbert_rope=self.sanitize_modernbert_rope,
+        )
+
+        if self.sanitize_modernbert_rope:
+            _patch_modernbert_rope_standardization()
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            trust_remote_code=self.trust_remote_code,
         )
 
         model = AutoModel.from_pretrained(
-            self.model_name_or_path,
+            model_path,
             trust_remote_code=self.trust_remote_code,
-            revision=self.revision,
         )
 
         model.to(device)
@@ -75,13 +83,17 @@ class HuggingFaceSmilesFeaturizer:
             valid_indices.append(i)
 
         valid_mask = np.zeros(len(smiles), dtype=bool)
+
         if not valid_inputs:
             hidden_size = int(getattr(model.config, "hidden_size", 0))
             out = FeatureBatch(
                 X=np.empty((0, hidden_size), dtype=np.float32),
                 valid_mask=valid_mask,
                 metadata=self._metadata(
-                    model=model, tokenizer=tokenizer, device=str(device)
+                    model=model,
+                    tokenizer=tokenizer,
+                    device=str(device),
+                    resolved_model_path=model_path,
                 ),
             )
             out.check(len(smiles))
@@ -99,19 +111,17 @@ class HuggingFaceSmilesFeaturizer:
                 max_length=self.max_seq_length,
                 return_tensors="pt",
             )
-            batch = {k: v.to(device) for k, v in batch.items()}
+            batch = {key: value.to(device) for key, value in batch.items()}
 
             with torch.no_grad():
                 outputs = model(**batch)
 
-            hidden = outputs.last_hidden_state
+            hidden = _get_last_hidden_state(outputs)
 
             if self.pooling == "mean":
                 pooled = _mean_pool(hidden, batch["attention_mask"])
-            elif self.pooling == "cls":
-                pooled = hidden[:, 0, :]
             else:
-                raise ValueError(f"Unknown pooling mode: {self.pooling!r}")
+                pooled = hidden[:, 0, :]
 
             rows.append(pooled.detach().cpu().numpy().astype(np.float32, copy=False))
 
@@ -122,18 +132,30 @@ class HuggingFaceSmilesFeaturizer:
             X=X,
             valid_mask=valid_mask,
             metadata=self._metadata(
-                model=model, tokenizer=tokenizer, device=str(device)
+                model=model,
+                tokenizer=tokenizer,
+                device=str(device),
+                resolved_model_path=model_path,
             ),
         )
         out.check(len(smiles))
         return out
 
-    def _metadata(self, *, model, tokenizer, device: str) -> dict[str, object]:
+    def _metadata(
+        self,
+        *,
+        model,
+        tokenizer,
+        device: str,
+        resolved_model_path: str,
+    ) -> dict[str, object]:
         n_params = int(sum(p.numel() for p in model.parameters()))
 
         return {
             "backend": "huggingface_transformers",
             "model_name_or_path": self.model_name_or_path,
+            "resolved_model_path": resolved_model_path,
+            "revision": self.revision,
             "pooling": self.pooling,
             "max_seq_length": self.max_seq_length,
             "device": device,
@@ -142,7 +164,7 @@ class HuggingFaceSmilesFeaturizer:
             "vocab_size": int(getattr(tokenizer, "vocab_size", 0)),
             "num_parameters": n_params,
             "trust_remote_code": self.trust_remote_code,
-            "revision": self.revision,
+            "sanitize_modernbert_rope": self.sanitize_modernbert_rope,
         }
 
 
@@ -164,3 +186,175 @@ def _mean_pool(last_hidden_state, attention_mask):
     summed = (last_hidden_state * mask).sum(dim=1)
     denom = mask.sum(dim=1).clamp(min=1)
     return summed / denom
+
+
+def _get_last_hidden_state(outputs):
+    if hasattr(outputs, "last_hidden_state"):
+        return outputs.last_hidden_state
+
+    if isinstance(outputs, dict):
+        if "last_hidden_state" in outputs:
+            return outputs["last_hidden_state"]
+        if "hidden_states" in outputs:
+            return outputs["hidden_states"][-1]
+
+    if isinstance(outputs, tuple) and len(outputs) > 0:
+        return outputs[0]
+
+    raise TypeError(
+        "Could not find last hidden state in Hugging Face model output. "
+        f"Output type: {type(outputs)!r}"
+    )
+
+
+def _maybe_prepare_sanitized_model_dir(
+    *,
+    model_name_or_path: str,
+    revision: str | None,
+    sanitize_modernbert_rope: bool,
+) -> str:
+    """Return a local model path, patching config.json only when needed."""
+
+    source_dir = _resolve_model_dir(
+        model_name_or_path=model_name_or_path,
+        revision=revision,
+    )
+
+    if not sanitize_modernbert_rope:
+        return str(source_dir)
+
+    config_path = source_dir / "config.json"
+    if not config_path.exists():
+        return str(source_dir)
+
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    sanitized = _sanitize_modernbert_rope_config(config)
+
+    if sanitized == config:
+        return str(source_dir)
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="modernmolbert_hf_"))
+    _copy_model_dir(source_dir, tmpdir)
+
+    (tmpdir / "config.json").write_text(
+        json.dumps(sanitized, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    return str(tmpdir)
+
+
+def _resolve_model_dir(
+    *,
+    model_name_or_path: str,
+    revision: str | None,
+) -> Path:
+    local_path = Path(model_name_or_path)
+    if local_path.exists():
+        return local_path
+
+    from huggingface_hub import snapshot_download
+
+    return Path(
+        snapshot_download(
+            repo_id=model_name_or_path,
+            revision=revision,
+        )
+    )
+
+
+def _sanitize_modernbert_rope_config(config_dict: dict) -> dict:
+
+    cleaned = dict(config_dict)
+
+    if cleaned.get("model_type") == "modernbert":
+        cleaned.pop("rope_scaling", None)
+        cleaned.pop("rope_parameters", None)
+        cleaned.pop("rope_type", None)
+        cleaned.pop("rope_theta", None)
+
+    return cleaned
+
+
+def _copy_model_dir(src: Path, dst: Path) -> None:
+    for item in src.iterdir():
+        target = dst / item.name
+
+        if item.is_dir():
+            shutil.copytree(item, target)
+        else:
+            shutil.copy2(item, target)
+
+
+def _patch_modernbert_rope_standardization() -> None:
+    """Patch ModernBERT RoPE handling for strict HF validation.
+
+    Some Transformers/HF version combinations construct a ModernBERT
+    rope_parameters dict with extra top-level keys such as "rope_type".
+    Strict validation expects only:
+
+        {
+          "sliding_attention": {...},
+          "full_attention": {...},
+        }
+
+    This compatibility shim keeps only those two per-attention entries.
+    """
+    try:
+        from transformers.models.modernbert.configuration_modernbert import (
+            ModernBertConfig,
+        )
+    except Exception:
+        return
+
+    if getattr(ModernBertConfig, "_modernmolbert_rope_patch_applied", False):
+        return
+
+    def _clean_or_build_rope(self) -> dict[str, dict[str, float | str]]:
+        existing = getattr(self, "rope_parameters", None)
+
+        if existing is None:
+            existing = getattr(self, "rope_scaling", None)
+
+        if isinstance(existing, dict):
+            cleaned = {
+                key: value
+                for key, value in existing.items()
+                if key in {"sliding_attention", "full_attention"}
+                and isinstance(value, dict)
+            }
+
+            if set(cleaned) == {"sliding_attention", "full_attention"}:
+                return cleaned
+
+        local_theta = getattr(self, "local_rope_theta", 10000.0)
+        global_theta = getattr(self, "global_rope_theta", 160000.0)
+
+        return {
+            "sliding_attention": {
+                "rope_type": "default",
+                "rope_theta": float(local_theta),
+            },
+            "full_attention": {
+                "rope_type": "default",
+                "rope_theta": float(global_theta),
+            },
+        }
+
+    def standardize_rope_params(self) -> None:
+        object.__setattr__(self, "rope_parameters", _clean_or_build_rope(self))
+
+    def convert_rope_params_to_dict(self, **kwargs):
+        object.__setattr__(self, "rope_parameters", _clean_or_build_rope(self))
+
+        # Prevent legacy keys from being processed again downstream.
+        kwargs.pop("rope_scaling", None)
+        kwargs.pop("rope_parameters", None)
+        kwargs.pop("rope_type", None)
+        kwargs.pop("rope_theta", None)
+
+        return kwargs
+
+    ModernBertConfig.standardize_rope_params = standardize_rope_params
+    ModernBertConfig.convert_rope_params_to_dict = convert_rope_params_to_dict
+    setattr(ModernBertConfig, "_modernmolbert_rope_patch_applied", True)

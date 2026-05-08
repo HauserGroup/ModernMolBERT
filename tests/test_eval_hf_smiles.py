@@ -81,3 +81,25 @@ def test_chemberta2_cls_pooling_smoke() -> None:
     assert out.valid_mask.tolist() == [True, True]
     assert out.X.shape == (2, 384)
     assert np.isfinite(out.X).all()
+
+
+def test_sanitize_modernbert_rope_config_handles_rope_scaling() -> None:
+    from modernmolbert.eval.featurizers.hf_smiles import (
+        _sanitize_modernbert_rope_config,
+    )
+
+    cfg = {
+        "model_type": "modernbert",
+        "rope_scaling": {
+            "sliding_attention": {"rope_type": "default", "rope_theta": 10000.0},
+            "full_attention": {"rope_type": "default", "rope_theta": 160000.0},
+            "rope_type": "default",
+            "rope_theta": None,
+        },
+    }
+
+    out = _sanitize_modernbert_rope_config(cfg)
+
+    assert set(out["rope_scaling"]) == {"sliding_attention", "full_attention"}
+    assert "rope_type" not in out["rope_scaling"]
+    assert "rope_theta" not in out["rope_scaling"]

@@ -38,7 +38,9 @@ from transformers import (
 
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
+    PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
+    ZPN_ZINC20_DATASET,
     assert_metadata_representation,
     compute_tokenization_stats,
     copy_tokenizer_artifacts,
@@ -48,6 +50,8 @@ from modernmolbert.utils import (
     file_sha256,
     find_local_dataset,
     get_streaming_dataset,
+    infer_selfies_column,
+    infer_validation_split,
     load_tokenizer_metadata,
     metadata_path_for_vocab,
     normalize_sequence,
@@ -56,7 +60,7 @@ from modernmolbert.utils import (
     validate_selfies_sample_shape,
 )
 
-DATASET_NAME = "mikemayuare/PubChem10M_SMILES_SELFIES"
+DATASET_NAME = PUBCHEM10M_DATASET
 
 
 def parse_args() -> argparse.Namespace:
@@ -82,11 +86,39 @@ def parse_args() -> argparse.Namespace:
     # Dataset
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
+        "--selfies_column",
+        type=str,
+        default=None,
+        help=(
+            "Column containing SELFIES strings. "
+            "Defaults to SELFIES, or selfies for zpn/zinc20."
+        ),
+    )
+    parser.add_argument(
+        "--train_split",
+        type=str,
+        default="train",
+        help="Dataset split used for training.",
+    )
+    parser.add_argument(
+        "--validation_split",
+        type=str,
+        default=None,
+        help="Dataset split used for validation when --use_validation_split is set.",
+    )
+    parser.add_argument(
+        "--use_validation_split",
+        action="store_true",
+        help="Use dataset validation split for eval instead of hash-bucketing train split.",
+    )
+    parser.add_argument(
         "--data_dir",
         type=Path,
-        default="data/pubchem10m_selfies",
-        help="Local Arrow dataset directory (e.g. data/pubchem10m_selfies). "
-        "Auto-detected from data/ if not set.",
+        default=None,
+        help=(
+            "Local Arrow dataset directory (e.g. data/pubchem10m_selfies). "
+            "If omitted, auto-detect a matching dataset under data/."
+        ),
     )
     parser.add_argument("--eval_size", type=int, default=100_000)
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
@@ -214,6 +246,23 @@ def adjust_args_for_backend(
     return args
 
 
+def resolve_dataset_args(args: argparse.Namespace) -> argparse.Namespace:
+    args.selfies_column = infer_selfies_column(args.dataset_name, args.selfies_column)
+    args.validation_split = infer_validation_split(
+        args.dataset_name,
+        args.validation_split,
+    )
+    if args.dataset_name == ZPN_ZINC20_DATASET and args.train_split == "train":
+        # Document intent explicitly even though train is already the default.
+        args.train_split = "train"
+    if args.use_validation_split and not args.validation_split:
+        raise ValueError(
+            "--use_validation_split requested but no validation split was resolved. "
+            "Pass --validation_split explicitly for this dataset."
+        )
+    return args
+
+
 def preview_dataset_and_tokenizer(
     args: argparse.Namespace,
     tokenizer: APETokenizer,
@@ -224,6 +273,7 @@ def preview_dataset_and_tokenizer(
 
     ds = get_streaming_dataset(
         args.dataset_name,
+        split=args.train_split,
         seed=args.seed + 999,
         buffer_size=min(args.shuffle_buffer_size, 10_000),
         data_dir=args.data_dir,
@@ -231,15 +281,19 @@ def preview_dataset_and_tokenizer(
 
     examples: list[str] = []
     for row in ds:
-        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        seq = normalize_sequence(row, args.selfies_column)
         if seq is None:
             continue
         examples.append(seq)
         if len(examples) >= n_examples:
             break
 
-    local = find_local_dataset(args.data_dir)
+    local = find_local_dataset(args.data_dir, dataset_name=args.dataset_name)
     log(f"Dataset: {args.dataset_name}")
+    log(f"SELFIES column: {args.selfies_column}")
+    log(f"Train split: {args.train_split}")
+    log(f"Validation split: {args.validation_split}")
+    log(f"Use validation split: {args.use_validation_split}")
     log(
         f"Dataset mode: {'local (from disk): ' + str(local) if local else 'streaming (HF Hub)'}"
     )
@@ -279,6 +333,7 @@ def preview_dataset_and_tokenizer(
 def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[str]:
     ds = get_streaming_dataset(
         args.dataset_name,
+        split=args.train_split,
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
@@ -286,10 +341,13 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
 
     rows: list[str] = []
     for row in ds:
-        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        seq = normalize_sequence(row, args.selfies_column)
         if seq is None:
             continue
-        if sequence_bucket(seq, args.val_split_mod) == args.val_split_bucket:
+        if (
+            not args.use_validation_split
+            and sequence_bucket(seq, args.val_split_mod) == args.val_split_bucket
+        ):
             continue
         rows.append(seq)
         if len(rows) >= n:
@@ -405,21 +463,24 @@ def make_train_iterable_dataset(
 ) -> IterableDataset:
     ds = get_streaming_dataset(
         args.dataset_name,
+        split=args.train_split,
         seed=args.seed + 100,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
     )
 
     def keep_train(row: dict[str, Any]) -> bool:
-        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        seq = normalize_sequence(row, args.selfies_column)
         if seq is None:
             return False
+        if args.use_validation_split:
+            return True
         return sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket
 
     ds = ds.filter(keep_train)
 
     def preprocess(row: dict[str, Any]) -> dict[str, Any]:
-        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        seq = normalize_sequence(row, args.selfies_column)
         assert seq is not None
         return encode_sequence(tokenizer, seq, args.max_seq_length)
 
@@ -434,8 +495,12 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Data
             args.max_eval_batches * args.per_device_eval_batch_size,
         )
 
+    eval_split = (
+        args.validation_split if args.use_validation_split else args.train_split
+    )
     ds = get_streaming_dataset(
         args.dataset_name,
+        split=eval_split,
         seed=args.seed + 200,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
@@ -445,10 +510,13 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Data
     pbar = tqdm(total=n_eval, desc="Building finite validation set")
 
     for row in ds:
-        seq = normalize_sequence(row, SELFIES_REPRESENTATION)
+        seq = normalize_sequence(row, args.selfies_column)
         if seq is None:
             continue
-        if sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket:
+        if (
+            not args.use_validation_split
+            and sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket
+        ):
             continue
 
         rows.append(encode_sequence(tokenizer, seq, args.max_seq_length))
@@ -459,6 +527,11 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Data
     pbar.close()
 
     if not rows:
+        if args.use_validation_split:
+            raise RuntimeError(
+                "Validation set is empty after sampling from validation split. "
+                "Check --validation_split and dataset contents."
+            )
         raise RuntimeError(
             "Validation set is empty after deterministic split. "
             "Try a larger eval_size or adjust val_split_mod/val_split_bucket."
@@ -604,6 +677,10 @@ def write_run_metadata(
 
     metadata = {
         "dataset_name": args.dataset_name,
+        "selfies_column": args.selfies_column,
+        "train_split": args.train_split,
+        "validation_split": args.validation_split,
+        "use_validation_split": args.use_validation_split,
         "representation": SELFIES_REPRESENTATION,
         "expected_input": (
             "SELFIES strings only. Convert SMILES before inference using a helper such "
@@ -677,6 +754,7 @@ def main() -> None:
     if hf_token:
         login(token=hf_token)
     args = parse_args()
+    args = resolve_dataset_args(args)
     backend = detect_backend(args)
     validate_args(args, backend)
     args = adjust_args_for_backend(args, backend)
@@ -699,6 +777,11 @@ def main() -> None:
 
     log(f"Backend: {backend}")
     log(f"bf16={args.bf16}, fp16={args.fp16}")
+    log(f"Dataset: {args.dataset_name}")
+    log(f"SELFIES column: {args.selfies_column}")
+    log(f"Train split: {args.train_split}")
+    log(f"Validation split: {args.validation_split}")
+    log(f"Use validation split: {args.use_validation_split}")
 
     log("Loading and validating tokenizer...")
     (

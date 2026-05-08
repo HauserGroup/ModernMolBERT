@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
+    PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
     assert_metadata_representation,
     compute_tokenization_stats,
@@ -16,6 +17,7 @@ from modernmolbert.utils import (
     encode_sequence,
     file_sha256,
     get_streaming_dataset,
+    infer_selfies_column,
     load_tokenizer_metadata,
     metadata_path_for_vocab,
     normalize_sequence,
@@ -25,7 +27,7 @@ from modernmolbert.utils import (
     validate_selfies_sample_shape,
 )
 
-DATASET_NAME = "mikemayuare/PubChem10M_SMILES_SELFIES"
+DATASET_NAME = PUBCHEM10M_DATASET
 
 
 def parse_args() -> argparse.Namespace:
@@ -49,6 +51,27 @@ def parse_args() -> argparse.Namespace:
         default=SELFIES_REPRESENTATION,
     )
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
+    parser.add_argument(
+        "--selfies_column",
+        type=str,
+        default=None,
+        help="Column containing SELFIES strings. Defaults by dataset.",
+    )
+    parser.add_argument(
+        "--split",
+        type=str,
+        default="train",
+        help="Dataset split to sample from.",
+    )
+    parser.add_argument(
+        "--data_dir",
+        type=Path,
+        default=None,
+        help=(
+            "Local Arrow dataset directory. If omitted, auto-detect a matching "
+            "dataset in data/."
+        ),
+    )
     parser.add_argument("--n", type=int, default=1000)
     parser.add_argument("--max_seq_length", type=int, default=256)
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
@@ -68,18 +91,20 @@ def _sample_sequences(args: argparse.Namespace) -> list[str]:
     if args.fixture_jsonl:
         return sample_jsonl_sequences(
             Path(args.fixture_jsonl),
-            representation=args.representation,
+            representation=args.selfies_column,
             n=args.n,
         )
 
     ds = get_streaming_dataset(
         dataset_name=args.dataset_name,
+        split=args.split,
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
+        data_dir=args.data_dir,
     )
     rows: list[str] = []
     for row in ds:
-        seq = normalize_sequence(row, args.representation)
+        seq = normalize_sequence(row, args.selfies_column)
         if seq is None:
             continue
         rows.append(seq)
@@ -108,6 +133,7 @@ def _assert_ethanol_not_unknown(
 def main() -> None:
     load_dotenv()
     args = parse_args()
+    args.selfies_column = infer_selfies_column(args.dataset_name, args.selfies_column)
 
     vocab_path = Path(args.tokenizer_vocab_path)
     if not vocab_path.exists():
@@ -169,6 +195,8 @@ def main() -> None:
         )
 
     print(f"representation: {args.representation}")
+    print(f"selfies_column: {args.selfies_column}")
+    print(f"split: {args.split}")
     print(f"tokenizer_path: {vocab_path}")
     print(f"tokenizer_metadata_path: {metadata_path}")
     print(f"vocab_size: {vocab_size}")

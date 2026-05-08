@@ -9,10 +9,12 @@ from dotenv import load_dotenv
 
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
+    PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
     collect_corpus_for_tokenizer,
     default_selfies_tokenizer_path,
     file_sha256,
+    infer_selfies_column,
     metadata_path_for_vocab,
     resolve_special_ids,
     tokenizer_vocab_size,
@@ -20,7 +22,7 @@ from modernmolbert.utils import (
     write_tokenizer_metadata,
 )
 
-DATASET_NAME = "mikemayuare/PubChem10M_SMILES_SELFIES"
+DATASET_NAME = PUBCHEM10M_DATASET
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,11 +37,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
+        "--selfies_column",
+        type=str,
+        default=None,
+        help="Column containing SELFIES strings. Defaults by dataset.",
+    )
+    parser.add_argument(
         "--data_dir",
         type=Path,
-        default="data/pubchem10m_selfies",
-        help="Local Arrow dataset directory (e.g. data/pubchem10m_selfies). "
-        "Auto-detected from data/ if not set.",
+        default=None,
+        help=(
+            "Local Arrow dataset directory. If omitted, auto-detect a matching "
+            "dataset in data/."
+        ),
     )
     parser.add_argument(
         "--representation",
@@ -64,13 +74,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     load_dotenv()
     args = parse_args()
+    resolved_column = infer_selfies_column(args.dataset_name, args.selfies_column)
 
     output_vocab_path = Path(args.output_vocab_path)
     output_vocab_path.parent.mkdir(parents=True, exist_ok=True)
 
     corpus = collect_corpus_for_tokenizer(
         dataset_name=args.dataset_name,
-        representation=args.representation,
+        representation=resolved_column,
         n=args.tokenizer_train_size,
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
@@ -94,6 +105,7 @@ def main() -> None:
     metadata = {
         "representation": SELFIES_REPRESENTATION,
         "dataset_name": args.dataset_name,
+        "selfies_column": resolved_column,
         "tokenizer_train_size": args.tokenizer_train_size,
         "max_vocab_size": args.max_vocab_size,
         "min_freq_for_merge": args.min_freq_for_merge,

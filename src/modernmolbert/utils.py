@@ -6,11 +6,12 @@ import hashlib
 import json
 import shutil
 import statistics
+import re
 from pathlib import Path
 from typing import Any
 
 import torch
-from datasets import Dataset, IterableDataset, load_dataset, load_from_disk
+from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
 from tqdm.auto import tqdm
 
 from modernmolbert.ape_tokenizer import APETokenizer
@@ -27,27 +28,88 @@ SPECIAL_TOKENS: dict[str, str] = {
 SELFIES_REPRESENTATION = "SELFIES"
 SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
 SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
+PUBCHEM10M_DATASET = "mikemayuare/PubChem10M_SMILES_SELFIES"
+ZPN_ZINC20_DATASET = "zpn/zinc20"
 
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def find_local_dataset(data_dir: Path | None = None) -> Path | None:
-    """Return the first Arrow dataset directory to use, or None to stream from HF.
+def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
+    if selfies_column is not None:
+        return selfies_column
+    if dataset_name == ZPN_ZINC20_DATASET:
+        return "selfies"
+    return SELFIES_REPRESENTATION
 
-    If *data_dir* is given, use it (returns it only if dataset_info.json exists).
-    Otherwise auto-detect: return the first subdirectory of ``data/`` in the
-    repo root that contains a ``dataset_info.json``.
+
+def infer_validation_split(
+    dataset_name: str, validation_split: str | None = None
+) -> str | None:
+    if validation_split is not None:
+        return validation_split
+    if dataset_name == ZPN_ZINC20_DATASET:
+        return "validation"
+    return None
+
+
+def _normalized_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+def _local_dataset_matches_request(local_dir: Path, dataset_name: str) -> bool:
+    info_path = local_dir / "dataset_info.json"
+    if not info_path.exists():
+        return False
+
+    try:
+        with info_path.open("r", encoding="utf-8") as f:
+            info = json.load(f)
+    except Exception:
+        return False
+
+    if not isinstance(info, dict):
+        return False
+
+    requested = _normalized_name(dataset_name.split("/")[-1])
+    if not requested:
+        return False
+
+    candidates: set[str] = {_normalized_name(local_dir.name)}
+    for key in ["dataset_name", "config_name", "builder_name"]:
+        value = info.get(key)
+        if value:
+            candidates.add(_normalized_name(str(value)))
+
+    return any(requested in c or c in requested for c in candidates if c)
+
+
+def find_local_dataset(
+    data_dir: Path | None = None,
+    dataset_name: str | None = None,
+) -> Path | None:
+    """Return local Arrow dataset directory, or None to stream from HF.
+
+    If *data_dir* is given, use it if it contains dataset_info.json.
+    If omitted, scan repo_root()/data and return the first directory whose
+    dataset metadata looks compatible with *dataset_name*.
     """
     if data_dir is not None:
         return data_dir if (data_dir / "dataset_info.json").exists() else None
+
     search_root = repo_root() / "data"
     if not search_root.exists():
         return None
+
     for candidate in sorted(search_root.iterdir()):
-        if candidate.is_dir() and (candidate / "dataset_info.json").exists():
+        if not candidate.is_dir() or not (candidate / "dataset_info.json").exists():
+            continue
+        if dataset_name is None or _local_dataset_matches_request(
+            candidate, dataset_name
+        ):
             return candidate
+
     return None
 
 
@@ -159,17 +221,34 @@ def get_streaming_dataset(
     dataset_name: str,
     seed: int,
     buffer_size: int,
+    split: str = "train",
     data_dir: Path | None = None,
 ) -> IterableDataset:
-    local = find_local_dataset(data_dir)
+    local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
     if local is not None:
         print(f"[data] Loading dataset from disk: {local}", flush=True)
         raw = load_from_disk(str(local))
-        if not isinstance(raw, Dataset):
-            raise ValueError(f"Expected a Dataset at {local}, got {type(raw).__name__}")
-        return raw.shuffle(seed=seed).to_iterable_dataset()
-    print(f"[data] Streaming dataset from HF Hub: {dataset_name}", flush=True)
-    hf_ds = load_dataset(dataset_name, split="train", streaming=True)
+        if isinstance(raw, DatasetDict):
+            if split not in raw:
+                available = ", ".join(sorted(str(k) for k in raw.keys()))
+                raise ValueError(
+                    f"Local dataset at {local} has no split '{split}'. "
+                    f"Available splits: {available}"
+                )
+            return raw[split].shuffle(seed=seed).to_iterable_dataset()
+        if isinstance(raw, Dataset):
+            if split != "train":
+                raise ValueError(
+                    f"Requested split '{split}' but local dataset at {local} "
+                    "is a single train-only Dataset. "
+                    "Either disable --use_validation_split or save a DatasetDict with splits."
+                )
+            return raw.shuffle(seed=seed).to_iterable_dataset()
+        raise ValueError(
+            f"Unsupported local dataset type at {local}: {type(raw).__name__}"
+        )
+    print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
+    hf_ds = load_dataset(dataset_name, split=split, streaming=True)
     return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
 
 
@@ -182,7 +261,11 @@ def collect_corpus_for_tokenizer(
     data_dir: Path | None = None,
 ) -> list[str]:
     ds = get_streaming_dataset(
-        dataset_name, seed=seed, buffer_size=buffer_size, data_dir=data_dir
+        dataset_name,
+        split="train",
+        seed=seed,
+        buffer_size=buffer_size,
+        data_dir=data_dir,
     )
     corpus: list[str] = []
 

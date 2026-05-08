@@ -1,0 +1,22 @@
+{
+  "ape_source": "modernmolbert.local",
+  "created_at_utc": "2026-05-07T20:56:23.708373+00:00",
+  "creation_command": "python -m modernmolbert.train_ape_tokenizer",
+  "dataset_name": "mikemayuare/PubChem10M_SMILES_SELFIES",
+  "max_vocab_size": 5000,
+  "min_freq_for_merge": 2000,
+  "representation": "SELFIES",
+  "seed": 13,
+  "shuffle_buffer_size": 100000,
+  "special_ids": {
+    "bos_token": 0,
+    "eos_token": 2,
+    "mask_token": 4,
+    "pad_token": 1,
+    "unk_token": 3
+  },
+  "tokenizer_path": "tokenizer/selfies_ape_tokenizer_1m.json",
+  "tokenizer_sha256": "dc623be82cde2e911bdb11051e22e799868121059c6e3c5bf84d8e468015fc4b",
+  "tokenizer_train_size": 1000000,
+  "vocab_size": 1229
+}

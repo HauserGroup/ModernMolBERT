@@ -1,7 +1,8 @@
-"""Optional end-to-end smoke tests for ModernMolBERT training.
+"""Optional end-to-end smoke tests for ModernMolBERT training and encoding.
 
 Skipped by default. Enable with:
     MODERNMOLBERT_RUN_SMOKE=1 uv run pytest -m smoke
+
 The MPS test additionally requires:
     MODERNMOLBERT_RUN_MPS=1
 
@@ -18,9 +19,11 @@ from pathlib import Path
 import pytest
 import torch
 
+from conftest import ROOT, find_existing_minimal_model
+
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return ROOT
 
 
 def _smoke_enabled() -> bool:
@@ -29,6 +32,170 @@ def _smoke_enabled() -> bool:
 
 def _mps_enabled() -> bool:
     return os.environ.get("MODERNMOLBERT_RUN_MPS") == "1"
+
+
+def _find_existing_tokenizer_vocab() -> Path | None:
+    """Find an existing tokenizer vocab for local encode checks."""
+    candidates = [
+        _repo_root() / "tokenizer" / "selfies_symbol_tokenizer.json",
+        _repo_root() / "tokenizer" / "selfies_ape_tokenizer.json",
+        _repo_root() / "tokenizer" / "selfies_ape_tokenizer_1m.json",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    return None
+
+
+def test_local_tokenizer_encode_selfies_examples() -> None:
+    """Fast encode-only check (no model forward)."""
+    tokenizer_path = _find_existing_tokenizer_vocab()
+    if tokenizer_path is None:
+        pytest.skip("No local tokenizer vocabulary found under tokenizer/.")
+
+    from modernmolbert.ape_tokenizer import APETokenizer
+
+    tok = APETokenizer()
+    tok.load_vocabulary(str(tokenizer_path))
+
+    examples = [
+        "[C]",
+        "[O]",
+        "[C][C][O]",
+        "[C][=C][C][=C][C][=C][Ring1][=Branch1]",
+    ]
+
+    unk_id = tok.vocabulary[tok.unk_token]
+    bos_id = tok.vocabulary[tok.bos_token]
+    eos_id = tok.vocabulary[tok.eos_token]
+    verbose = os.environ.get("MODERNMOLBERT_TEST_VERBOSE") == "1"
+    summaries: list[str] = []
+
+    if verbose:
+        print(f"[encode-test] tokenizer={tokenizer_path}")
+        print(f"[encode-test] special_ids bos={bos_id} eos={eos_id} unk={unk_id}")
+
+    for text in examples:
+        encoded = tok.encode(text, add_special_tokens=True)
+        token_strings = tok.convert_ids_to_tokens(encoded)
+        unk_positions = [
+            i for i, token_id in enumerate(encoded[1:-1], start=1) if token_id == unk_id
+        ]
+
+        if verbose:
+            summaries.append(
+                " | ".join(
+                    [
+                        f"text={text}",
+                        f"len={len(encoded)}",
+                        f"ids={encoded}",
+                        f"tokens={token_strings}",
+                        f"unk_positions={unk_positions}",
+                    ]
+                )
+            )
+
+        assert encoded[0] == bos_id, (text, encoded, token_strings)
+        assert encoded[-1] == eos_id, (text, encoded, token_strings)
+        assert len(encoded) > 2, (text, encoded, token_strings)
+        assert not unk_positions, (text, encoded, token_strings, unk_positions)
+
+        # __call__ should preserve the same encoded ids.
+        batch = tok(text, add_special_tokens=True, return_tensors="pt")
+        ids = batch["input_ids"].tolist()
+        assert ids == encoded, (text, ids, encoded, token_strings)
+
+    if verbose:
+        for summary in summaries:
+            print(f"[encode-test] {summary}")
+
+
+@pytest.mark.smoke
+def test_existing_minimal_model_selfies_encoding() -> None:
+    """Verify that a minimal trained model can encode SELFIES and produce finite logits.
+
+    This does not train a model. It uses the first available minimal/debug model in
+    runs/*/final_model. If no model exists, it skips.
+    """
+    if not _smoke_enabled():
+        pytest.skip("Set MODERNMOLBERT_RUN_SMOKE=1 to run smoke tests.")
+
+    final_model = find_existing_minimal_model()
+    if final_model is None:
+        pytest.skip(
+            "No existing minimal trained model found. Run the MPS smoke training test "
+            "or a debug training command first."
+        )
+
+    code = f"""
+from transformers import AutoModelForMaskedLM
+from modernmolbert.ape_tokenizer import APETokenizer
+import torch
+
+model_dir = {str(final_model)!r}
+tokenizer_path = {str(final_model / "tokenizer.json")!r}
+
+model = AutoModelForMaskedLM.from_pretrained(model_dir)
+model.eval()
+
+tok = APETokenizer()
+tok.load_vocabulary(tokenizer_path)
+
+examples = [
+    "[C]",
+    "[O]",
+    "[C][C][O]",
+    "[C][=C][C][=C][C][=C][Ring1][=Branch1]",
+]
+
+special = {{
+    "unk_token": tok.vocabulary[tok.unk_token],
+    "bos_token": tok.vocabulary[tok.bos_token],
+    "eos_token": tok.vocabulary[tok.eos_token],
+    "pad_token": tok.vocabulary[tok.pad_token],
+    "mask_token": tok.vocabulary[tok.mask_token],
+}}
+
+for text in examples:
+    batch = tok(text, add_special_tokens=True, return_tensors="pt")
+
+    # APETokenizer returns rank-1 tensors; HF models expect batch dimension.
+    for key in ["input_ids", "attention_mask"]:
+        if batch[key].ndim == 1:
+            batch[key] = batch[key].unsqueeze(0)
+
+    unk_positions = [
+        i for i, token_id in enumerate(batch["input_ids"][0].tolist())
+        if token_id == special["unk_token"]
+    ]
+
+    assert not unk_positions, (text, batch["input_ids"][0].tolist(), unk_positions)
+
+    with torch.no_grad():
+        out = model(**batch)
+
+    assert torch.isfinite(out.logits).all(), text
+    assert out.logits.shape[0] == 1
+    assert out.logits.shape[1] == batch["input_ids"].shape[1]
+    assert out.logits.shape[2] == model.config.vocab_size
+
+print("encoding ok", model_dir)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=_repo_root(),
+        env={**os.environ.copy(), "TOKENIZERS_PARALLELISM": "false"},
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout
+    assert "encoding ok" in result.stdout
 
 
 @pytest.mark.smoke
@@ -113,13 +280,27 @@ def test_mps_base_smoke_training(tmp_path: Path) -> None:
 from transformers import AutoModelForMaskedLM
 from modernmolbert.ape_tokenizer import APETokenizer
 import torch
+
 model = AutoModelForMaskedLM.from_pretrained({str(final_model)!r})
+model.eval()
+
 tok = APETokenizer()
 tok.load_vocabulary({str(final_model / "tokenizer.json")!r})
+
 batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
+
+for key in ["input_ids", "attention_mask"]:
+    if batch[key].ndim == 1:
+        batch[key] = batch[key].unsqueeze(0)
+
 with torch.no_grad():
     out = model(**batch)
+
 assert torch.isfinite(out.logits).all()
+assert out.logits.shape[0] == 1
+assert out.logits.shape[1] == batch["input_ids"].shape[1]
+assert out.logits.shape[2] == model.config.vocab_size
+
 print("reload ok", tuple(out.logits.shape))
 """
     reload_result = subprocess.run(

@@ -3,12 +3,17 @@ from pathlib import Path
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.validate_tokenizer import _assert_ethanol_not_unknown
 from modernmolbert.utils import (
+    PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
+    ZPN_ZINC20_DATASET,
     compute_tokenization_stats,
     eligible_token_ids,
     file_sha256,
+    infer_selfies_column,
+    infer_validation_split,
     ignored_special_token_ids,
     metadata_path_for_vocab,
+    normalize_sequence,
     resolve_special_ids,
     sample_jsonl_sequences,
     validate_selfies_sample_shape,
@@ -173,3 +178,21 @@ def test_ignored_special_token_ids_excludes_unk_token():
     assert special_ids["eos_token"] in ignored
     assert special_ids["mask_token"] in ignored
     assert special_ids["unk_token"] not in ignored
+
+
+def test_infer_selfies_column_for_pubchem_and_zinc20():
+    assert infer_selfies_column(PUBCHEM10M_DATASET, None) == "SELFIES"
+    assert infer_selfies_column(ZPN_ZINC20_DATASET, None) == "selfies"
+    assert infer_selfies_column(PUBCHEM10M_DATASET, "my_col") == "my_col"
+
+
+def test_infer_validation_split_for_pubchem_and_zinc20():
+    assert infer_validation_split(PUBCHEM10M_DATASET, None) is None
+    assert infer_validation_split(ZPN_ZINC20_DATASET, None) == "validation"
+    assert infer_validation_split(PUBCHEM10M_DATASET, "dev") == "dev"
+
+
+def test_normalize_sequence_supports_pubchem_and_zinc20_column_names():
+    assert normalize_sequence({"SELFIES": "[C][O]"}, "SELFIES") == "[C][O]"
+    assert normalize_sequence({"selfies": "[C][O]"}, "selfies") == "[C][O]"
+    assert normalize_sequence({"SELFIES": "   "}, "SELFIES") is None

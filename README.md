@@ -73,6 +73,28 @@ truncation_rate@256: ...
 special_ids: ...
 ```
 
+### 2b) Inspect one row from zpn/zinc20
+
+```bash
+uv run python - <<'PY'
+from datasets import load_dataset
+
+row = next(iter(load_dataset("zpn/zinc20", split="train", streaming=True)))
+print("keys:", list(row.keys()))
+print("selfies:", row["selfies"][:200])
+PY
+```
+
+### 2c) Validate tokenizer on zpn/zinc20
+
+```bash
+uv run python -m modernmolbert.validate_tokenizer \
+  --dataset_name zpn/zinc20 \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json \
+  --n 1000
+```
+
 ### 3) Debug training run
 
 This is a tiny end-to-end check. It validates the training loop, model save, tokenizer artifact copying, and final reload path.
@@ -108,6 +130,27 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --eval_steps 25 \
   --save_steps 50 \
   --save_total_limit 2 \
+  --num_workers 0 \
+  --report_to tensorboard \
+  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
+  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
+```
+
+### 4b) Short zpn/zinc20 base pilot
+
+```bash
+uv run python -m modernmolbert.train_selfies_ape_modernbert \
+  --output_dir runs/zinc20_base_pilot_256 \
+  --dataset_name zpn/zinc20 \
+  --use_validation_split \
+  --model_size base \
+  --max_seq_length 256 \
+  --max_steps 200 \
+  --eval_size 64 \
+  --max_eval_batches 4 \
+  --per_device_train_batch_size 1 \
+  --per_device_eval_batch_size 1 \
+  --gradient_accumulation_steps 16 \
   --num_workers 0 \
   --report_to tensorboard \
   --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \

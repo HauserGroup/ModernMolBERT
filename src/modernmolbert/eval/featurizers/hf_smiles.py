@@ -9,6 +9,7 @@ from typing import Literal, Sequence
 import numpy as np
 
 from modernmolbert.eval.featurizers.base import FeatureBatch
+from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 
 
 PoolingMode = Literal["mean", "cls"]
@@ -197,21 +198,13 @@ def _mean_pool(
     input_ids=None,
     special_token_ids: list[int] | None = None,
 ):
-    content_mask = attention_mask.bool()
 
-    if input_ids is not None and special_token_ids:
-        for special_id in special_token_ids:
-            content_mask = content_mask & input_ids.ne(special_id)
-
-        # Fallback: if a row has only special tokens, fall back to attention_mask.
-        empty_rows = content_mask.sum(dim=1).eq(0)
-        if empty_rows.any():
-            content_mask[empty_rows] = attention_mask.bool()[empty_rows]
-
-    mask = content_mask.unsqueeze(-1).to(last_hidden_state.dtype)
-    summed = (last_hidden_state * mask).sum(dim=1)
-    denom = mask.sum(dim=1).clamp(min=1)
-    return summed / denom
+    return mean_pool_excluding_token_ids(
+        last_hidden_state=last_hidden_state,
+        attention_mask=attention_mask,
+        input_ids=input_ids,
+        excluded_token_ids=special_token_ids,
+    )
 
 
 def _get_last_hidden_state(outputs):

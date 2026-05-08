@@ -9,6 +9,7 @@ from transformers import AutoModel
 
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.eval.featurizers.base import FeatureBatch
+from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 
 
 @dataclass
@@ -100,10 +101,11 @@ class ModernMolBERTSelfiesFeaturizer:
                 if self.pooling == "cls":
                     pooled = hidden[:, 0, :]
                 elif self.pooling == "mean":
-                    pooled = self._mean_pool_excluding_specials(
-                        hidden=hidden,
-                        input_ids=batch["input_ids"],
+                    pooled = mean_pool_excluding_token_ids(
+                        last_hidden_state=hidden,
                         attention_mask=batch["attention_mask"],
+                        input_ids=batch["input_ids"],
+                        excluded_token_ids=self._special_token_ids(),
                     )
                 else:
                     raise ValueError(f"Unsupported pooling strategy: {self.pooling}")
@@ -163,3 +165,15 @@ class ModernMolBERTSelfiesFeaturizer:
             return torch.device("mps")
 
         return torch.device("cpu")
+
+    def _special_token_ids(self) -> set[int]:
+
+        ids = {
+            getattr(self.tokenizer, "pad_token_id", None),
+            getattr(self.tokenizer, "bos_token_id", None),
+            getattr(self.tokenizer, "eos_token_id", None),
+            getattr(self.tokenizer, "unk_token_id", None),
+            getattr(self.tokenizer, "mask_token_id", None),
+        }
+
+        return {int(x) for x in ids if x is not None}

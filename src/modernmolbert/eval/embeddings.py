@@ -7,6 +7,7 @@ from tqdm.auto import tqdm
 from transformers import AutoModel
 
 from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 
 
 def smiles_to_selfies(smiles: str) -> str | None:
@@ -54,18 +55,12 @@ def mean_pool(
     input_ids: torch.Tensor,
     special_token_ids: list[int],
 ) -> torch.Tensor:
-    content_mask = attention_mask.bool()
-    for special_id in special_token_ids:
-        content_mask = content_mask & input_ids.ne(special_id)
-
-    empty_rows = content_mask.sum(dim=1).eq(0)
-    if empty_rows.any():
-        content_mask[empty_rows] = attention_mask.bool()[empty_rows]
-
-    mask = content_mask.unsqueeze(-1).to(last_hidden_state.dtype)
-    summed = (last_hidden_state * mask).sum(dim=1)
-    denom = mask.sum(dim=1).clamp(min=1)
-    return summed / denom
+    return mean_pool_excluding_token_ids(
+        last_hidden_state=last_hidden_state,
+        attention_mask=attention_mask,
+        input_ids=input_ids,
+        excluded_token_ids=special_token_ids,
+    )
 
 
 def embed_smiles(

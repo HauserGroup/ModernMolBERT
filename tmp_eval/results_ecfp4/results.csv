@@ -1,2 +1,0 @@
-dataset,task,task_type,split,featurizer,n_train,n_eval,accuracy,balanced_accuracy,roc_auc,average_precision
-tiny_ecfp4_demo,label,classification,test,ecfp4_2048,6,4,1.0,1.0,1.0,1.0

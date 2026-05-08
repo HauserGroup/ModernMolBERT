@@ -224,3 +224,6 @@ data/
 
 # AI
 .github/prompts/
+
+# eval
+tmp_eval/

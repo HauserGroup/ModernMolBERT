@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Literal
 
@@ -48,8 +46,14 @@ def fit_predict_downstream(
     if task_type == "classification":
         y_train_int = np.asarray(y_train).astype(int)
 
-        if len(np.unique(y_train_int)) < 2:
+        classes = np.unique(y_train_int)
+        if len(classes) < 2:
             raise ValueError("Classification training labels contain only one class")
+        if len(classes) != 2:
+            raise ValueError(
+                "Only binary classification is currently supported. "
+                f"Found classes: {classes.tolist()}"
+            )
 
         estimator = LogisticRegression(
             max_iter=config.classification_max_iter,

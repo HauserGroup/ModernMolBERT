@@ -26,7 +26,7 @@ def _batch_tokenize(
         for s in selfies_list
     ]
 
-    max_len = max(len(x["input_ids"]) for x in encoded)
+    max_len = min(max(len(x["input_ids"]) for x in encoded), max_seq_length)
 
     input_ids = []
     attention_mask = []
@@ -51,8 +51,18 @@ def _batch_tokenize(
 def mean_pool(
     last_hidden_state: torch.Tensor,
     attention_mask: torch.Tensor,
+    input_ids: torch.Tensor,
+    special_token_ids: list[int],
 ) -> torch.Tensor:
-    mask = attention_mask.unsqueeze(-1).to(last_hidden_state.dtype)
+    content_mask = attention_mask.bool()
+    for special_id in special_token_ids:
+        content_mask = content_mask & input_ids.ne(special_id)
+
+    empty_rows = content_mask.sum(dim=1).eq(0)
+    if empty_rows.any():
+        content_mask[empty_rows] = attention_mask.bool()[empty_rows]
+
+    mask = content_mask.unsqueeze(-1).to(last_hidden_state.dtype)
     summed = (last_hidden_state * mask).sum(dim=1)
     denom = mask.sum(dim=1).clamp(min=1)
     return summed / denom
@@ -84,6 +94,7 @@ def embed_smiles(
 
     tokenizer = APETokenizer()
     tokenizer.load_vocabulary(str(tokenizer_path))
+    special_token_ids = [int(x) for x in tokenizer.special_tokens.values()]
 
     model = AutoModel.from_pretrained(str(model_dir))
     model.to(device_obj)
@@ -110,9 +121,14 @@ def embed_smiles(
 
         with torch.no_grad():
             out = model(**batch)
-            pooled = mean_pool(out.last_hidden_state, batch["attention_mask"])
+            pooled = mean_pool(
+                out.last_hidden_state,
+                batch["attention_mask"],
+                batch["input_ids"],
+                special_token_ids,
+            )
 
-        embeddings.append(pooled.cpu().numpy())
+        embeddings.append(pooled.cpu().float().numpy())
 
     if embeddings:
         X = np.concatenate(embeddings, axis=0)

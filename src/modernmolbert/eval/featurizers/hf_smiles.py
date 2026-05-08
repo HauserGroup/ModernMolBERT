@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
+import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
-import tempfile
 from typing import Literal, Sequence
 
 import numpy as np
@@ -68,6 +67,12 @@ class HuggingFaceSmilesFeaturizer:
         model.to(device)
         model.eval()
 
+        special_token_ids = [
+            int(token_id)
+            for token_id in getattr(tokenizer, "all_special_ids", [])
+            if token_id is not None
+        ]
+
         valid_inputs: list[str] = []
         valid_indices: list[int] = []
 
@@ -119,7 +124,12 @@ class HuggingFaceSmilesFeaturizer:
             hidden = _get_last_hidden_state(outputs)
 
             if self.pooling == "mean":
-                pooled = _mean_pool(hidden, batch["attention_mask"])
+                pooled = _mean_pool(
+                    hidden,
+                    batch["attention_mask"],
+                    input_ids=batch.get("input_ids"),
+                    special_token_ids=special_token_ids,
+                )
             else:
                 pooled = hidden[:, 0, :]
 
@@ -181,8 +191,24 @@ def _resolve_device(device: str):
     return torch.device(device)
 
 
-def _mean_pool(last_hidden_state, attention_mask):
-    mask = attention_mask.unsqueeze(-1).to(last_hidden_state.dtype)
+def _mean_pool(
+    last_hidden_state,
+    attention_mask,
+    input_ids=None,
+    special_token_ids: list[int] | None = None,
+):
+    content_mask = attention_mask.bool()
+
+    if input_ids is not None and special_token_ids:
+        for special_id in special_token_ids:
+            content_mask = content_mask & input_ids.ne(special_id)
+
+        # Fallback: if a row has only special tokens, fall back to attention_mask.
+        empty_rows = content_mask.sum(dim=1).eq(0)
+        if empty_rows.any():
+            content_mask[empty_rows] = attention_mask.bool()[empty_rows]
+
+    mask = content_mask.unsqueeze(-1).to(last_hidden_state.dtype)
     summed = (last_hidden_state * mask).sum(dim=1)
     denom = mask.sum(dim=1).clamp(min=1)
     return summed / denom
@@ -213,7 +239,11 @@ def _maybe_prepare_sanitized_model_dir(
     revision: str | None,
     sanitize_modernbert_rope: bool,
 ) -> str:
-    """Return a local model path, patching config.json only when needed."""
+    """Return a local model path, patching config.json only when needed.
+
+    Sanitized configs are cached in a deterministic local directory so we avoid
+    creating untracked temporary copies on repeated runs.
+    """
 
     source_dir = _resolve_model_dir(
         model_name_or_path=model_name_or_path,
@@ -233,15 +263,31 @@ def _maybe_prepare_sanitized_model_dir(
     if sanitized == config:
         return str(source_dir)
 
-    tmpdir = Path(tempfile.mkdtemp(prefix="modernmolbert_hf_"))
-    _copy_model_dir(source_dir, tmpdir)
+    cache_key = hashlib.sha256(
+        (
+            str(source_dir.resolve()) + "\n" + json.dumps(sanitized, sort_keys=True)
+        ).encode("utf-8")
+    ).hexdigest()[:16]
 
-    (tmpdir / "config.json").write_text(
+    cache_root = Path.home() / ".cache" / "modernmolbert" / "hf_sanitized_models"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    cached_dir = cache_root / f"{source_dir.name}_{cache_key}"
+
+    if cached_dir.exists() and (cached_dir / "config.json").exists():
+        return str(cached_dir)
+
+    tmp_dir = cache_root / f".{cached_dir.name}.tmp-{os.getpid()}"
+    if tmp_dir.exists():
+        shutil.rmtree(tmp_dir)
+
+    _copy_model_dir(source_dir, tmp_dir)
+    (tmp_dir / "config.json").write_text(
         json.dumps(sanitized, indent=2) + "\n",
         encoding="utf-8",
     )
 
-    return str(tmpdir)
+    tmp_dir.rename(cached_dir)
+    return str(cached_dir)
 
 
 def _resolve_model_dir(
@@ -264,14 +310,21 @@ def _resolve_model_dir(
 
 
 def _sanitize_modernbert_rope_config(config_dict: dict) -> dict:
-
     cleaned = dict(config_dict)
 
-    if cleaned.get("model_type") == "modernbert":
-        cleaned.pop("rope_scaling", None)
-        cleaned.pop("rope_parameters", None)
-        cleaned.pop("rope_type", None)
-        cleaned.pop("rope_theta", None)
+    # Remove top-level legacy scalar keys.
+    cleaned.pop("rope_type", None)
+    cleaned.pop("rope_theta", None)
+
+    # Keep only per-attention mappings for both old and new key names.
+    for rope_key in ("rope_scaling", "rope_parameters"):
+        rope = cleaned.get(rope_key)
+        if isinstance(rope, dict):
+            cleaned[rope_key] = {
+                key: value
+                for key, value in rope.items()
+                if key in _ATTENTION_ROPE_KEYS and isinstance(value, dict)
+            }
 
     return cleaned
 
@@ -289,7 +342,9 @@ def _copy_model_dir(src: Path, dst: Path) -> None:
 def _patch_modernbert_rope_standardization() -> None:
     """Patch ModernBERT RoPE handling for strict HF validation.
 
-    Some Transformers/HF version combinations construct a ModernBERT
+    Some Transformers/HF version combinations (observed with modern preview
+    versions around transformers>=5.8 and strict huggingface_hub dataclasses)
+    construct a ModernBERT
     rope_parameters dict with extra top-level keys such as "rope_type".
     Strict validation expects only:
 

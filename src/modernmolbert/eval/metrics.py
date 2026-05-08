@@ -32,13 +32,14 @@ def compute_classification_metrics(
 
     metrics = {
         "accuracy": float(accuracy_score(y_true, y_pred)),
-        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
     }
 
     if len(np.unique(y_true)) == 2:
+        metrics["balanced_accuracy"] = float(balanced_accuracy_score(y_true, y_pred))
         metrics["roc_auc"] = float(roc_auc_score(y_true, y_score))
         metrics["average_precision"] = float(average_precision_score(y_true, y_score))
     else:
+        metrics["balanced_accuracy"] = math.nan
         metrics["roc_auc"] = math.nan
         metrics["average_precision"] = math.nan
 

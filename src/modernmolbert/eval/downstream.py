@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
 
 import numpy as np
-from sklearn.linear_model import Ridge, RidgeCV
-from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn.linear_model import LogisticRegression, Ridge, RidgeCV
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
+
 
 TaskType = Literal["classification", "regression"]
 
@@ -18,13 +21,11 @@ class DownstreamPrediction:
 
 @dataclass(frozen=True)
 class FrozenDownstreamConfig:
-    """Configuration for the shared downstream learner."""
-
     classification_max_iter: int = 5000
     classification_class_weight: str | None = "balanced"
     regression_alpha: float = 1.0
     use_ridge_cv: bool = False
-    ridge_cv_alphas: Sequence[float] = (0.01, 0.1, 1.0, 10.0, 100.0)
+    ridge_cv_alphas: tuple[float, ...] = (0.01, 0.1, 1.0, 10.0, 100.0)
     random_state: int = 13
     standardize: bool = True
 
@@ -37,8 +38,45 @@ def fit_predict_downstream(
     X_eval: np.ndarray,
     config: FrozenDownstreamConfig,
 ) -> DownstreamPrediction:
+    """Fit the fixed downstream learner for the frozen-representation benchmark.
 
-    # ... [Classification block remains largely the same] ...
+    Primary benchmark policy:
+      - classification: LogisticRegression
+      - regression: Ridge or RidgeCV
+    """
+
+    if task_type == "classification":
+        y_train_int = np.asarray(y_train).astype(int)
+
+        if len(np.unique(y_train_int)) < 2:
+            raise ValueError("Classification training labels contain only one class")
+
+        estimator = LogisticRegression(
+            max_iter=config.classification_max_iter,
+            class_weight=config.classification_class_weight,
+            random_state=config.random_state,
+        )
+
+        model = (
+            make_pipeline(StandardScaler(), estimator)
+            if config.standardize
+            else estimator
+        )
+
+        model.fit(X_train, y_train_int)
+
+        y_pred = np.asarray(model.predict(X_eval)).astype(int)
+        y_score = np.asarray(model.predict_proba(X_eval))[:, 1].astype(float)
+
+        return DownstreamPrediction(
+            y_pred=y_pred,
+            y_score=y_score,
+            metadata={
+                "downstream_model": "logistic_regression",
+                "standardize": config.standardize,
+                "class_weight": config.classification_class_weight,
+            },
+        )
 
     if task_type == "regression":
         if config.use_ridge_cv:
@@ -51,11 +89,10 @@ def fit_predict_downstream(
             if config.standardize
             else estimator
         )
-        model.fit(X_train, y_train.astype(float))
 
-        # FIX 3: Wrap in np.asarray to clear the "tuple" type error
-        raw_preds = model.predict(X_eval)
-        y_pred = np.asarray(raw_preds).astype(np.float64)
+        model.fit(X_train, np.asarray(y_train).astype(float))
+
+        y_pred = np.asarray(model.predict(X_eval)).astype(float)
 
         metadata: dict[str, object] = {
             "downstream_model": "ridge_cv" if config.use_ridge_cv else "ridge",
@@ -63,17 +100,14 @@ def fit_predict_downstream(
         }
 
         if config.use_ridge_cv:
-            # FIX 1 & 2: Use explicit type narrowing for the estimator
             if isinstance(model, Pipeline):
                 final_estimator = model[-1]
             else:
                 final_estimator = model
 
-            # Tell Pylance this definitely has alpha_
             if isinstance(final_estimator, RidgeCV):
                 metadata["alpha"] = float(final_estimator.alpha_)
             else:
-                # Fallback for type safety, though logic dictates this is RidgeCV
                 metadata["alpha"] = None
         else:
             metadata["alpha"] = float(config.regression_alpha)

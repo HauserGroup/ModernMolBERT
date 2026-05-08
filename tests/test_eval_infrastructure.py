@@ -1,10 +1,13 @@
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from modernmolbert.eval.datasets import EvalDataset
-from modernmolbert.eval.downstream import FrozenDownstreamConfig
+from modernmolbert.eval.datasets import EvalDataset, load_csv_eval_dataset
+from modernmolbert.eval.downstream import FrozenDownstreamConfig, fit_predict_downstream
 from modernmolbert.eval.featurizers.base import FeatureBatch
 from modernmolbert.eval.featurizers.dummy import DummyFeaturizer
 from modernmolbert.eval.registry import make_featurizer
@@ -63,6 +66,76 @@ def test_eval_dataset_check() -> None:
     ds.check()
 
 
+def test_load_csv_eval_dataset(tmp_path: Path) -> None:
+    train_csv = tmp_path / "train.csv"
+    test_csv = tmp_path / "test.csv"
+
+    pd.DataFrame({"smiles": ["CCO", "CCN"], "label": [0, 1]}).to_csv(
+        train_csv, index=False
+    )
+    pd.DataFrame({"smiles": ["CO", "CN"], "label": [0, 1]}).to_csv(
+        test_csv, index=False
+    )
+
+    ds = load_csv_eval_dataset(
+        name="csv_tiny",
+        task_type="classification",
+        task_names=["label"],
+        train_csv=train_csv,
+        test_csv=test_csv,
+    )
+
+    assert ds.name == "csv_tiny"
+    assert ds.task_type == "classification"
+    assert len(ds.train) == 2
+    assert len(ds.test) == 2
+
+
+def test_downstream_classification_fixed_model() -> None:
+    X_train = np.array(
+        [
+            [0.0, 0.0],
+            [0.1, 0.0],
+            [1.0, 1.0],
+            [1.1, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    y_train = np.array([0, 0, 1, 1], dtype=np.float64)
+    X_eval = np.array([[0.05, 0.0], [1.05, 1.0]], dtype=np.float64)
+
+    pred = fit_predict_downstream(
+        task_type="classification",
+        X_train=X_train,
+        y_train=y_train,
+        X_eval=X_eval,
+        config=FrozenDownstreamConfig(),
+    )
+
+    assert pred.y_pred.shape == (2,)
+    assert pred.y_score is not None
+    assert pred.y_score.shape == (2,)
+    assert pred.metadata["downstream_model"] == "logistic_regression"
+
+
+def test_downstream_regression_fixed_model() -> None:
+    X_train = np.array([[0.0], [1.0], [2.0], [3.0]], dtype=np.float64)
+    y_train = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
+    X_eval = np.array([[1.5], [2.5]], dtype=np.float64)
+
+    pred = fit_predict_downstream(
+        task_type="regression",
+        X_train=X_train,
+        y_train=y_train,
+        X_eval=X_eval,
+        config=FrozenDownstreamConfig(regression_alpha=1.0),
+    )
+
+    assert pred.y_pred.shape == (2,)
+    assert pred.y_score is None
+    assert pred.metadata["downstream_model"] == "ridge"
+
+
 def test_frozen_runner_classification(tmp_path: Path) -> None:
     train = pd.DataFrame(
         {
@@ -100,6 +173,7 @@ def test_frozen_runner_classification(tmp_path: Path) -> None:
     )
 
     assert len(result.task_results) == 1
+
     metrics = result.task_results[0].metrics
     assert "accuracy" in metrics
     assert "roc_auc" in metrics
@@ -145,6 +219,7 @@ def test_frozen_runner_regression(tmp_path: Path) -> None:
     )
 
     assert len(result.task_results) == 1
+
     metrics = result.task_results[0].metrics
     assert "mae" in metrics
     assert "rmse" in metrics
@@ -187,3 +262,78 @@ def test_runner_cache_reuse(tmp_path: Path) -> None:
 
     cache_files = list((tmp_path / "cache").rglob("features.npy"))
     assert cache_files
+
+
+def test_cli_run_frozen_benchmark_with_dummy_featurizer(tmp_path: Path) -> None:
+    train_csv = tmp_path / "train.csv"
+    test_csv = tmp_path / "test.csv"
+    config_json = tmp_path / "dummy.json"
+    output_dir = tmp_path / "results"
+
+    pd.DataFrame(
+        {
+            "smiles": ["CCO", "CCN", "c1ccccc1", "CCCl", "CCBr", "CO"],
+            "label": [0, 0, 1, 1, 1, 0],
+        }
+    ).to_csv(train_csv, index=False)
+
+    pd.DataFrame(
+        {
+            "smiles": ["CCO", "c1ccccc1", "CCBr", "CO"],
+            "label": [0, 1, 1, 0],
+        }
+    ).to_csv(test_csv, index=False)
+
+    config_json.write_text(
+        json.dumps(
+            {
+                "type": "dummy",
+                "name": "dummy_cli",
+                "n_features": 8,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "modernmolbert.eval.cli.run_frozen_benchmark",
+        "--name",
+        "tiny_cli",
+        "--task_type",
+        "classification",
+        "--task_names",
+        "label",
+        "--train_csv",
+        str(train_csv),
+        "--test_csv",
+        str(test_csv),
+        "--featurizer_config",
+        str(config_json),
+        "--output_dir",
+        str(output_dir),
+        "--cache_dir",
+        str(tmp_path / "cache"),
+        "--batch_size",
+        "2",
+    ]
+
+    result = subprocess.run(
+        cmd,
+        cwd=Path(__file__).resolve().parents[1],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        check=False,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stdout
+    assert (output_dir / "results.json").exists()
+    assert (output_dir / "results.csv").exists()
+
+    payload = json.loads((output_dir / "results.json").read_text())
+    assert payload["dataset"] == "tiny_cli"
+    assert payload["featurizer"] == "dummy_cli"
+    assert len(payload["task_results"]) == 1

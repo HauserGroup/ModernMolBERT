@@ -75,6 +75,41 @@ def test_collator_probability_one_masks_all_eligible_only():
     assert torch.equal(non_ignored, eligible)
 
 
+def test_collator_random_replacements_never_use_special_ids():
+    torch.manual_seed(2)
+    collator = MolecularMLMCollator(
+        pad_token_id=1,
+        mask_token_id=4,
+        vocab_size=12,
+        mlm_probability=1.0,
+        special_token_ids=[0, 1, 2, 3, 4],
+    )
+
+    batch = collator(_examples())
+    input_ids = batch["input_ids"]
+    labels = batch["labels"]
+
+    replaced_random = (labels != -100) & (input_ids != labels) & (input_ids != 4)
+    if replaced_random.any():
+        assert torch.all(
+            ~torch.isin(input_ids[replaced_random], torch.tensor([0, 1, 2, 3, 4]))
+        )
+
+
+def test_collator_forces_at_least_one_mask_when_probability_nonzero():
+    torch.manual_seed(7)
+    collator = MolecularMLMCollator(
+        pad_token_id=1,
+        mask_token_id=4,
+        vocab_size=32,
+        mlm_probability=1e-6,
+        special_token_ids=[0, 1, 2, 3, 4],
+    )
+
+    labels = collator(_examples())["labels"]
+    assert int((labels != -100).sum()) >= 1
+
+
 @pytest.mark.skip(reason="Temporarily skipped because it is slow in the current run.")
 def test_collator_special_tokens_never_masked_and_vocab_bounds():
     torch.manual_seed(1)

@@ -88,10 +88,7 @@ def parse_args() -> argparse.Namespace:
         "--selfies_column",
         type=str,
         default=None,
-        help=(
-            "Column containing SELFIES strings. "
-            "Defaults to SELFIES, or selfies for zpn/zinc20."
-        ),
+        help=("Column containing SELFIES strings. Defaults by dataset."),
     )
     parser.add_argument(
         "--train_split",
@@ -117,6 +114,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Local Arrow dataset directory (e.g. data/pubchem10m_selfies). "
             "If omitted, auto-detect a matching dataset under data/."
+        ),
+    )
+    parser.add_argument(
+        "--data_files",
+        type=str,
+        default=None,
+        help=(
+            "Optional parquet file path or glob to stream directly. "
+            "When set, this takes precedence over --dataset_name/--data_dir."
         ),
     )
     parser.add_argument("--eval_size", type=int, default=100_000)
@@ -167,7 +173,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--device_backend", choices=["auto", "cuda", "mps", "cpu"], default="auto"
     )
-    parser.add_argument("--bf16", action="store_true", default=True)
+    parser.add_argument(
+        "--bf16",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use bf16 mixed precision when supported.",
+    )
     parser.add_argument("--fp16", action="store_true", default=False)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--max_eval_batches", type=int, default=20)
@@ -221,6 +232,11 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
         raise ValueError("val_split_bucket must satisfy 0 <= bucket < val_split_mod")
     if backend == "cuda" and not torch.cuda.is_available():
         raise ValueError("device_backend=cuda requested but CUDA is not available")
+    if backend == "cuda" and args.bf16 and not torch.cuda.is_bf16_supported():
+        raise ValueError(
+            "bf16 was requested, but the current CUDA device does not support bf16. "
+            "Use --no-bf16."
+        )
     if backend == "mps" and not torch.backends.mps.is_available():
         raise ValueError("device_backend=mps requested but MPS is not available")
 
@@ -273,6 +289,7 @@ def preview_dataset_and_tokenizer(
         seed=args.seed + 999,
         buffer_size=min(args.shuffle_buffer_size, 10_000),
         data_dir=args.data_dir,
+        data_files=args.data_files,
     )
 
     examples: list[str] = []
@@ -290,9 +307,12 @@ def preview_dataset_and_tokenizer(
     log(f"Train split: {args.train_split}")
     log(f"Validation split: {args.validation_split}")
     log(f"Use validation split: {args.use_validation_split}")
-    log(
-        f"Dataset mode: {'local (from disk): ' + str(local) if local else 'streaming (HF Hub)'}"
-    )
+    if args.data_files is not None:
+        log(f"Dataset mode: parquet data_files={args.data_files}")
+    else:
+        log(
+            f"Dataset mode: {'local (from disk): ' + str(local) if local else 'streaming (HF Hub)'}"
+        )
     log(f"Representation: {SELFIES_REPRESENTATION}")
 
     for i, seq in enumerate(examples, start=1):
@@ -333,6 +353,7 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
+        data_files=args.data_files,
     )
 
     rows: list[str] = []
@@ -463,6 +484,7 @@ def make_train_iterable_dataset(
         seed=args.seed + 100,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
+        data_files=args.data_files,
     )
 
     def keep_train(row: dict[str, Any]) -> bool:
@@ -500,6 +522,7 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Data
         seed=args.seed + 200,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
+        data_files=args.data_files,
     )
 
     rows: list[dict[str, list[int]]] = []
@@ -544,6 +567,13 @@ class MolecularMLMCollator:
     mlm_probability: float
     special_token_ids: list[int]
 
+    def __post_init__(self) -> None:
+        special_ids = set(self.special_token_ids)
+        self._eligible_replacement_ids = torch.tensor(
+            [i for i in range(self.vocab_size) if i not in special_ids],
+            dtype=torch.long,
+        )
+
     def __call__(self, examples: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
         ids = [
             torch.tensor(ex["input_ids"], dtype=torch.long)
@@ -568,6 +598,16 @@ class MolecularMLMCollator:
         probability_matrix.masked_fill_(attention_mask.eq(0), 0.0)
 
         masked_indices = torch.bernoulli(probability_matrix).bool()
+
+        if self.mlm_probability > 0.0 and not masked_indices.any():
+            eligible_positions = (~special_mask & attention_mask.bool()).nonzero(
+                as_tuple=False
+            )
+            if len(eligible_positions) > 0:
+                idx = torch.randint(len(eligible_positions), (1,)).item()
+                row, col = eligible_positions[idx].tolist()
+                masked_indices[row, col] = True
+
         labels[~masked_indices] = -100
 
         # 80% of selected tokens become mask tokens.
@@ -582,8 +622,12 @@ class MolecularMLMCollator:
             & masked_indices
             & ~replace_with_mask
         )
-        random_words = torch.randint(self.vocab_size, labels.shape, dtype=torch.long)
-        input_ids[replace_with_random] = random_words[replace_with_random]
+        if replace_with_random.any():
+            random_idx = torch.randint(
+                len(self._eligible_replacement_ids), labels.shape, dtype=torch.long
+            )
+            random_words = self._eligible_replacement_ids[random_idx]
+            input_ids[replace_with_random] = random_words[replace_with_random]
 
         # Remaining 10% stay unchanged.
         return {
@@ -628,10 +672,13 @@ def compute_metrics(eval_pred: Any) -> dict[str, float]:
 
 
 def log_training_plan(
-    args: argparse.Namespace, backend: str, n_params: int | None = None
+    args: argparse.Namespace,
+    backend: str,
+    n_params: int | None = None,
+    world_size: int = 1,
 ) -> None:
     effective_batch_size = (
-        args.per_device_train_batch_size * args.gradient_accumulation_steps
+        args.per_device_train_batch_size * args.gradient_accumulation_steps * world_size
     )
     log("Training plan:")
     print(f"  backend:                    {backend}", flush=True)
@@ -656,6 +703,7 @@ def log_training_plan(
     print(f"  save_total_limit:           {args.save_total_limit}", flush=True)
     print(f"  logging every steps:        {args.logging_steps}", flush=True)
     print(f"  report_to:                  {args.report_to}", flush=True)
+    print(f"  world_size:                 {world_size}", flush=True)
     print(f"  bf16/fp16:                  {args.bf16}/{args.fp16}", flush=True)
 
 
@@ -668,6 +716,7 @@ def write_run_metadata(
     tokenizer_stats: dict[str, float],
     tokenizer_vocab_path: Path,
     tokenizer_metadata_path: Path,
+    final_eval_metrics: dict[str, float] | None = None,
 ) -> None:
     output_dir = Path(args.output_dir)
 
@@ -692,6 +741,7 @@ def write_run_metadata(
         "special_ids": special_ids,
         "num_parameters": n_params,
         "tokenizer_stats": tokenizer_stats,
+        "final_eval_metrics": final_eval_metrics,
         "args": vars(args),
     }
 
@@ -830,7 +880,6 @@ def main() -> None:
         f"max_position_embeddings={config.max_position_embeddings}"
     )
     log(f"Model parameters: {n_params / 1e6:.2f}M")
-    log_training_plan(args, backend, n_params=n_params)
 
     collator = MolecularMLMCollator(
         pad_token_id=special_ids["pad_token"],
@@ -855,7 +904,16 @@ def main() -> None:
     it = iter(train_dataset)
 
     for _ in range(args.per_device_train_batch_size):
-        one.append(next(it))
+        try:
+            one.append(next(it))
+        except StopIteration:
+            break
+
+    if not one:
+        raise RuntimeError(
+            "No training examples available after filtering. "
+            "Check dataset, split, and SELFIES column."
+        )
 
     batch = collator(one)
 
@@ -886,8 +944,11 @@ def main() -> None:
         prediction_loss_only=not args.compute_masked_accuracy,
         report_to=report_to,
         load_best_model_at_end=False,
+        overwrite_output_dir=True,
     )
-    setattr(training_args, "overwrite_output_dir", True)
+
+    world_size = training_args.world_size if hasattr(training_args, "world_size") else 1
+    log_training_plan(args, backend, n_params=n_params, world_size=world_size)
 
     trainer = Trainer(
         model=model,
@@ -926,17 +987,6 @@ def main() -> None:
     trainer.save_metrics("train", metrics)
     trainer.save_state()
 
-    write_run_metadata(
-        args=args,
-        backend=backend,
-        vocab_size=vocab_size,
-        special_ids=special_ids,
-        n_params=n_params,
-        tokenizer_stats=tokenizer_stats,
-        tokenizer_vocab_path=tokenizer_vocab_path,
-        tokenizer_metadata_path=tokenizer_metadata_path,
-    )
-
     print("Running final evaluation...")
     eval_metrics = trainer.evaluate()
     if "eval_loss" in eval_metrics:
@@ -947,6 +997,18 @@ def main() -> None:
 
     trainer.log_metrics("eval", eval_metrics)
     trainer.save_metrics("eval", eval_metrics)
+
+    write_run_metadata(
+        args=args,
+        backend=backend,
+        vocab_size=vocab_size,
+        special_ids=special_ids,
+        n_params=n_params,
+        tokenizer_stats=tokenizer_stats,
+        tokenizer_vocab_path=tokenizer_vocab_path,
+        tokenizer_metadata_path=tokenizer_metadata_path,
+        final_eval_metrics={k: float(v) for k, v in eval_metrics.items()},
+    )
 
     print("Done.")
     print(f"Final model: {final_dir}")

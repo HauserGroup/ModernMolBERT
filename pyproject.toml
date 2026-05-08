@@ -51,4 +51,6 @@ markers = [
     "smoke: optional end-to-end smoke tests",
     "mps: tests intended for Apple MPS",
     "cuda: tests intended for CUDA",
+    "model: tests that load trained model checkpoints or external pretrained models",
+    "molformer: tests requiring the separate molformer-only environment",
 ]

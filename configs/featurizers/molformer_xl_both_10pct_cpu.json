@@ -1,0 +1,9 @@
+{
+  "device": "cpu",
+  "max_seq_length": 128,
+  "model_name_or_path": "ibm/MoLFormer-XL-both-10pct",
+  "name": "molformer_xl_both_10pct_cpu",
+  "pooling": "mean",
+  "trust_remote_code": true,
+  "type": "hf_smiles"
+}

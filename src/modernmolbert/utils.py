@@ -8,7 +8,8 @@ import shutil
 import statistics
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+
 
 import torch
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
@@ -29,10 +30,11 @@ SELFIES_REPRESENTATION = "SELFIES"
 SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
 SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
 PUBCHEM10M_DATASET = "mikemayuare/PubChem10M_SMILES_SELFIES"
-ZPN_ZINC20_DATASET = (
-    "zpn/zinc20"  # legacy: uses a dataset script, incompatible with datasets>=4
-)
 ZINC20_DATASET = "haydn-jones/ZINC20"
+ZINC20_CHEMBL36_DATASET = "alessandronascimento/zinc20_chembl36"
+# ZINC20_CHEMBL36_DATASET notes:
+#   - SELFIES column is lowercase: "selfies"
+#   - "id" column contains strings prefixed with "ZINC" or "CHEMBL"
 
 
 def repo_root() -> Path:
@@ -42,7 +44,9 @@ def repo_root() -> Path:
 def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
     if selfies_column is not None:
         return selfies_column
-    if dataset_name in (ZPN_ZINC20_DATASET, ZINC20_DATASET):
+    if dataset_name == ZINC20_CHEMBL36_DATASET:
+        return "selfies"  # lowercase in this dataset
+    if dataset_name == ZINC20_DATASET:
         return "SELFIES"
     return SELFIES_REPRESENTATION
 
@@ -52,9 +56,35 @@ def infer_validation_split(
 ) -> str | None:
     if validation_split is not None:
         return validation_split
-    if dataset_name in (ZPN_ZINC20_DATASET, ZINC20_DATASET):
+    if dataset_name == ZINC20_DATASET:
         return "validation"
     return None
+
+
+def filter_zinc20_chembl36_by_source(
+    ds: IterableDataset,
+    source: Literal["zinc", "chembl", "all"] = "all",
+) -> IterableDataset:
+    """Filter a ZINC20_CHEMBL36 streaming dataset by molecule source.
+
+    Parameters
+    ----------
+    ds:
+        Streaming dataset loaded from ZINC20_CHEMBL36_DATASET.
+    source:
+        ``"zinc"``   — keep only rows whose ``id`` starts with ``"ZINC"``.
+        ``"chembl"`` — keep only rows whose ``id`` starts with ``"CHEMBL"``.
+        ``"all"``    — no filtering; return the dataset unchanged.
+    """
+    if source == "all":
+        return ds
+    prefix = "ZINC" if source == "zinc" else "CHEMBL"
+    # batched=True: filter is called once per batch (default 1000 rows) rather
+    # than once per row, and np.char.startswith runs the string comparison in C.
+    return ds.filter(
+        lambda batch: [s.startswith(prefix) for s in batch["id"]],
+        batched=True,
+    )
 
 
 def _normalized_name(value: str) -> str:

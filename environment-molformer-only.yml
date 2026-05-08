@@ -1,0 +1,21 @@
+# environment-molformer-only.yml
+name: molformer-only
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - scikit-learn
+  - pytorch
+  - pip:
+      # MoLFormer remote code expects the Transformers 4.x API.
+      # Do not use this env for ModernMolBERT training.
+      - "transformers[onnx]==4.49.0"
+      - "huggingface-hub<1.0"
+      - "safetensors"
+      - "tokenizers"
+      - "tqdm"

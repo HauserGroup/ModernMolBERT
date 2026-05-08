@@ -499,3 +499,161 @@ assert torch.isfinite(out.logits).all()
 print("reload ok", out.logits.shape)
 PY
 ```
+
+## MoLFormer evaluation baseline
+
+MoLFormer is included as a frozen SMILES-encoder baseline. In the main benchmark, its embeddings should be evaluated with the same downstream models as the other representations:
+
+- classification: logistic regression
+- regression: ridge / RidgeCV
+
+We do not fine-tune MoLFormer for the primary benchmark.
+
+### Checkpoint
+
+Use the pinned Hugging Face checkpoint:
+
+```text
+ibm-research/MoLFormer-XL-both-10pct
+revision: 7b12d946c181a37f6012b9dc3b002275de070314
+```
+
+The checkpoint requires `trust_remote_code=True`, so the revision is pinned for reproducibility.
+
+### Separate MoLFormer-only environment
+
+MoLFormer currently needs a Transformers 4.x environment because its Hugging Face remote code depends on older Transformers APIs. Keep this separate from the main ModernMolBERT training environment.
+
+Create `environment-molformer-only.yml`:
+
+```yaml
+name: molformer-only
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - scikit-learn
+  - pytorch
+  - pytest
+  - pip:
+      - "transformers>=4.38,<5"
+      - "huggingface-hub<1.0"
+      - "safetensors"
+      - "tokenizers"
+      - "tqdm"
+```
+
+Create and activate:
+
+```bash
+conda env create -f environment-molformer-only.yml
+conda activate molformer-only
+```
+
+Do not install the package with `pip install -e .` in this environment. Instead, run MoLFormer commands from the repo root with:
+
+```bash
+export PYTHONPATH="$PWD/src"
+```
+
+### Featurizer config
+
+Create `configs/featurizers/molformer_xl_both_10pct_cpu.json`:
+
+```json
+{
+  "type": "hf_smiles",
+  "name": "molformer_xl_both_10pct",
+  "model_name_or_path": "ibm-research/MoLFormer-XL-both-10pct",
+  "revision": "7b12d946c181a37f6012b9dc3b002275de070314",
+  "max_seq_length": 128,
+  "pooling": "mean",
+  "device": "cpu",
+  "trust_remote_code": true
+}
+```
+
+### Smoke test
+
+```bash
+PYTHONPATH="$PWD/src" python - <<'PY'
+from modernmolbert.eval.featurizers.hf_smiles import HuggingFaceSmilesFeaturizer
+
+f = HuggingFaceSmilesFeaturizer(
+    name="molformer_xl_both_10pct",
+    model_name_or_path="ibm-research/MoLFormer-XL-both-10pct",
+    revision="7b12d946c181a37f6012b9dc3b002275de070314",
+    max_seq_length=128,
+    pooling="mean",
+    device="cpu",
+    trust_remote_code=True,
+)
+
+out = f.featurize_smiles(["CCO", "c1ccccc1", "CC(=O)O"], batch_size=2)
+
+print("valid_mask", out.valid_mask)
+print("X", out.X.shape, out.X.dtype)
+print("metadata", out.metadata)
+PY
+```
+
+Expected shape:
+
+```text
+valid_mask [ True  True  True]
+X (3, 768) float32
+```
+
+### Optional pytest
+
+MoLFormer tests are skipped by default. Run them explicitly inside the `molformer-only` environment:
+
+```bash
+PYTHONPATH="$PWD/src" MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 \
+  python -m pytest tests/test_eval_molformer.py -q -s
+```
+
+A registry-only test can be run without loading the model:
+
+```bash
+PYTHONPATH="$PWD/src" python -m pytest tests/test_eval_molformer.py -q -k registry
+```
+
+Register these markers in `pyproject.toml` if they are not already present:
+
+```toml
+[tool.pytest.ini_options]
+markers = [
+    "smoke: optional smoke tests",
+    "mps: tests requiring Apple MPS",
+    "model: tests that load trained model checkpoints or external pretrained models",
+    "molformer: tests requiring the separate molformer-only environment",
+]
+```
+
+### CLI example
+
+```bash
+PYTHONPATH="$PWD/src" python -m modernmolbert.eval.cli.run_frozen_benchmark \
+  --name tiny_molformer_demo \
+  --task_type classification \
+  --task_names label \
+  --train_csv tmp_eval/train.csv \
+  --test_csv tmp_eval/test.csv \
+  --featurizer_config configs/featurizers/molformer_xl_both_10pct_cpu.json \
+  --output_dir tmp_eval/results_molformer \
+  --cache_dir tmp_eval/cache \
+  --batch_size 4
+```
+
+Notes:
+
+- Use this environment only for MoLFormer evaluation.
+- Use the main `uv`/ModernMolBERT environment for training and normal tests.
+- MoLFormer consumes SMILES, not SELFIES.
+- The embedding is mean-pooled from `last_hidden_state` using the attention mask.

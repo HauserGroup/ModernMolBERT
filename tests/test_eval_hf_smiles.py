@@ -1,0 +1,83 @@
+import os
+
+import numpy as np
+import pytest
+
+from modernmolbert.eval.featurizers.hf_smiles import HuggingFaceSmilesFeaturizer
+from modernmolbert.eval.registry import make_featurizer
+
+
+def _hf_enabled() -> bool:
+    return os.environ.get("MODERNMOLBERT_RUN_HF_TESTS") == "1"
+
+
+@pytest.mark.model
+def test_hf_smiles_registry_constructs_featurizer() -> None:
+    featurizer = make_featurizer(
+        "hf_smiles",
+        name="chemberta_test",
+        model_name_or_path="DeepChem/ChemBERTa-77M-MLM",
+        max_seq_length=64,
+        pooling="mean",
+        device="cpu",
+    )
+
+    assert featurizer.name == "chemberta_test"
+
+
+@pytest.mark.model
+def test_chemberta2_embedding_smoke() -> None:
+    """Optional network/model-loading smoke test for ChemBERTa embeddings.
+
+    Enable with:
+        MODERNMOLBERT_RUN_HF_TESTS=1 uv run pytest tests/test_eval_hf_smiles.py -q -s
+    """
+    if not _hf_enabled():
+        pytest.skip("Set MODERNMOLBERT_RUN_HF_TESTS=1 to run Hugging Face model tests.")
+
+    featurizer = HuggingFaceSmilesFeaturizer(
+        name="chemberta_77m_mlm",
+        model_name_or_path="DeepChem/ChemBERTa-77M-MLM",
+        max_seq_length=64,
+        pooling="mean",
+        device="cpu",
+    )
+
+    out = featurizer.featurize_smiles(
+        ["CCO", "c1ccccc1", "CC(=O)O", "", None],  # type: ignore[list-item]
+        batch_size=2,
+    )
+
+    out.check(5)
+
+    assert out.valid_mask.tolist() == [True, True, True, False, False]
+    assert out.X.shape[0] == 3
+    assert out.X.shape[1] == 384
+    assert out.X.dtype == np.float32
+    assert np.isfinite(out.X).all()
+
+    assert out.metadata["model_name_or_path"] == "DeepChem/ChemBERTa-77M-MLM"
+    assert out.metadata["pooling"] == "mean"
+    assert out.metadata["hidden_size"] == 384
+
+
+@pytest.mark.model
+def test_chemberta2_cls_pooling_smoke() -> None:
+    if not _hf_enabled():
+        pytest.skip("Set MODERNMOLBERT_RUN_HF_TESTS=1 to run Hugging Face model tests.")
+
+    featurizer = HuggingFaceSmilesFeaturizer(
+        name="chemberta_77m_mlm_cls",
+        model_name_or_path="DeepChem/ChemBERTa-77M-MLM",
+        max_seq_length=64,
+        pooling="cls",
+        device="cpu",
+    )
+
+    out = featurizer.featurize_smiles(["CCO", "c1ccccc1"], batch_size=2)
+
+    out.check(2)
+
+    assert out.valid_mask.tolist() == [True, True]
+    assert out.X.shape == (2, 384)
+    assert np.isfinite(out.X).all()

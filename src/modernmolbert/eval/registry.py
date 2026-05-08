@@ -6,6 +6,7 @@ from typing import Any, Callable
 from modernmolbert.eval.featurizers.base import RepresentationFeaturizer
 from modernmolbert.eval.featurizers.dummy import DummyFeaturizer
 from modernmolbert.eval.featurizers.rdkit_ecfp import ECFP4Featurizer
+from modernmolbert.eval.featurizers.hf_smiles import HuggingFaceSmilesFeaturizer
 
 
 @dataclass(frozen=True)
@@ -28,6 +29,12 @@ FEATURIZER_REGISTRY: dict[str, FeaturizerSpec] = {
         factory=ECFP4Featurizer,
         description="RDKit Morgan/ECFP4 fingerprint, radius=2.",
         required_extra="eval-rdkit",
+    ),
+    "hf_smiles": FeaturizerSpec(
+        name="hf_smiles",
+        factory=HuggingFaceSmilesFeaturizer,
+        description="Generic Hugging Face SMILES encoder featurizer.",
+        required_extra="eval-transformers",
     ),
 }
 

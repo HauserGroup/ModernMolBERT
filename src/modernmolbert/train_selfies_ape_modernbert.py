@@ -40,7 +40,6 @@ from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
-    ZPN_ZINC20_DATASET,
     assert_metadata_representation,
     compute_tokenization_stats,
     copy_tokenizer_artifacts,
@@ -252,9 +251,6 @@ def resolve_dataset_args(args: argparse.Namespace) -> argparse.Namespace:
         args.dataset_name,
         args.validation_split,
     )
-    if args.dataset_name == ZPN_ZINC20_DATASET and args.train_split == "train":
-        # Document intent explicitly even though train is already the default.
-        args.train_split = "train"
     if args.use_validation_split and not args.validation_split:
         raise ValueError(
             "--use_validation_split requested but no validation split was resolved. "

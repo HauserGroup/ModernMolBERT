@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Literal, Sequence
 
@@ -31,6 +29,7 @@ class HuggingFaceSmilesFeaturizer:
     pooling: PoolingMode = "mean"
     device: str = "auto"
     trust_remote_code: bool = False
+    revision: str | None = None
 
     def featurize_smiles(
         self,
@@ -49,11 +48,15 @@ class HuggingFaceSmilesFeaturizer:
         tokenizer = AutoTokenizer.from_pretrained(
             self.model_name_or_path,
             trust_remote_code=self.trust_remote_code,
+            revision=self.revision,
         )
+
         model = AutoModel.from_pretrained(
             self.model_name_or_path,
             trust_remote_code=self.trust_remote_code,
+            revision=self.revision,
         )
+
         model.to(device)
         model.eval()
 
@@ -139,6 +142,7 @@ class HuggingFaceSmilesFeaturizer:
             "vocab_size": int(getattr(tokenizer, "vocab_size", 0)),
             "num_parameters": n_params,
             "trust_remote_code": self.trust_remote_code,
+            "revision": self.revision,
         }
 
 

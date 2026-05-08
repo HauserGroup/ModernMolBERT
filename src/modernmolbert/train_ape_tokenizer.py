@@ -96,12 +96,17 @@ def main() -> None:
         min_freq_for_merge=args.min_freq_for_merge,
         save_checkpoint=False,
     )
+
+    # Phase 1: write the vocab to disk.
     tokenizer.save_vocabulary(str(output_vocab_path))
 
+    # Phase 2: compute the SHA from the file that is now on disk.
+    vocab_sha256 = file_sha256(output_vocab_path)
     vocab_size = tokenizer_vocab_size(tokenizer)
     special_ids = resolve_special_ids(tokenizer)
     metadata_path = metadata_path_for_vocab(output_vocab_path)
 
+    # Phase 3: write metadata — SHA reflects the final on-disk vocab.
     metadata = {
         "representation": SELFIES_REPRESENTATION,
         "dataset_name": args.dataset_name,
@@ -116,7 +121,7 @@ def main() -> None:
         "vocab_size": vocab_size,
         "special_ids": special_ids,
         "tokenizer_path": str(output_vocab_path),
-        "tokenizer_sha256": file_sha256(output_vocab_path),
+        "tokenizer_sha256": vocab_sha256,
         "creation_command": "python -m modernmolbert.train_ape_tokenizer",
     }
     write_tokenizer_metadata(metadata_path, metadata)

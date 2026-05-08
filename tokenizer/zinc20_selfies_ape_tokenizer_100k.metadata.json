@@ -1,0 +1,23 @@
+{
+  "ape_source": "modernmolbert.local",
+  "created_at_utc": "2026-05-08T09:26:16.754500+00:00",
+  "creation_command": "python -m modernmolbert.train_ape_tokenizer",
+  "dataset_name": "haydn-jones/ZINC20",
+  "max_vocab_size": 5000,
+  "min_freq_for_merge": 2000,
+  "representation": "SELFIES",
+  "seed": 13,
+  "selfies_column": "SELFIES",
+  "shuffle_buffer_size": 50000,
+  "special_ids": {
+    "bos_token": 0,
+    "eos_token": 2,
+    "mask_token": 4,
+    "pad_token": 1,
+    "unk_token": 3
+  },
+  "tokenizer_path": "tokenizer/zinc20_selfies_ape_tokenizer_100k.json",
+  "tokenizer_sha256": "e9fb8b5d12aeff7ba42fc8f6719c9a496069f37c629eed89831177b75e8caad0",
+  "tokenizer_train_size": 100000,
+  "vocab_size": 231
+}

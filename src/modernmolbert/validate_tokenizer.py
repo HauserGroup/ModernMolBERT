@@ -5,6 +5,7 @@ import argparse
 from pathlib import Path
 
 from dotenv import load_dotenv
+from tqdm.auto import tqdm
 
 from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.utils import (
@@ -72,12 +73,32 @@ def parse_args() -> argparse.Namespace:
             "dataset in data/."
         ),
     )
+    parser.add_argument(
+        "--data_files",
+        type=str,
+        default=None,
+        help=(
+            "Optional parquet glob/path for direct streaming (e.g. "
+            "hf://datasets/<repo>/data/train-*.parquet)."
+        ),
+    )
     parser.add_argument("--n", type=int, default=1000)
     parser.add_argument("--max_seq_length", type=int, default=256)
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--unk_rate_threshold", type=float, default=0.001)
     parser.add_argument("--truncation_warn_threshold", type=float, default=0.05)
+    parser.add_argument(
+        "--warn_only",
+        action="store_true",
+        help="Report validation failures as warnings instead of exiting nonzero.",
+    )
+    parser.add_argument(
+        "--show_unknown_examples",
+        type=int,
+        default=0,
+        help="Print up to N sample sequences that contain <unk> tokens.",
+    )
     parser.add_argument(
         "--fixture_jsonl",
         type=str,
@@ -101,16 +122,61 @@ def _sample_sequences(args: argparse.Namespace) -> list[str]:
         seed=args.seed,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
+        data_files=args.data_files,
     )
     rows: list[str] = []
-    for row in ds:
-        seq = normalize_sequence(row, args.selfies_column)
-        if seq is None:
-            continue
-        rows.append(seq)
-        if len(rows) >= args.n:
-            break
+    try:
+        with tqdm(total=args.n, desc="Sampling sequences", unit="seq") as pbar:
+            for row in ds:
+                seq = normalize_sequence(row, args.selfies_column)
+                if seq is None:
+                    continue
+                rows.append(seq)
+                pbar.update(1)
+                if len(rows) >= args.n:
+                    break
+    finally:
+        # Best-effort cleanup so streaming layers don't continue retry noise
+        # after validation has already reached a terminal state.
+        del ds
     return rows
+
+
+def _fail_or_warn(args: argparse.Namespace, message: str) -> bool:
+    if args.warn_only:
+        print(f"WARNING: {message}", flush=True)
+        return True
+    print(f"ERROR: {message}", flush=True)
+    raise SystemExit(1)
+
+
+def _print_unknown_examples(
+    tokenizer: APETokenizer,
+    sequences: list[str],
+    special_ids: dict[str, int],
+    max_seq_length: int,
+    n: int,
+) -> None:
+    if n <= 0:
+        return
+    unk_id = special_ids["unk_token"]
+    shown = 0
+    for seq in sequences:
+        encoded = encode_sequence(
+            tokenizer,
+            seq,
+            max_seq_length=max_seq_length,
+        )["input_ids"]
+        if unk_id not in encoded:
+            continue
+        tokens = tokenizer.convert_ids_to_tokens(encoded)
+        print("UNKNOWN EXAMPLE")
+        print(f"selfies: {seq[:300]}")
+        print(f"ids: {encoded[:80]}")
+        print(f"tokens: {tokens[:80]}")
+        shown += 1
+        if shown >= n:
+            break
 
 
 def _assert_ethanol_not_unknown(
@@ -170,9 +236,14 @@ def main() -> None:
     if vocab_size < 100:
         raise ValueError(f"Suspiciously small vocabulary size: {vocab_size}")
 
+    warning_count = 0
+
     sequences = _sample_sequences(args)
     validate_selfies_sample_shape(sequences)
-    _assert_ethanol_not_unknown(tokenizer, special_ids)
+    try:
+        _assert_ethanol_not_unknown(tokenizer, special_ids)
+    except ValueError as exc:
+        warning_count += int(_fail_or_warn(args, str(exc)))
 
     stats = compute_tokenization_stats(
         tokenizer=tokenizer,
@@ -181,22 +252,12 @@ def main() -> None:
         special_ids=special_ids,
     )
 
-    if stats["unk_rate"] > args.unk_rate_threshold:
-        raise ValueError(
-            f"Tokenizer unknown-token rate too high: {stats['unk_rate']:.6f} "
-            f"(threshold {args.unk_rate_threshold:.6f})"
-        )
-    if stats["empty_sequence_rate"] > 0.0:
-        raise ValueError("Tokenizer produced empty tokenized sequences.")
-    if stats["mostly_unknown_rate"] > 0.01:
-        raise ValueError(
-            "Too many sequences are mostly unknown tokens: "
-            f"{stats['mostly_unknown_rate']:.4f}"
-        )
-
     print(f"representation: {args.representation}")
     print(f"selfies_column: {args.selfies_column}")
     print(f"split: {args.split}")
+    print(f"dataset_name: {args.dataset_name}")
+    if args.data_files:
+        print(f"data_files: {args.data_files}")
     print(f"tokenizer_path: {vocab_path}")
     print(f"tokenizer_metadata_path: {metadata_path}")
     print(f"vocab_size: {vocab_size}")
@@ -209,11 +270,44 @@ def main() -> None:
     print(f"p99_len: {stats['p99_len']:.0f}")
     print(f"truncation_rate@{args.max_seq_length}: {stats['truncation_rate']:.6f}")
 
+    if stats["unk_rate"] > args.unk_rate_threshold:
+        if args.show_unknown_examples > 0:
+            _print_unknown_examples(
+                tokenizer=tokenizer,
+                sequences=sequences,
+                special_ids=special_ids,
+                max_seq_length=args.max_seq_length,
+                n=args.show_unknown_examples,
+            )
+        warning_count += int(
+            _fail_or_warn(
+                args,
+                "Tokenizer unknown-token rate too high: "
+                f"{stats['unk_rate']:.6f} "
+                f"(threshold {args.unk_rate_threshold:.6f})",
+            )
+        )
+    if stats["empty_sequence_rate"] > 0.0:
+        warning_count += int(
+            _fail_or_warn(args, "Tokenizer produced empty tokenized sequences.")
+        )
+    if stats["mostly_unknown_rate"] > 0.01:
+        warning_count += int(
+            _fail_or_warn(
+                args,
+                "Too many sequences are mostly unknown tokens: "
+                f"{stats['mostly_unknown_rate']:.4f}",
+            )
+        )
+
     if stats["truncation_rate"] > args.truncation_warn_threshold:
         print(
             "warning: truncation rate is above threshold "
             f"({stats['truncation_rate']:.4f} > {args.truncation_warn_threshold:.4f})"
         )
+
+    if warning_count > 0 and args.warn_only:
+        print(f"validation completed with {warning_count} warning(s)", flush=True)
 
 
 if __name__ == "__main__":

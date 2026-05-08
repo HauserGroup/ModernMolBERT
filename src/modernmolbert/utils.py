@@ -29,7 +29,10 @@ SELFIES_REPRESENTATION = "SELFIES"
 SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
 SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
 PUBCHEM10M_DATASET = "mikemayuare/PubChem10M_SMILES_SELFIES"
-ZPN_ZINC20_DATASET = "zpn/zinc20"
+ZPN_ZINC20_DATASET = (
+    "zpn/zinc20"  # legacy: uses a dataset script, incompatible with datasets>=4
+)
+ZINC20_DATASET = "haydn-jones/ZINC20"
 
 
 def repo_root() -> Path:
@@ -39,8 +42,8 @@ def repo_root() -> Path:
 def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
     if selfies_column is not None:
         return selfies_column
-    if dataset_name == ZPN_ZINC20_DATASET:
-        return "selfies"
+    if dataset_name in (ZPN_ZINC20_DATASET, ZINC20_DATASET):
+        return "SELFIES"
     return SELFIES_REPRESENTATION
 
 
@@ -49,7 +52,7 @@ def infer_validation_split(
 ) -> str | None:
     if validation_split is not None:
         return validation_split
-    if dataset_name == ZPN_ZINC20_DATASET:
+    if dataset_name in (ZPN_ZINC20_DATASET, ZINC20_DATASET):
         return "validation"
     return None
 
@@ -223,7 +226,21 @@ def get_streaming_dataset(
     buffer_size: int,
     split: str = "train",
     data_dir: Path | None = None,
+    data_files: str | None = None,
 ) -> IterableDataset:
+    if data_files is not None:
+        print(
+            f"[data] Streaming parquet files directly for split '{split}': {data_files}",
+            flush=True,
+        )
+        hf_ds = load_dataset(
+            "parquet",
+            data_files={split: data_files},
+            split=split,
+            streaming=True,
+        )
+        return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
+
     local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
     if local is not None:
         print(f"[data] Loading dataset from disk: {local}", flush=True)
@@ -248,7 +265,18 @@ def get_streaming_dataset(
             f"Unsupported local dataset type at {local}: {type(raw).__name__}"
         )
     print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
-    hf_ds = load_dataset(dataset_name, split=split, streaming=True)
+    try:
+        hf_ds = load_dataset(dataset_name, split=split, streaming=True)
+    except RuntimeError as e:
+        if "Dataset scripts are no longer supported" in str(e):
+            raise RuntimeError(
+                f"Dataset {dataset_name!r} uses a legacy Hugging Face dataset script, "
+                "which is not supported by the installed `datasets` version. "
+                "Use a script-free Parquet/Arrow mirror, load data files directly with "
+                "`load_dataset('parquet', data_files=...)`, or pin `datasets<4` in a "
+                "separate data-preparation environment."
+            ) from e
+        raise
     return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
 
 

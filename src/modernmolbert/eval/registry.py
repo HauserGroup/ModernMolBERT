@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from modernmolbert.eval.featurizers.base import RepresentationFeaturizer
 from modernmolbert.eval.featurizers.dummy import DummyFeaturizer
+from modernmolbert.eval.featurizers.rdkit_ecfp import ECFP4Featurizer
 
 
 @dataclass(frozen=True)
@@ -21,6 +22,12 @@ FEATURIZER_REGISTRY: dict[str, FeaturizerSpec] = {
         factory=DummyFeaturizer,
         description="Deterministic toy featurizer for tests and plumbing only.",
         required_extra=None,
+    ),
+    "ecfp4": FeaturizerSpec(
+        name="ecfp4",
+        factory=ECFP4Featurizer,
+        description="RDKit Morgan/ECFP4 fingerprint, radius=2.",
+        required_extra="eval-rdkit",
     ),
 }
 

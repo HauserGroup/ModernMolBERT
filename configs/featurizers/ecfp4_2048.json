@@ -1,0 +1,8 @@
+{
+  "include_chirality": false,
+  "n_bits": 2048,
+  "name": "ecfp4_2048",
+  "radius": 2,
+  "type": "ecfp4",
+  "use_bond_types": true
+}

@@ -1,0 +1,27 @@
+{
+  "cache_key": {
+    "dataset_name": "tiny_ecfp4_demo",
+    "featurizer_metadata": {
+      "include_chirality": false,
+      "n_bits": 2048,
+      "name": "ecfp4_2048",
+      "radius": 2,
+      "use_bond_types": true
+    },
+    "featurizer_name": "ecfp4_2048",
+    "smiles_hash": "e1b75662716e841a34a07fbd31cf459aba765448276962f4f914df5579c735c6",
+    "split_name": "train"
+  },
+  "feature_dim": 2048,
+  "feature_metadata": {
+    "backend": "rdkit",
+    "ecfp": "ECFP4",
+    "fingerprint": "morgan",
+    "include_chirality": false,
+    "n_bits": 2048,
+    "radius": 2,
+    "use_bond_types": true
+  },
+  "n_inputs": 6,
+  "n_valid": 6
+}

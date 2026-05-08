@@ -873,6 +873,28 @@ If `run_modernmolbert_eval.py` is retained, it must delegate to the shared runne
 
 ---
 
+## Preparing MoleculeNet evaluation data
+
+MoleculeNet datasets are prepared locally from DeepChem into sanitized Parquet files containing raw SMILES, canonical SMILES, SELFIES, validity flags, and task labels.
+
+The preparation pipeline intentionally loads each DeepChem dataset **unsplit**, sanitizes molecules first, converts valid molecules to canonical SMILES and SELFIES, and then applies a local train/validation/test split. This avoids DeepChem/RDKit scaffold splitting before invalid molecules have been removed.
+
+### Prepare only the core suit.
+
+```bash
+uv run python -m modernmolbert.eval.cli.prepare_moleculenet \
+  --split scaffold \
+  --seed 13 \
+  --frac_train 0.8 \
+  --frac_valid 0.1 \
+  --frac_test 0.1 \
+  --output_root data/eval/moleculenet_sanitized \
+  --deepchem_data_dir data/deepchem/raw \
+  --deepchem_save_dir data/deepchem/processed
+
+uv run python -m modernmolbert.eval.cli.prepare_moleculenet --list_datasets # list available
+```
+
 ## Development principles
 
 - Keep tokenizer training separate from model training.
@@ -883,3 +905,16 @@ If `run_modernmolbert_eval.py` is retained, it must delegate to the shared runne
 - Avoid adding new benchmark scope until the core tokenizer, model, featuriser, and runner path are stable.
 - Prefer small smoke tests before expensive training.
 - Record enough metadata to reproduce every run.
+
+### Path handling in examples and notebooks
+
+Examples should resolve files relative to the repository root rather than the current working directory. This avoids broken paths when notebooks are launched from `examples/`, `notebooks/`, VS Code, or Jupyter.
+
+Use:
+
+```python
+from modernmolbert.paths import data_path, outputs_path
+
+dataset_dir = data_path("eval", "moleculenet_sanitized", "bbbp")
+output_dir = outputs_path("examples", "ecfp4_moleculenet")
+```

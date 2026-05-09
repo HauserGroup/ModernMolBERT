@@ -164,6 +164,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_grad_norm", type=float, default=1.0)
+    parser.add_argument(
+        "--load_best_model_at_end",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Load the checkpoint with the best eval metric at the end of training.",
+    )
+
+    parser.add_argument(
+        "--metric_for_best_model",
+        type=str,
+        default="eval_loss",
+        help="Metric used to choose the best checkpoint.",
+    )
+
+    parser.add_argument(
+        "--greater_is_better",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether a larger best-model metric is better.",
+    )
 
     # Runtime
     parser.add_argument("--logging_steps", type=int, default=100)
@@ -181,7 +201,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--fp16", action="store_true", default=False)
     parser.add_argument("--num_workers", type=int, default=4)
-    parser.add_argument("--max_eval_batches", type=int, default=20)
+    parser.add_argument(
+        "--max_eval_batches",
+        type=int,
+        default=0,
+        help=(
+            "Maximum number of eval batches to materialize. "
+            "Use 0 for no cap, so --eval_size controls validation size."
+        ),
+    )
     parser.add_argument(
         "--report_to",
         type=str,
@@ -194,6 +222,11 @@ def parse_args() -> argparse.Namespace:
         help="Compute masked-token accuracy during eval.",
     )
     parser.add_argument("--debug", action="store_true", help="Run a tiny smoke test.")
+    parser.add_argument(
+        "--hf_login",
+        action="store_true",
+        help="Call huggingface_hub.login using HF_TOKEN before loading datasets/models.",
+    )
 
     return parser.parse_args()
 
@@ -224,6 +257,10 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
         raise ValueError("mlm_probability must be between 0 and 1")
     if args.bf16 and args.fp16:
         raise ValueError("bf16 and fp16 are mutually exclusive")
+    if args.eval_size <= 0:
+        raise ValueError("eval_size must be positive")
+    if args.max_eval_batches < 0:
+        raise ValueError("max_eval_batches must be >= 0")
     if args.per_device_train_batch_size <= 0 or args.per_device_eval_batch_size <= 0:
         raise ValueError("batch sizes must be positive")
     if args.val_split_mod < 2:
@@ -239,6 +276,11 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
         )
     if backend == "mps" and not torch.backends.mps.is_available():
         raise ValueError("device_backend=mps requested but MPS is not available")
+    if args.load_best_model_at_end and args.save_steps != args.eval_steps:
+        raise ValueError(
+            "--load_best_model_at_end requires --save_steps to equal --eval_steps "
+            "so every evaluated checkpoint can be selected as best."
+        )
 
 
 def adjust_args_for_backend(
@@ -255,7 +297,7 @@ def adjust_args_for_backend(
         args.max_steps = min(args.max_steps, 200)
         args.logging_steps = min(args.logging_steps, 10)
         args.eval_steps = min(args.eval_steps, 50)
-        args.save_steps = min(args.save_steps, 100)
+        args.save_steps = args.eval_steps
         args.tokenizer_validation_samples = min(args.tokenizer_validation_samples, 200)
 
     return args
@@ -506,11 +548,28 @@ def make_train_iterable_dataset(
 
 
 def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Dataset:
-    n_eval = args.eval_size
+    requested_eval_size = args.eval_size
+    n_eval = requested_eval_size
+
     if args.max_eval_batches > 0:
-        n_eval = min(
-            n_eval,
-            args.max_eval_batches * args.per_device_eval_batch_size,
+        batch_capped_eval_size = args.max_eval_batches * args.per_device_eval_batch_size
+
+        n_eval = min(requested_eval_size, batch_capped_eval_size)
+
+        log(
+            "Building finite validation set: "
+            f"requested_eval_size={requested_eval_size}, "
+            f"max_eval_batches={args.max_eval_batches}, "
+            f"per_device_eval_batch_size={args.per_device_eval_batch_size}, "
+            f"actual_eval_size={n_eval}"
+        )
+
+    else:
+        log(
+            "Building finite validation set: "
+            f"requested_eval_size={requested_eval_size}, "
+            f"max_eval_batches=none, "
+            f"actual_eval_size={n_eval}"
         )
 
     eval_split = (
@@ -568,11 +627,19 @@ class MolecularMLMCollator:
     special_token_ids: list[int]
 
     def __post_init__(self) -> None:
-        special_ids = set(self.special_token_ids)
-        self._eligible_replacement_ids = torch.tensor(
-            [i for i in range(self.vocab_size) if i not in special_ids],
-            dtype=torch.long,
-        )
+        special_ids = {int(token_id) for token_id in self.special_token_ids}
+        eligible = [
+            token_id
+            for token_id in range(self.vocab_size)
+            if token_id not in special_ids
+        ]
+
+        if not eligible:
+            raise ValueError(
+                "No eligible non-special token IDs available for MLM random replacement."
+            )
+
+        self._eligible_replacement_ids = torch.tensor(eligible, dtype=torch.long)
 
     def __call__(self, examples: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
         ids = [
@@ -634,7 +701,7 @@ class MolecularMLMCollator:
                 size=labels.shape,
                 device=input_ids.device,
             )
-            random_words = self._eligible_replacement_ids[random_indices]
+            random_words = eligible_random_ids[random_indices]
             input_ids[replace_with_random] = random_words[replace_with_random]
 
         # Remaining 10% stay unchanged.
@@ -647,31 +714,11 @@ class MolecularMLMCollator:
     def eligible_random_token_ids(
         self, device: torch.device | None = None
     ) -> torch.Tensor:
-        """Return vocabulary IDs eligible for random MLM replacement.
-
-        Special tokens are excluded so the random-replacement branch cannot insert
-
-        padding, BOS, EOS, UNK, MASK, or any other configured special token.
-
-        """
-
-        special_ids = {int(token_id) for token_id in self.special_token_ids}
-
-        eligible = [
-            token_id
-            for token_id in range(self.vocab_size)
-            if token_id not in special_ids
-        ]
-
-        if not eligible:
-            raise ValueError(
-                "No eligible non-special token IDs available for MLM random replacement."
-            )
 
         if device is None:
-            device = torch.device("cpu")
+            return self._eligible_replacement_ids
 
-        return torch.tensor(eligible, dtype=torch.long, device=device)
+        return self._eligible_replacement_ids.to(device)
 
 
 MODERNBERT_CONFIGS = {
@@ -735,6 +782,12 @@ def log_training_plan(
     print(
         f"  eval batch/device:          {args.per_device_eval_batch_size}", flush=True
     )
+    print(
+        f"  load_best_model_at_end:     {args.load_best_model_at_end}",
+        flush=True,
+    )
+    print(f"  metric_for_best_model:      {args.metric_for_best_model}", flush=True)
+    print(f"  greater_is_better:          {args.greater_is_better}", flush=True)
     print(f"  eval every steps:           {args.eval_steps}", flush=True)
     print(f"  save every steps:           {args.save_steps}", flush=True)
     print(f"  save_total_limit:           {args.save_total_limit}", flush=True)
@@ -754,6 +807,7 @@ def write_run_metadata(
     tokenizer_vocab_path: Path,
     tokenizer_metadata_path: Path,
     final_eval_metrics: dict[str, float] | None = None,
+    trainer_state: dict[str, Any] | None = None,
 ) -> None:
     output_dir = Path(args.output_dir)
 
@@ -779,8 +833,24 @@ def write_run_metadata(
         "num_parameters": n_params,
         "tokenizer_stats": tokenizer_stats,
         "final_eval_metrics": final_eval_metrics,
+        "trainer_state_summary": trainer_state,
         "args": vars(args),
     }
+
+    best_checkpoint_text = ""
+
+    if trainer_state:
+        best_checkpoint_text = f"""
+
+    ## Best checkpoint
+
+    - Best checkpoint: `{trainer_state.get("best_model_checkpoint")}`
+
+    - Best metric: `{trainer_state.get("best_metric")}`
+
+    - Best global step: `{trainer_state.get("best_global_step")}`
+
+    """
 
     with (output_dir / "ape_tokenizer_metadata.json").open("w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
@@ -815,6 +885,7 @@ Keep these files with the checkpoint:
 - Max sequence length: {args.max_seq_length}
 - MLM probability: {args.mlm_probability}
 
+{best_checkpoint_text}
 ## Loading sketch
 
 ```python
@@ -832,15 +903,19 @@ tokenizer.load_vocabulary("final_model/tokenizer.json")
 
 
 def main() -> None:
-    load_dotenv()
-    hf_token = os.environ.get("HF_TOKEN")
-    if hf_token:
-        login(token=hf_token)
     args = parse_args()
+    load_dotenv()
+
+    if args.hf_login:
+        hf_token = os.environ.get("HF_TOKEN")
+        if not hf_token:
+            raise ValueError("--hf_login was set but HF_TOKEN is not available.")
+        login(token=hf_token)
+
     args = resolve_dataset_args(args)
     backend = detect_backend(args)
-    validate_args(args, backend)
     args = adjust_args_for_backend(args, backend)
+    validate_args(args, backend)
 
     # Resolve max_seq_length from the official model config when not explicitly set.
     if args.max_seq_length is None:
@@ -973,6 +1048,9 @@ def main() -> None:
         save_strategy="steps",
         save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
+        load_best_model_at_end=args.load_best_model_at_end,
+        metric_for_best_model=args.metric_for_best_model,
+        greater_is_better=args.greater_is_better,
         bf16=args.bf16,
         fp16=args.fp16,
         dataloader_num_workers=args.num_workers,
@@ -980,7 +1058,6 @@ def main() -> None:
         remove_unused_columns=False,
         prediction_loss_only=not args.compute_masked_accuracy,
         report_to=report_to,
-        load_best_model_at_end=False,
     )
 
     world_size = training_args.world_size if hasattr(training_args, "world_size") else 1
@@ -1005,9 +1082,9 @@ def main() -> None:
     train_result = trainer.train()
 
     print("Saving final model...")
+
     final_dir = output_dir / "final_model"
     trainer.save_model(str(final_dir))
-    model.config.save_pretrained(str(final_dir))
 
     copy_tokenizer_artifacts(
         vocab_path=tokenizer_vocab_path,
@@ -1017,11 +1094,17 @@ def main() -> None:
     )
 
     metrics = train_result.metrics
-    metrics["train_samples_streaming"] = 1.0
+
+    estimated_train_samples = (
+        args.max_steps
+        * args.per_device_train_batch_size
+        * args.gradient_accumulation_steps
+        * world_size
+    )
+    metrics["train_samples_streaming"] = float(estimated_train_samples)
     metrics["num_parameters"] = float(n_params)
     trainer.log_metrics("train", metrics)
     trainer.save_metrics("train", metrics)
-    trainer.save_state()
 
     print("Running final evaluation...")
     eval_metrics = trainer.evaluate()
@@ -1034,6 +1117,15 @@ def main() -> None:
     trainer.log_metrics("eval", eval_metrics)
     trainer.save_metrics("eval", eval_metrics)
 
+    trainer.save_state()
+
+    trainer_state_summary = {
+        "best_global_step": getattr(trainer.state, "best_global_step", None),
+        "best_metric": getattr(trainer.state, "best_metric", None),
+        "best_model_checkpoint": getattr(trainer.state, "best_model_checkpoint", None),
+        "global_step": getattr(trainer.state, "global_step", None),
+    }
+
     write_run_metadata(
         args=args,
         backend=backend,
@@ -1044,6 +1136,7 @@ def main() -> None:
         tokenizer_vocab_path=tokenizer_vocab_path,
         tokenizer_metadata_path=tokenizer_metadata_path,
         final_eval_metrics={k: float(v) for k, v in eval_metrics.items()},
+        trainer_state=trainer_state_summary,
     )
 
     print("Done.")

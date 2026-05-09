@@ -7,7 +7,7 @@ SELFIES_COLUMN="SELFIES"
 TOKENIZER_PATH="tokenizer/pubchem10m_selfies_ape_tokenizer_1m.json"
 TOKENIZER_METADATA_PATH="tokenizer/pubchem10m_selfies_ape_tokenizer_1m.metadata.json"
 
-OUTPUT_DIR="runs/pubchem10m_mps_base_overnight"
+OUTPUT_DIR="runs/pubchem10m_mps_base_pilot_256"
 
 mkdir -p runs
 
@@ -23,33 +23,40 @@ if [[ ! -f "${TOKENIZER_METADATA_PATH}" ]]; then
   exit 1
 fi
 
-echo "Starting PubChem10M SELFIES ModernBERT-base overnight MPS run..."
+if [[ -d "${OUTPUT_DIR}" && -n "$(ls -A "${OUTPUT_DIR}")" ]]; then
+  echo "Output directory already exists and is not empty: ${OUTPUT_DIR}"
+  echo "Choose a new OUTPUT_DIR or remove the existing directory."
+  exit 1
+fi
+
+echo "Starting PubChem10M SELFIES ModernBERT-base MPS pilot run..."
 echo "Output directory: ${OUTPUT_DIR}"
 
 uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --dataset_name "${DATASET_NAME}" \
   --selfies_column "${SELFIES_COLUMN}" \
-  --split train \
+  --train_split train \
   --output_dir "${OUTPUT_DIR}" \
   --device_backend mps \
   --model_size base \
   --tokenizer_vocab_path "${TOKENIZER_PATH}" \
   --tokenizer_metadata_path "${TOKENIZER_METADATA_PATH}" \
-  --max_seq_length 512 \
-  --max_steps 12000 \
+  --max_seq_length 256 \
+  --max_steps 6000 \
   --eval_size 512 \
   --max_eval_batches 64 \
   --per_device_train_batch_size 1 \
   --per_device_eval_batch_size 1 \
   --gradient_accumulation_steps 32 \
-  --mlm_probability 0.30 \
+  --mlm_probability 0.15 \
   --learning_rate 1e-4 \
-  --warmup_steps 1000 \
+  --warmup_steps 500 \
   --logging_steps 25 \
-  --eval_steps 500 \
+  --eval_steps 1000 \
   --save_steps 1000 \
   --save_total_limit 3 \
   --num_workers 0 \
+  --compute_masked_accuracy \
   --report_to tensorboard
 
 echo "Done."

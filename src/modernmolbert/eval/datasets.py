@@ -1,7 +1,23 @@
+"""Contributing:
+
+
+dataset = load_csv_eval_dataset(
+    name="my_assay",
+    task_type="classification",
+    task_names="active",
+    train_csv="data/my_assay/train.csv",
+    valid_csv="data/my_assay/valid.csv",
+    test_csv="data/my_assay/test.csv",
+    smiles_column="smiles",
+)
+
+"""
+
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from typing import Any, Iterator, Literal
+from collections.abc import Sequence
 
 import pandas as pd
 
@@ -93,7 +109,7 @@ def load_csv_eval_dataset(
     *,
     name: str,
     task_type: TaskType,
-    task_names: list[str],
+    task_names: str | Sequence[str],
     train_csv: str | Path,
     test_csv: str | Path,
     valid_csv: str | Path | None = None,
@@ -102,14 +118,14 @@ def load_csv_eval_dataset(
 ) -> EvalDataset:
     """Load an EvalDataset from explicit CSV split files."""
 
-    train = pd.read_csv(train_csv)
-    valid = pd.read_csv(valid_csv) if valid_csv is not None else None
-    test = pd.read_csv(test_csv)
+    train = read_table(train_csv)
+    valid = read_table(valid_csv) if valid_csv is not None else None
+    test = read_table(test_csv)
 
     dataset = EvalDataset(
         name=name,
         task_type=task_type,
-        task_names=list(task_names),
+        task_names=normalize_task_names(task_names),
         train=train,
         valid=valid,
         test=test,
@@ -125,7 +141,7 @@ def load_single_csv_with_split_column(
     *,
     name: str,
     task_type: TaskType,
-    task_names: list[str],
+    task_names: str | Sequence[str],
     csv_path: str | Path,
     split_column: str = "split",
     smiles_column: str = "smiles",
@@ -150,7 +166,7 @@ def load_single_csv_with_split_column(
     dataset = EvalDataset(
         name=name,
         task_type=task_type,
-        task_names=list(task_names),
+        task_names=normalize_task_names(task_names),
         train=train,
         valid=valid,
         test=test,
@@ -197,6 +213,9 @@ def load_prepared_moleculenet_dataset(
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 
+    if eval_split not in {"valid", "test"}:
+        raise ValueError("eval_split must be either 'valid' or 'test'")
+
     train_path = dataset_dir / "train.parquet"
     valid_path = dataset_dir / "valid.parquet"
     eval_path = dataset_dir / f"{eval_split}.parquet"
@@ -226,6 +245,15 @@ def load_prepared_moleculenet_dataset(
     if not isinstance(tasks, list) or not tasks:
         raise ValueError("metadata.json must contain a non-empty list field 'tasks'")
 
+    dataset_metadata = dict(metadata)
+
+    dataset_metadata.update(
+        {
+            "eval_split": eval_split,
+            "dataset_dir": str(dataset_dir),
+        }
+    )
+
     dataset = EvalDataset(
         name=str(metadata.get("name", dataset_dir.name)),
         task_type=task_type,
@@ -235,10 +263,65 @@ def load_prepared_moleculenet_dataset(
         test=test,
         smiles_column=smiles_column,
         selfies_column=selfies_column,
-        metadata={
-            "eval_split": eval_split,
-            "dataset_dir": str(dataset_dir),
-        },
+        metadata=dataset_metadata,
+    )
+    dataset.check()
+    return dataset
+
+
+def normalize_task_names(task_names: str | Sequence[str]) -> list[str]:
+
+    if isinstance(task_names, str):
+        return [task_names]
+
+    out = [str(task) for task in task_names]
+
+    if not out:
+        raise ValueError("task_names must contain at least one task")
+
+    return out
+
+
+def read_table(path: str | Path) -> pd.DataFrame:
+
+    path = Path(path)
+
+    if path.suffix == ".csv":
+        return pd.read_csv(path)
+
+    if path.suffix in {".parquet", ".pq"}:
+        return pd.read_parquet(path)
+
+    if path.suffix in {".tsv", ".txt"}:
+        return pd.read_csv(path, sep="\t")
+
+    raise ValueError(
+        f"Unsupported table format for {path}. Use .csv, .tsv, .parquet, or .pq."
+    )
+
+
+def make_eval_dataset_from_splits(
+    *,
+    name: str,
+    task_type: TaskType,
+    task_names: str | Sequence[str],
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    valid: pd.DataFrame | None = None,
+    smiles_column: str = "smiles",
+    selfies_column: str = "selfies",
+    metadata: dict[str, Any] | None = None,
+) -> EvalDataset:
+    dataset = EvalDataset(
+        name=name,
+        task_type=task_type,
+        task_names=normalize_task_names(task_names),
+        train=train,
+        valid=valid,
+        test=test,
+        smiles_column=smiles_column,
+        selfies_column=selfies_column,
+        metadata={} if metadata is None else dict(metadata),
     )
     dataset.check()
     return dataset

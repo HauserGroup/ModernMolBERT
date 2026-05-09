@@ -1,0 +1,140 @@
+% main.tex
+% arXiv-friendly LaTeX template
+
+\documentclass[11pt]{article}
+
+% ---------- Encoding and fonts ----------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+% ---------- Page layout ----------
+\usepackage[margin=1in]{geometry}
+
+% ---------- Math ----------
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+
+% ---------- Figures and tables ----------
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% ---------- Links ----------
+% Load hyperref late.
+% Do not specify a pdftex driver manually; arXiv recommends letting packages detect drivers.
+\usepackage[colorlinks=true,
+            linkcolor=blue,
+            citecolor=blue,
+            urlcolor=blue]{hyperref}
+
+% ---------- References ----------
+% Option A: natbib + BibTeX
+\usepackage[numbers,sort&compress]{natbib}
+
+% ---------- Custom macros ----------
+% Put your own commands in macros.tex and include that file in the arXiv upload.
+\input{macros}
+
+% ---------- Metadata ----------
+\title{ModernMolBERT: A ModernBERT Encoder Family for SELFIES Molecular Language Modeling}
+
+\author{
+  Jakob S. Madsen\thanks{
+    Center for Pharmaceutical Data Science Education, University of Copenhagen.
+    Emails: \texttt{jsmadsen@sund.ku.dk}, \texttt{alexander.hauser@sund.ku.dk}
+  }
+  \and
+  Alexander Hauser\footnotemark[1]
+}
+
+% Use a fixed date, not \today.
+\date{May 9, 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We introduce \textsc{ModernMolBERT}, a Modern Molecular BERT family for small-molecule representation learning. \textsc{ModernMolBERT} adapts the ModernBERT encoder architecture to SELFIES molecular language modeling, using chemically aware tokenization to preserve molecular syntax and structure. We train base and large models on large-scale unlabeled molecular corpora and evaluate the resulting representations on standard molecular property prediction benchmarks. \textsc{ModernMolBERT} provides a compact, reproducible, encoder-only foundation for SELFIES-based chemical machine learning.
+\end{abstract}
+
+\section{Introduction}
+\label{sec:introduction}
+ModernBERT is a Modern BERT \citep{warnerSmarterBetterFaster} and APE means Atom Pair Encoding \citet{leonComparingSMILESSELFIES2024}. We need these for molecules.
+
+\section{Methods}
+\label{sec:methods}
+
+Describe the methods clearly enough that the work can be reproduced.
+
+\section{Results}
+\label{sec:results}
+
+Describe the results.
+
+% Example figure:
+
+% \begin{figure}[htbp]
+%     \centering
+%     \includegraphics[width=0.8\textwidth]{figures/example_figure.pdf}
+%     \caption{Example figure caption. Use PDF, PNG, or JPG figures for PDFLaTeX submissions.}
+%     \label{fig:example}
+% \end{figure}
+
+Example table:
+
+\begin{table}[htbp]
+    \centering
+    \caption{Example table caption.}
+    \label{tab:example}
+    \begin{tabular}{lcc}
+        \toprule
+        Condition & Estimate & Standard error \\
+        \midrule
+        A & 1.23 & 0.10 \\
+        B & 0.98 & 0.12 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{Discussion}
+\label{sec:discussion}
+
+Interpret the results, discuss limitations, and describe future work.
+
+\section*{Acknowledgements}
+
+Acknowledge funding, collaborators, and technical assistance here.
+
+\section*{Data and code availability}
+
+State where data and code are available, or explain any restrictions.
+
+\section*{Author contributions}
+
+Describe author contributions here, if appropriate.
+
+\section*{Competing interests}
+
+Declare competing interests, or write: The authors declare no competing interests.
+
+% ---------- Bibliography ----------
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+
+\section{Supplementary methods}
+\label{app:supplementary-methods}
+
+Additional methodological details can go here.
+
+\section{Additional results}
+\label{app:additional-results}
+
+Additional figures, tables, or derivations can go here.
+
+\end{document}

@@ -3,8 +3,12 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
+<!-- ![ModernMolBERT](imgs/mmbert_text.png) -->
 
-ModernMolBERT is a SELFIES-native molecular representation project. It trains a ModernBERT masked-language model on SELFIES strings and evaluates the resulting encoder as a frozen molecular featuriser against existing molecular representations through one shared benchmark pipeline.
+<img src="imgs/mmbert_text.png" width="600"/>.
+
+
+ModernMolBERT (Modern Molecular BERT) is a SELFIES-native molecular representation project. It trains a ModernBERT masked-language model on SELFIES strings and evaluates the resulting encoder as a frozen molecular featuriser against existing molecular representations through one shared benchmark pipeline.
 
 The core objective is not to maintain a collection of separate scripts. The core objective is to support a reliable path from tokenizer training to model pretraining to frozen-feature benchmarking:
 
@@ -918,3 +922,6 @@ from modernmolbert.paths import data_path, outputs_path
 dataset_dir = data_path("eval", "moleculenet_sanitized", "bbbp")
 output_dir = outputs_path("examples", "ecfp4_moleculenet")
 ```
+
+## Citation
+If you use this work, please cite the accompanying paper. See [`CITATION.cff`](CITATION.cff) or use the "Cite this repository" button on GitHub.

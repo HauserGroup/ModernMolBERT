@@ -7,6 +7,9 @@ from modernmolbert.eval.featurizers.base import FeatureBatch, RepresentationFeat
 from modernmolbert.eval.featurizers.dummy import DummyFeaturizer
 from modernmolbert.eval.featurizers.rdkit_ecfp import ECFP4Featurizer
 from modernmolbert.eval.featurizers.hf_smiles import HuggingFaceSmilesFeaturizer
+from modernmolbert.eval.featurizers.modernmolbert_selfies import (
+    ModernMolBERTSelfiesFeaturizer,
+)
 
 __all__ = [
     "FeatureBatch",
@@ -14,4 +17,5 @@ __all__ = [
     "DummyFeaturizer",
     "ECFP4Featurizer",
     "HuggingFaceSmilesFeaturizer",
+    "ModernMolBERTSelfiesFeaturizer",
 ]

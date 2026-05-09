@@ -125,12 +125,13 @@ class HuggingFaceSmilesFeaturizer:
             hidden = _get_last_hidden_state(outputs)
 
             if self.pooling == "mean":
-                pooled = _mean_pool(
-                    hidden,
-                    batch["attention_mask"],
+                pooled = mean_pool_excluding_token_ids(
+                    last_hidden_state=hidden,
+                    attention_mask=batch["attention_mask"],
                     input_ids=batch.get("input_ids"),
-                    special_token_ids=special_token_ids,
+                    excluded_token_ids=special_token_ids,
                 )
+
             else:
                 pooled = hidden[:, 0, :]
 
@@ -163,6 +164,7 @@ class HuggingFaceSmilesFeaturizer:
         n_params = int(sum(p.numel() for p in model.parameters()))
 
         return {
+            "featurizer": self.name,
             "backend": "huggingface_transformers",
             "model_name_or_path": self.model_name_or_path,
             "resolved_model_path": resolved_model_path,
@@ -190,21 +192,6 @@ def _resolve_device(device: str):
         return torch.device("cpu")
 
     return torch.device(device)
-
-
-def _mean_pool(
-    last_hidden_state,
-    attention_mask,
-    input_ids=None,
-    special_token_ids: list[int] | None = None,
-):
-
-    return mean_pool_excluding_token_ids(
-        last_hidden_state=last_hidden_state,
-        attention_mask=attention_mask,
-        input_ids=input_ids,
-        excluded_token_ids=special_token_ids,
-    )
 
 
 def _get_last_hidden_state(outputs):

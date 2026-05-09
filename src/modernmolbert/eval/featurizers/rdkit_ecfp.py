@@ -77,6 +77,7 @@ class ECFP4Featurizer:
             X=X,
             valid_mask=valid_mask,
             metadata={
+                "featurizer": self.name,
                 "backend": "rdkit",
                 "fingerprint": "morgan",
                 "ecfp": "ECFP4",

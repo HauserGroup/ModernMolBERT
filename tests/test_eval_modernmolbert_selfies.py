@@ -12,6 +12,7 @@ import torch
 from modernmolbert.eval.featurizers.modernmolbert_selfies import (
     ModernMolBERTSelfiesFeaturizer,
 )
+from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 
 
 class TinyTokenizer:
@@ -218,17 +219,15 @@ def test_modernmolbert_selfies_featurizer_cls_pooling(tiny_modernmolbert_dir):
 def test_modernmolbert_selfies_featurizer_rejects_unknown_pooling(
     tiny_modernmolbert_dir,
 ):
-    featurizer = ModernMolBERTSelfiesFeaturizer(
-        model_dir=tiny_modernmolbert_dir,
-        tokenizer_path=tiny_modernmolbert_dir,
-        max_seq_length=32,
-        batch_size=2,
-        device="cpu",
-        pooling="not_a_pooling_strategy",  # type: ignore[arg-type]
-    )
-
     with pytest.raises(ValueError, match="pooling|Unsupported"):
-        featurizer.featurize_smiles(["CCO"])
+        ModernMolBERTSelfiesFeaturizer(
+            model_dir=tiny_modernmolbert_dir,
+            tokenizer_path=tiny_modernmolbert_dir,
+            max_seq_length=32,
+            batch_size=2,
+            device="cpu",
+            pooling="not_a_pooling_strategy",  # type: ignore[arg-type]
+        )
 
 
 def test_mean_pooling_excludes_special_tokens(tiny_modernmolbert_dir):
@@ -268,10 +267,11 @@ def test_mean_pooling_excludes_special_tokens(tiny_modernmolbert_dir):
 
     attention_mask = torch.tensor([[1, 1, 1, 1, 0]], dtype=torch.long)
 
-    pooled = featurizer._mean_pool_excluding_specials(
-        hidden=hidden,
-        input_ids=input_ids,
+    pooled = mean_pool_excluding_token_ids(
+        last_hidden_state=hidden,
         attention_mask=attention_mask,
+        input_ids=input_ids,
+        excluded_token_ids=featurizer._special_token_ids(),
     )
 
     expected = torch.tensor([[2.0, 4.0]])
@@ -313,12 +313,34 @@ def test_mean_pooling_falls_back_to_attention_mask_when_no_content_tokens(
 
     attention_mask = torch.tensor([[1, 1, 0]], dtype=torch.long)
 
-    pooled = featurizer._mean_pool_excluding_specials(
-        hidden=hidden,
-        input_ids=input_ids,
+    pooled = mean_pool_excluding_token_ids(
+        last_hidden_state=hidden,
         attention_mask=attention_mask,
+        input_ids=input_ids,
+        excluded_token_ids=featurizer._special_token_ids(),
     )
 
-    # Fallback should average BOS and EOS because there are no content tokens.
     expected = torch.tensor([[2.0, 4.0]])
     assert torch.allclose(pooled, expected)
+
+
+def test_modernmolbert_selfies_featurizer_records_metadata(tiny_modernmolbert_dir):
+    featurizer = ModernMolBERTSelfiesFeaturizer(
+        name="modernmolbert_pilot_test",
+        model_dir=tiny_modernmolbert_dir,
+        tokenizer_path=tiny_modernmolbert_dir,
+        max_seq_length=32,
+        batch_size=2,
+        device="cpu",
+        pooling="mean",
+    )
+
+    batch = featurizer.featurize_smiles(["CCO", "not_a_smiles"])
+
+    assert batch.metadata["featurizer"] == "modernmolbert_pilot_test"
+    assert batch.metadata["backend"] == "modernmolbert_selfies"
+    assert batch.metadata["pooling"] == "mean"
+    assert batch.metadata["max_seq_length"] == 32
+    assert batch.metadata["n_inputs"] == 2
+    assert batch.metadata["n_valid"] == 1
+    assert batch.metadata["invalid_fraction"] == pytest.approx(0.5)

@@ -1,7 +1,7 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
-from collections.abc import Sequence
 
 import numpy as np
 import torch
@@ -16,14 +16,11 @@ from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 class ModernMolBERTSelfiesFeaturizer:
     model_dir: str | Path
     tokenizer_path: str | Path | None = None
+    name: str = "modernmolbert_selfies"
     max_seq_length: int = 256
     pooling: Literal["mean", "cls"] = "mean"
     device: str = "auto"
     batch_size: int = 32
-
-    @property
-    def name(self) -> str:
-        return "modernmolbert_selfies"
 
     def __post_init__(self) -> None:
         self.model_dir = Path(self.model_dir)
@@ -32,6 +29,9 @@ class ModernMolBERTSelfiesFeaturizer:
             self.tokenizer_path = self.model_dir
         else:
             self.tokenizer_path = Path(self.tokenizer_path)
+
+        if self.pooling not in {"mean", "cls"}:
+            raise ValueError(f"Unsupported pooling strategy: {self.pooling!r}")
 
         self._device = self._resolve_device(self.device)
         self.tokenizer = APETokenizer.from_pretrained(self.tokenizer_path)
@@ -43,40 +43,51 @@ class ModernMolBERTSelfiesFeaturizer:
         self,
         smiles: Sequence[str],
         *,
-        batch_size: int = 64,
+        batch_size: int | None = None,
     ) -> FeatureBatch:
+        import selfies as sf
 
-        selfies_strings: list[str] = []
+        effective_batch_size = self.batch_size if batch_size is None else batch_size
+        if effective_batch_size <= 0:
+            raise ValueError("batch_size must be positive")
 
-        valid_mask = np.zeros(len(smiles), dtype=bool)
-
-        effective_batch_size = batch_size
-
-        selfies_strings: list[str] = []
-
-        valid_mask = np.zeros(len(smiles), dtype=bool)
         selfies_strings: list[str] = []
         valid_mask = np.zeros(len(smiles), dtype=bool)
 
         for i, smi in enumerate(smiles):
-            try:
-                import selfies as sf
+            if smi is None:
+                continue
 
-                encoded = sf.encoder(smi)
-                if encoded is None:
-                    continue
-                selfies_strings.append(encoded)
-                valid_mask[i] = True
+            text = str(smi).strip()
+            if not text:
+                continue
+
+            try:
+                encoded = sf.encoder(text)
             except Exception:
                 continue
 
-        if not selfies_strings:
-            return FeatureBatch(
-                X=np.zeros((0, self.model.config.hidden_size), dtype=np.float32),
-                valid_mask=valid_mask,
-            )
+            if not encoded:
+                continue
 
-        features = []
+            selfies_strings.append(encoded)
+            valid_mask[i] = True
+
+        hidden_size = int(getattr(self.model.config, "hidden_size", 0))
+
+        if not selfies_strings:
+            out = FeatureBatch(
+                X=np.zeros((0, hidden_size), dtype=np.float32),
+                valid_mask=valid_mask,
+                metadata=self._metadata(
+                    n_inputs=len(smiles),
+                    n_valid=0,
+                ),
+            )
+            out.check(n_inputs=len(smiles))
+            return out
+
+        features: list[np.ndarray] = []
 
         with torch.no_grad():
             for start in range(0, len(selfies_strings), effective_batch_size):
@@ -85,6 +96,7 @@ class ModernMolBERTSelfiesFeaturizer:
                 batch = self.tokenizer(
                     batch_strings,
                     padding=True,
+                    truncation=True,
                     max_length=self.max_seq_length,
                     return_tensors="pt",
                 )
@@ -100,55 +112,56 @@ class ModernMolBERTSelfiesFeaturizer:
 
                 if self.pooling == "cls":
                     pooled = hidden[:, 0, :]
-                elif self.pooling == "mean":
+                else:
                     pooled = mean_pool_excluding_token_ids(
                         last_hidden_state=hidden,
                         attention_mask=batch["attention_mask"],
                         input_ids=batch["input_ids"],
                         excluded_token_ids=self._special_token_ids(),
                     )
-                else:
-                    raise ValueError(f"Unsupported pooling strategy: {self.pooling}")
 
                 features.append(pooled.detach().cpu().float().numpy())
 
         X = np.concatenate(features, axis=0).astype(np.float32, copy=False)
 
-        out = FeatureBatch(X=X, valid_mask=valid_mask)
+        out = FeatureBatch(
+            X=X,
+            valid_mask=valid_mask,
+            metadata=self._metadata(
+                n_inputs=len(smiles),
+                n_valid=int(valid_mask.sum()),
+            ),
+        )
         out.check(n_inputs=len(smiles))
         return out
 
-    def featurize(self, smiles: list[str]) -> FeatureBatch:
-        return self.featurize_smiles(smiles)
-
-    def _mean_pool_excluding_specials(
+    def featurize(
         self,
-        hidden: torch.Tensor,
-        input_ids: torch.Tensor,
-        attention_mask: torch.Tensor,
-    ) -> torch.Tensor:
-        special_ids = {
-            getattr(self.tokenizer, "pad_token_id", None),
-            getattr(self.tokenizer, "bos_token_id", None),
-            getattr(self.tokenizer, "eos_token_id", None),
-            getattr(self.tokenizer, "unk_token_id", None),
-            getattr(self.tokenizer, "mask_token_id", None),
+        smiles: Sequence[str],
+        *,
+        batch_size: int | None = None,
+    ) -> FeatureBatch:
+        return self.featurize_smiles(smiles, batch_size=batch_size)
+
+    def _metadata(self, *, n_inputs: int, n_valid: int) -> dict[str, object]:
+        return {
+            "featurizer": self.name,
+            "backend": "modernmolbert_selfies",
+            "model_dir": str(self.model_dir),
+            "tokenizer_path": str(self.tokenizer_path),
+            "pooling": self.pooling,
+            "max_seq_length": self.max_seq_length,
+            "device": str(self._device),
+            "hidden_size": int(getattr(self.model.config, "hidden_size", 0)),
+            "num_hidden_layers": int(
+                getattr(self.model.config, "num_hidden_layers", 0)
+            ),
+            "vocab_size": int(getattr(self.model.config, "vocab_size", 0)),
+            "num_parameters": int(sum(p.numel() for p in self.model.parameters())),
+            "n_inputs": n_inputs,
+            "n_valid": n_valid,
+            "invalid_fraction": float(1.0 - n_valid / n_inputs) if n_inputs else 0.0,
         }
-        special_ids = {int(x) for x in special_ids if x is not None}
-
-        content_mask = attention_mask.bool()
-
-        for token_id in special_ids:
-            content_mask &= input_ids != token_id
-
-        # Fallback: if a row has no content tokens, use attention mask.
-        empty_rows = content_mask.sum(dim=1) == 0
-        if empty_rows.any():
-            content_mask[empty_rows] = attention_mask[empty_rows].bool()
-
-        weights = content_mask.unsqueeze(-1).to(hidden.dtype)
-        denom = weights.sum(dim=1).clamp_min(1.0)
-        return (hidden * weights).sum(dim=1) / denom
 
     @staticmethod
     def _resolve_device(device: str) -> torch.device:
@@ -167,7 +180,6 @@ class ModernMolBERTSelfiesFeaturizer:
         return torch.device("cpu")
 
     def _special_token_ids(self) -> set[int]:
-
         ids = {
             getattr(self.tokenizer, "pad_token_id", None),
             getattr(self.tokenizer, "bos_token_id", None),

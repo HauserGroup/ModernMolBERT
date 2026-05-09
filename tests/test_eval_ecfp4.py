@@ -21,6 +21,8 @@ def test_ecfp4_featurizer_basic_shape() -> None:
     # Non-empty molecules should set at least one bit.
     assert np.all(out.X.sum(axis=1) > 0)
 
+    assert out.metadata["featurizer"] == "ecfp4"
+
 
 def test_ecfp4_registry() -> None:
     featurizer = make_featurizer("ecfp4", name="ecfp4_test", n_bits=512)
@@ -29,6 +31,9 @@ def test_ecfp4_registry() -> None:
 
     assert out.X.shape == (1, 512)
     assert out.valid_mask.tolist() == [True]
+
+    assert featurizer.name == "ecfp4_test"
+    assert out.metadata["featurizer"] == "ecfp4_test"
 
 
 def test_ecfp4_is_deterministic() -> None:

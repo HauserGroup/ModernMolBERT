@@ -1,28 +1,91 @@
-"""Contributing:
+"""Dataset loading utilities for frozen molecular representation benchmarks.
 
+All dataset sources are normalized into an `EvalDataset`, which stores fixed
+train/valid/test pandas DataFrames plus the column names used for molecular
+representations and labels.
 
-dataset = load_csv_eval_dataset(
+Contributing a simple CSV/Parquet dataset:
+
+```python
+dataset = load_table_eval_dataset(
     name="my_assay",
     task_type="classification",
     task_names="active",
-    train_csv="data/my_assay/train.csv",
-    valid_csv="data/my_assay/valid.csv",
-    test_csv="data/my_assay/test.csv",
+    train_path="data/my_assay/train.csv",
+    valid_path="data/my_assay/valid.csv",
+    test_path="data/my_assay/test.csv",
     smiles_column="smiles",
 )
-
+```
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
 from typing import Any, Iterator, Literal
-from collections.abc import Sequence
 
 import pandas as pd
 
 
 TaskType = Literal["classification", "regression"]
+
+
+def normalize_task_type(task_type: str) -> TaskType:
+
+    if task_type == "classification":
+        return "classification"
+
+    if task_type == "regression":
+        return "regression"
+
+    raise ValueError(
+        f"Unknown task_type: {task_type!r}. Expected 'classification' or 'regression'."
+    )
+
+
+def normalize_task_names(task_names: str | Sequence[str]) -> list[str]:
+    """Normalize one task name or a sequence of task names to a non-empty list."""
+
+    if isinstance(task_names, str):
+        out = [task_names]
+
+    else:
+        out = [str(task) for task in task_names]
+
+    out = [task.strip() for task in out]
+
+    if not out or any(not task for task in out):
+        raise ValueError("task_names must contain at least one non-empty task")
+
+    if len(set(out)) != len(out):
+        raise ValueError(f"Duplicate task names found: {out}")
+
+    return out
+
+
+def read_table(path: str | Path) -> pd.DataFrame:
+    """Read a tabular dataset split from CSV, TSV, or Parquet."""
+
+    path = Path(path)
+
+    if not path.exists():
+        raise FileNotFoundError(f"Table file does not exist: {path}")
+
+    suffix = path.suffix.lower()
+
+    if suffix == ".csv":
+        return pd.read_csv(path)
+
+    if suffix in {".parquet", ".pq"}:
+        return pd.read_parquet(path)
+
+    if suffix in {".tsv", ".txt"}:
+        return pd.read_csv(path, sep="\t")
+
+    raise ValueError(
+        f"Unsupported table format for {path}. Use .csv, .tsv, .txt, .parquet, or .pq."
+    )
 
 
 @dataclass(frozen=True)
@@ -57,11 +120,13 @@ class EvalDataset:
         if not self.name:
             raise ValueError("Dataset name must be non-empty")
 
-        if self.task_type not in {"classification", "regression"}:
-            raise ValueError(f"Unknown task_type: {self.task_type!r}")
+        normalize_task_type(self.task_type)
 
         if not self.task_names:
             raise ValueError("EvalDataset must contain at least one task")
+
+        if len(set(self.task_names)) != len(self.task_names):
+            raise ValueError(f"Duplicate task names found: {self.task_names}")
 
         for split_name, frame in self.iter_splits(include_valid=True):
             if len(frame) == 0:
@@ -116,25 +181,68 @@ def load_csv_eval_dataset(
     smiles_column: str = "smiles",
     selfies_column: str = "selfies",
 ) -> EvalDataset:
-    """Load an EvalDataset from explicit CSV split files."""
+    """Load an EvalDataset from explicit CSV split files.
 
-    train = read_table(train_csv)
-    valid = read_table(valid_csv) if valid_csv is not None else None
-    test = read_table(test_csv)
+    Deprecated naming: this function now supports CSV/TSV/Parquet via read_table.
+    Prefer load_table_eval_dataset in new code.
+    """
 
-    dataset = EvalDataset(
+    return load_table_eval_dataset(
         name=name,
         task_type=task_type,
-        task_names=normalize_task_names(task_names),
+        task_names=task_names,
+        train_path=train_csv,
+        valid_path=valid_csv,
+        test_path=test_csv,
+        smiles_column=smiles_column,
+        selfies_column=selfies_column,
+    )
+
+
+def load_single_table_with_split_column(
+    *,
+    name: str,
+    task_type: TaskType | str,
+    task_names: str | Sequence[str],
+    table_path: str | Path,
+    split_column: str = "split",
+    smiles_column: str = "smiles",
+    selfies_column: str = "selfies",
+    train_value: str = "train",
+    valid_value: str = "valid",
+    test_value: str = "test",
+) -> EvalDataset:
+    """Load an EvalDataset from one table containing a split column."""
+
+    frame = read_table(table_path)
+
+    if split_column not in frame.columns:
+        raise ValueError(f"Missing split column {split_column!r}")
+
+    train = frame.loc[frame[split_column] == train_value].reset_index(drop=True)
+    valid_frame = frame.loc[frame[split_column] == valid_value].reset_index(drop=True)
+    test = frame.loc[frame[split_column] == test_value].reset_index(drop=True)
+
+    valid = valid_frame if len(valid_frame) > 0 else None
+
+    return make_eval_dataset_from_splits(
+        name=name,
+        task_type=task_type,
+        task_names=task_names,
         train=train,
         valid=valid,
         test=test,
         smiles_column=smiles_column,
         selfies_column=selfies_column,
-        metadata={},
+        metadata={
+            "source": "table_with_split_column",
+            "table_path": str(table_path),
+            "split_column": split_column,
+            "train_value": train_value,
+            "valid_value": valid_value,
+            "test_value": test_value,
+        },
     )
-    dataset.check()
-    return dataset
 
 
 def load_single_csv_with_split_column(
@@ -150,32 +258,24 @@ def load_single_csv_with_split_column(
     valid_value: str = "valid",
     test_value: str = "test",
 ) -> EvalDataset:
-    """Load an EvalDataset from one CSV containing a split column."""
+    """Load an EvalDataset from one CSV containing a split column.
 
-    frame = pd.read_csv(csv_path)
+    Deprecated naming: this function now supports CSV/TSV/Parquet via read_table.
+    Prefer load_single_table_with_split_column in new code.
+    """
 
-    if split_column not in frame.columns:
-        raise ValueError(f"Missing split column {split_column!r}")
-
-    train = frame.loc[frame[split_column] == train_value].reset_index(drop=True)
-    valid_frame = frame.loc[frame[split_column] == valid_value].reset_index(drop=True)
-    test = frame.loc[frame[split_column] == test_value].reset_index(drop=True)
-
-    valid = valid_frame if len(valid_frame) > 0 else None
-
-    dataset = EvalDataset(
+    return load_single_table_with_split_column(
         name=name,
         task_type=task_type,
-        task_names=normalize_task_names(task_names),
-        train=train,
-        valid=valid,
-        test=test,
+        task_names=task_names,
+        table_path=csv_path,
+        split_column=split_column,
         smiles_column=smiles_column,
         selfies_column=selfies_column,
-        metadata={},
+        train_value=train_value,
+        valid_value=valid_value,
+        test_value=test_value,
     )
-    dataset.check()
-    return dataset
 
 
 def load_prepared_moleculenet_dataset(
@@ -269,59 +369,135 @@ def load_prepared_moleculenet_dataset(
     return dataset
 
 
-def normalize_task_names(task_names: str | Sequence[str]) -> list[str]:
+def normalize_metadata(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Normalize optional metadata to a plain mutable dictionary."""
 
-    if isinstance(task_names, str):
-        return [task_names]
+    if metadata is None:
+        return {}
 
-    out = [str(task) for task in task_names]
-
-    if not out:
-        raise ValueError("task_names must contain at least one task")
-
-    return out
-
-
-def read_table(path: str | Path) -> pd.DataFrame:
-
-    path = Path(path)
-
-    if path.suffix == ".csv":
-        return pd.read_csv(path)
-
-    if path.suffix in {".parquet", ".pq"}:
-        return pd.read_parquet(path)
-
-    if path.suffix in {".tsv", ".txt"}:
-        return pd.read_csv(path, sep="\t")
-
-    raise ValueError(
-        f"Unsupported table format for {path}. Use .csv, .tsv, .parquet, or .pq."
-    )
+    return {str(key): value for key, value in metadata.items()}
 
 
 def make_eval_dataset_from_splits(
     *,
     name: str,
-    task_type: TaskType,
+    task_type: TaskType | str,
     task_names: str | Sequence[str],
     train: pd.DataFrame,
     test: pd.DataFrame,
     valid: pd.DataFrame | None = None,
     smiles_column: str = "smiles",
     selfies_column: str = "selfies",
-    metadata: dict[str, Any] | None = None,
+    metadata: Mapping[str, Any] | None = None,
 ) -> EvalDataset:
+    """Construct and validate an EvalDataset from already-loaded split frames."""
+
     dataset = EvalDataset(
         name=name,
-        task_type=task_type,
+        task_type=normalize_task_type(str(task_type)),
         task_names=normalize_task_names(task_names),
         train=train,
         valid=valid,
         test=test,
         smiles_column=smiles_column,
         selfies_column=selfies_column,
-        metadata={} if metadata is None else dict(metadata),
+        metadata=normalize_metadata(metadata),
     )
+
     dataset.check()
+
     return dataset
+
+
+def load_table_eval_dataset(
+    *,
+    name: str,
+    task_type: TaskType | str,
+    task_names: str | Sequence[str],
+    train_path: str | Path,
+    test_path: str | Path,
+    valid_path: str | Path | None = None,
+    smiles_column: str = "smiles",
+    selfies_column: str = "selfies",
+) -> EvalDataset:
+    """Load an EvalDataset from explicit train/valid/test table files.
+
+    Supported file formats are CSV, TSV, TXT, Parquet, and PQ.
+
+    """
+
+    train = read_table(train_path)
+
+    valid = read_table(valid_path) if valid_path is not None else None
+
+    test = read_table(test_path)
+
+    return make_eval_dataset_from_splits(
+        name=name,
+        task_type=task_type,
+        task_names=task_names,
+        train=train,
+        valid=valid,
+        test=test,
+        smiles_column=smiles_column,
+        selfies_column=selfies_column,
+        metadata={
+            "source": "table_splits",
+            "train_path": str(train_path),
+            "valid_path": str(valid_path) if valid_path is not None else None,
+            "test_path": str(test_path),
+        },
+    )
+
+
+def load_eval_dataset_from_config(config: Mapping[str, Any]) -> EvalDataset:
+    """Load an EvalDataset from a suite/dataset config dictionary.
+
+    Supported loaders:
+    - table_splits
+    - table_with_split_column
+    - prepared_moleculenet
+    """
+
+    loader = str(config.get("loader", ""))
+
+    if loader == "table_splits":
+        return load_table_eval_dataset(
+            name=str(config["name"]),
+            task_type=str(config["task_type"]),
+            task_names=config["task_names"],
+            train_path=config["train_path"],
+            valid_path=config.get("valid_path"),
+            test_path=config["test_path"],
+            smiles_column=str(config.get("smiles_column", "smiles")),
+            selfies_column=str(config.get("selfies_column", "selfies")),
+        )
+
+    if loader == "table_with_split_column":
+        return load_single_table_with_split_column(
+            name=str(config["name"]),
+            task_type=str(config["task_type"]),
+            task_names=config["task_names"],
+            table_path=config["table_path"],
+            split_column=str(config.get("split_column", "split")),
+            smiles_column=str(config.get("smiles_column", "smiles")),
+            selfies_column=str(config.get("selfies_column", "selfies")),
+            train_value=str(config.get("train_value", "train")),
+            valid_value=str(config.get("valid_value", "valid")),
+            test_value=str(config.get("test_value", "test")),
+        )
+
+    if loader == "prepared_moleculenet":
+        return load_prepared_moleculenet_dataset(
+            dataset_dir=config["dataset_dir"],
+            eval_split=str(config.get("eval_split", "test")),
+            smiles_column=str(config.get("smiles_column", "smiles_canonical")),
+            selfies_column=str(config.get("selfies_column", "selfies")),
+            merge_train_valid=bool(config.get("merge_train_valid", False)),
+        )
+
+    raise ValueError(
+        f"Unknown dataset loader {loader!r}. "
+        "Expected one of: 'table_splits', 'table_with_split_column', "
+        "'prepared_moleculenet'."
+    )

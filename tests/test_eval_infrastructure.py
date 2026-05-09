@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+import pytest
 from pathlib import Path
 
 import numpy as np
@@ -390,3 +391,46 @@ def test_cli_run_frozen_benchmark_with_dummy_featurizer(tmp_path: Path) -> None:
     assert payload["dataset"] == "tiny_cli"
     assert payload["featurizer"] == "dummy_cli"
     assert len(payload["task_results"]) == 1
+
+
+def test_feature_batch_shape_check_fails_on_non_numeric_features() -> None:
+    batch = FeatureBatch(
+        X=np.array([["a"], ["b"]], dtype=object),
+        valid_mask=np.array([True, True]),
+    )
+
+    try:
+        batch.check(2)
+    except TypeError as e:
+        assert "numeric" in str(e)
+    else:
+        raise AssertionError("Expected TypeError")
+
+
+def test_feature_batch_check_accepts_valid_batch() -> None:
+    batch = FeatureBatch(
+        X=np.zeros((2, 8), dtype=np.float32),
+        valid_mask=np.array([True, False, True]),
+    )
+
+    batch.check(n_inputs=3)
+
+
+def test_feature_batch_check_rejects_bad_row_count() -> None:
+    batch = FeatureBatch(
+        X=np.zeros((1, 8), dtype=np.float32),
+        valid_mask=np.array([True, False, True]),
+    )
+
+    with pytest.raises(ValueError, match="Number of rows"):
+        batch.check(n_inputs=3)
+
+
+def test_feature_batch_check_rejects_non_numeric_features() -> None:
+    batch = FeatureBatch(
+        X=np.array([["a"], ["b"]], dtype=object),
+        valid_mask=np.array([True, True]),
+    )
+
+    with pytest.raises(TypeError, match="numeric"):
+        batch.check(n_inputs=2)

@@ -10,8 +10,6 @@ Run from the repo root inside the molformer-only conda env:
       python -m pytest tests/test_eval_molformer.py -q -s
 """
 
-from __future__ import annotations
-
 import os
 
 import numpy as np
@@ -77,6 +75,7 @@ def test_molformer_embedding_smoke() -> None:
     assert np.isfinite(out.X).all()
 
     assert out.metadata["backend"] == "huggingface_transformers"
+    assert out.metadata["featurizer"] == "molformer_xl_both_10pct"
     assert out.metadata["model_name_or_path"] == MOLFORMER_MODEL
     assert out.metadata["revision"] == MOLFORMER_REVISION
     assert out.metadata["pooling"] == "mean"

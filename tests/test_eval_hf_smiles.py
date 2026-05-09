@@ -52,6 +52,8 @@ def test_chemberta2_embedding_smoke() -> None:
 
     out.check(5)
 
+    assert out.metadata["model_name_or_path"] == "DeepChem/ChemBERTa-77M-MLM"
+    assert out.metadata["featurizer"] == "chemberta_77m_mlm"
     assert out.valid_mask.tolist() == [True, True, True, False, False]
     assert out.X.shape[0] == 3
     assert out.X.shape[1] == 384
@@ -83,6 +85,9 @@ def test_chemberta2_cls_pooling_smoke() -> None:
     assert out.valid_mask.tolist() == [True, True]
     assert out.X.shape == (2, 384)
     assert np.isfinite(out.X).all()
+
+    assert out.metadata["featurizer"] == "chemberta_77m_mlm_cls"
+    assert out.metadata["pooling"] == "cls"
 
 
 def test_sanitize_modernbert_rope_config_handles_rope_scaling() -> None:

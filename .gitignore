@@ -225,6 +225,8 @@ outputs/
 
 # AI
 .github/prompts/
+.prompt.md
+.agents/
 
 # eval
 tmp_eval/

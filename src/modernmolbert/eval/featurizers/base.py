@@ -56,6 +56,9 @@ class FeatureBatch:
                 f"{self.X.shape[0]} != {n_valid}"
             )
 
+        if not np.issubdtype(self.X.dtype, np.number):
+            raise TypeError(f"X must be numeric, got dtype {self.X.dtype}")
+
         if not np.isfinite(self.X).all():
             raise ValueError("X contains non-finite values")
 

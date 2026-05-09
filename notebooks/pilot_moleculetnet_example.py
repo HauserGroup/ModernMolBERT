@@ -83,7 +83,7 @@ assert METADATA_PATH.exists(), f"Missing {METADATA_PATH}."
 #
 # Point this at the final_model directory from your completed run.
 
-MODEL_DIR = Path("runs/pubchem10m_mps_base_pilot_256/checkpoint-final")
+MODEL_DIR = Path("../runs/pubchem10m_mps_base_pilot_256/final_model")
 
 # If you are already inside the run directory, use:
 # MODEL_DIR = Path("final_model")

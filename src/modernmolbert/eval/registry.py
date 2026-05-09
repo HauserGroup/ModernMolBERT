@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,16 +74,44 @@ def make_featurizer(
     return spec.factory(**kwargs)
 
 
-def make_featurizer_from_config(path: str | Path) -> RepresentationFeaturizer:
-    config_path = Path(path)
-    config = json.loads(config_path.read_text(encoding="utf-8"))
+def load_featurizer_config(config: Mapping[str, Any] | str | Path) -> dict[str, Any]:
+    """Load or normalize a featurizer config.
 
-    featurizer_type = config.get("type") or config.get("name")
+    Configs may be provided directly as dictionaries or as JSON files.
+    """
+
+    if isinstance(config, Mapping):
+        return {str(key): value for key, value in config.items()}
+
+    config_path = Path(config)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Featurizer config not found: {config_path}")
+
+    if config_path.suffix.lower() != ".json":
+        raise ValueError(
+            f"Unsupported featurizer config format: {config_path}. "
+            "Use a JSON config file."
+        )
+
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Featurizer config must be a JSON object: {config_path}")
+
+    return {str(key): value for key, value in data.items()}
+
+
+def make_featurizer_from_config(
+    config: Mapping[str, Any] | str | Path,
+) -> RepresentationFeaturizer:
+    """Instantiate a registered featurizer from a config dict or JSON file."""
+
+    data = load_featurizer_config(config)
+
+    featurizer_type = data.get("type")
     if featurizer_type is None:
-        raise ValueError(f"Featurizer config {config_path} is missing 'type' or 'name'")
+        raise ValueError("Featurizer config is missing required field 'type'.")
 
-    kwargs = {
-        key: value for key, value in config.items() if key not in {"type", "name"}
-    }
+    kwargs = {key: value for key, value in data.items() if key != "type"}
 
-    return make_featurizer(featurizer_type, **kwargs)
+    return make_featurizer(str(featurizer_type), **kwargs)

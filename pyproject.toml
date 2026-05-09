@@ -8,6 +8,7 @@ dependencies = [
     "accelerate>=1.13.0",
     "datasets>=4.8.5",
     "huggingface-hub>=1.14.0",
+    "iprogress>=0.4",
     "ipykernel>=7.2.0",
     "numpy>=2.4.4",
     "python-dotenv>=1.0.0",

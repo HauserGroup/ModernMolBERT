@@ -74,7 +74,6 @@ target-version = "py313"
 select = [
     "E",   # pycodestyle errors
     "F",   # pyflakes
-    "I",   # isort
     "UP",  # pyupgrade
     "B",   # flake8-bugbear
     "SIM", # flake8-simplify
@@ -94,9 +93,6 @@ ignore = [
     "F401", # unused imports (exploratory notebooks)
     "B018", # useless expression (cell output idiom)
 ]
-
-[tool.ruff.lint.isort]
-known-first-party = ["modernmolbert"]
 
 [tool.pyright]
 pythonVersion = "3.13"

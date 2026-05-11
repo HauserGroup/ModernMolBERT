@@ -1,10 +1,12 @@
+from dataclasses import FrozenInstanceError, asdict
+
 import numpy as np
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.downstream import FrozenDownstreamConfig
 from modernmolbert.eval.featurizers.base import FeatureBatch
-from modernmolbert.eval.task_eval import TaskResult, TaskSkip
-from modernmolbert.eval.task_eval import align_task_data, evaluate_single_task
+from modernmolbert.eval.task_eval import TaskResult, TaskSkip, align_task_data, evaluate_single_task
 
 
 def test_align_task_data_filters_missing_labels_and_invalid_features() -> None:
@@ -142,9 +144,7 @@ def test_evaluate_single_task_classification_success() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_task_result(**overrides) -> "TaskResult":
-    from modernmolbert.eval.task_eval import TaskResult
-
+def _make_task_result(**overrides) -> TaskResult:
     defaults = dict(
         dataset="bbbp",
         task="p_np",
@@ -163,9 +163,7 @@ def _make_task_result(**overrides) -> "TaskResult":
     return TaskResult(**defaults)  # type: ignore[call-overload]
 
 
-def _make_task_skip(**overrides) -> "TaskSkip":
-    from modernmolbert.eval.task_eval import TaskSkip
-
+def _make_task_skip(**overrides) -> TaskSkip:
     defaults = dict(
         dataset="bbbp",
         task="p_np",
@@ -181,8 +179,6 @@ def _make_task_skip(**overrides) -> "TaskSkip":
 
 
 def test_task_result_fields() -> None:
-    from dataclasses import asdict
-
     result = _make_task_result()
 
     assert result.dataset == "bbbp"
@@ -212,20 +208,16 @@ def test_task_result_default_metadata_empty() -> None:
 
 
 def test_task_result_stores_downstream_metadata() -> None:
-    result = _make_task_result(
-        downstream_metadata={"downstream_model": "ridge", "alpha": 1.0}
-    )
+    result = _make_task_result(downstream_metadata={"downstream_model": "ridge", "alpha": 1.0})
 
     assert result.downstream_metadata["downstream_model"] == "ridge"
     assert result.downstream_metadata["alpha"] == 1.0
 
 
 def test_task_result_is_frozen() -> None:
-    import pytest
-
     result = _make_task_result()
 
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         result.task = "other"  # type: ignore[misc]
 
 
@@ -235,8 +227,6 @@ def test_task_result_is_frozen() -> None:
 
 
 def test_task_skip_fields() -> None:
-    from dataclasses import asdict
-
     skip = _make_task_skip()
 
     assert skip.dataset == "bbbp"
@@ -253,11 +243,9 @@ def test_task_skip_fields() -> None:
 
 
 def test_task_skip_is_frozen() -> None:
-    import pytest
-
     skip = _make_task_skip()
 
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         skip.reason = "other"  # type: ignore[misc]
 
 

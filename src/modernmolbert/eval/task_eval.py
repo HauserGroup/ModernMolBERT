@@ -1,18 +1,14 @@
 from dataclasses import dataclass, field
-
 from typing import Any
 
 import numpy as np
-
 import pandas as pd
 
 from modernmolbert.eval.downstream import (
     FrozenDownstreamConfig,
     fit_predict_downstream,
 )
-
 from modernmolbert.eval.featurizers.base import FeatureBatch
-
 from modernmolbert.eval.metrics import compute_metrics
 
 

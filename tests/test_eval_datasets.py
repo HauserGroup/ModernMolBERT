@@ -7,11 +7,18 @@ import pytest
 from modernmolbert.eval.datasets import (
     load_eval_dataset_from_config,
     load_prepared_moleculenet_dataset,
+    make_eval_dataset_from_splits,
     load_single_table_with_split_column,
     load_table_eval_dataset,
     normalize_task_names,
     read_table,
     EvalDataset,
+)
+
+from modernmolbert.eval.dataset_registry import (
+    DATASET_REGISTRY,
+    DatasetSpec,
+    register_dataset,
 )
 
 # ---------------------------------------------------------------------------
@@ -377,3 +384,40 @@ def test_load_eval_dataset_from_config_table_splits(tmp_path: Path) -> None:
 
     assert ds.name == "toy"
     assert ds.task_names == ["label"]
+
+
+def test_load_eval_dataset_from_registered_config(tmp_path):
+    DATASET_REGISTRY.clear()
+
+    def load_toy(*, root):
+        train = pd.DataFrame({"smiles": ["CCO", "CCN"], "label": [0, 1]})
+        test = pd.DataFrame({"smiles": ["CCC"], "label": [1]})
+
+        return make_eval_dataset_from_splits(
+            name="toy",
+            task_type="classification",
+            task_names="label",
+            train=train,
+            test=test,
+        )
+
+    register_dataset(
+        DatasetSpec(
+            name="toy",
+            task_type="classification",
+            task_names=("label",),
+            loader=load_toy,
+            description="Toy registered dataset.",
+        )
+    )
+
+    dataset = load_eval_dataset_from_config(
+        {
+            "loader": "registered",
+            "name": "toy",
+            "root": str(tmp_path),
+        }
+    )
+
+    assert dataset.name == "toy"
+    assert dataset.task_names == ["label"]

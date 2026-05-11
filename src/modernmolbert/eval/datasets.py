@@ -17,6 +17,8 @@ dataset = load_table_eval_dataset(
     smiles_column="smiles",
 )
 ```
+
+Contributed dataset loaders should drop missing labels before returning EvalDataset.
 """
 
 from collections.abc import Mapping, Sequence
@@ -493,6 +495,30 @@ def load_eval_dataset_from_config(config: Mapping[str, Any]) -> EvalDataset:
             smiles_column=str(config.get("smiles_column", "smiles_canonical")),
             selfies_column=str(config.get("selfies_column", "selfies")),
             merge_train_valid=bool(config.get("merge_train_valid", False)),
+        )
+
+    if loader == "registered":
+        from modernmolbert.eval.contributed_datasets import (
+            register_contributed_datasets,
+        )
+        from modernmolbert.eval.dataset_registry import load_registered_dataset
+
+        register_contributed_datasets()
+
+        name = str(config.get("name", ""))
+        if not name:
+            raise ValueError("Registered dataset config requires field 'name'")
+
+        root = config.get("root", None)
+        kwargs = config.get("kwargs", None)
+
+        if kwargs is not None and not isinstance(kwargs, dict):
+            raise ValueError("Registered dataset field 'kwargs' must be a mapping")
+
+        return load_registered_dataset(
+            name,
+            root=root,
+            kwargs=kwargs,
         )
 
     raise ValueError(

@@ -1,3 +1,50 @@
+## Contributed datasets
+
+Reusable datasets are contributed through Python code, not by adding standalone dataset YAML files.
+
+A contributed dataset must provide:
+
+```text
+1. a loader function returning EvalDataset
+2. a DatasetSpec registration
+3. a test
+4. source/license/split metadata
+```
+
+**See CONTRIBUTING.md for the full dataset contribution guide.**
+
+Reusable datasets are contributed through Python loaders and `DatasetSpec`, not by standalone YAML files.
+
+Suite configs may reference registered datasets:
+
+
+```yaml
+datasets:
+  - loader: registered
+    name: my_activity
+    root: data/eval/my_activity
+```
+
+---
+
+# 6. Tests to update
+## File
+
+```text
+
+tests/test_eval_dataset_registry.py
+```
+
+
+See CONTRIBUTING.md for the full dataset contribution guide.
+
+The current benchmark path supports only:
+
+- regression
+- binary classification
+
+Add one test that makes the missing-label policy explicit for the example loader.
+
 # Evaluation suite configs
 
 This directory contains benchmark suite configs for frozen-representation evaluation.

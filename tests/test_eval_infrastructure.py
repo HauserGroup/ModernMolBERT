@@ -130,7 +130,10 @@ def test_downstream_regression_fixed_model() -> None:
         X_train=X_train,
         y_train=y_train,
         X_eval=X_eval,
-        config=FrozenDownstreamConfig(regression_alpha=1.0),
+        config=FrozenDownstreamConfig(
+            model_type="ridge",
+            params={"alpha": 1.0},
+        ),
     )
 
     assert pred.y_pred.shape == (2,)
@@ -486,3 +489,78 @@ def test_runner_outputs_feature_cache_keys(tmp_path: Path) -> None:
     assert "eval_feature_dim" in csv.columns
     assert csv.loc[0, "train_feature_dim"] == 8
     assert csv.loc[0, "eval_feature_dim"] == 8
+
+
+def test_downstream_regression_ridge_cv() -> None:
+    X_train = np.array([[0.0], [1.0], [2.0], [3.0]], dtype=np.float64)
+    y_train = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
+    X_eval = np.array([[1.5], [2.5]], dtype=np.float64)
+
+    pred = fit_predict_downstream(
+        task_type="regression",
+        X_train=X_train,
+        y_train=y_train,
+        X_eval=X_eval,
+        config=FrozenDownstreamConfig(
+            model_type="ridge_cv",
+            params={"alphas": [0.1, 1.0, 10.0]},
+        ),
+    )
+
+    assert pred.y_pred.shape == (2,)
+    assert pred.y_score is None
+    assert pred.metadata["downstream_model"] == "ridge_cv"
+    assert "alpha" in pred.metadata
+
+
+def test_downstream_classification_random_forest() -> None:
+    X_train = np.array(
+        [
+            [0.0, 0.0],
+            [0.1, 0.0],
+            [1.0, 1.0],
+            [1.1, 1.0],
+        ],
+        dtype=np.float64,
+    )
+    y_train = np.array([0, 0, 1, 1], dtype=np.float64)
+    X_eval = np.array([[0.05, 0.0], [1.05, 1.0]], dtype=np.float64)
+
+    pred = fit_predict_downstream(
+        task_type="classification",
+        X_train=X_train,
+        y_train=y_train,
+        X_eval=X_eval,
+        config=FrozenDownstreamConfig(
+            model_type="random_forest_classifier",
+            params={"n_estimators": 10, "n_jobs": 1},
+            random_state=13,
+        ),
+    )
+
+    assert pred.y_pred.shape == (2,)
+    assert pred.y_score is not None
+    assert pred.y_score.shape == (2,)
+    assert pred.metadata["downstream_model"] == "random_forest_classifier"
+
+
+def test_downstream_regression_random_forest() -> None:
+    X_train = np.array([[0.0], [1.0], [2.0], [3.0]], dtype=np.float64)
+    y_train = np.array([0.0, 1.0, 2.0, 3.0], dtype=np.float64)
+    X_eval = np.array([[1.5], [2.5]], dtype=np.float64)
+
+    pred = fit_predict_downstream(
+        task_type="regression",
+        X_train=X_train,
+        y_train=y_train,
+        X_eval=X_eval,
+        config=FrozenDownstreamConfig(
+            model_type="random_forest_regressor",
+            params={"n_estimators": 10, "n_jobs": 1},
+            random_state=13,
+        ),
+    )
+
+    assert pred.y_pred.shape == (2,)
+    assert pred.y_score is None
+    assert pred.metadata["downstream_model"] == "random_forest_regressor"

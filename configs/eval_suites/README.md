@@ -254,3 +254,16 @@ uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
   --output_dir outputs/eval/core_moleculenet \
   --overwrite
 ```
+
+## Eval test commands
+
+Run the fast evaluation tests with:
+
+```bash
+uv run pytest tests/test_eval_*.py -q
+
+# or
+
+uv run pytest tests/test_eval_suite.py tests/test_eval_suite_configs.py -q
+
+```

@@ -257,3 +257,28 @@ def test_task_skip_reason_preserved() -> None:
     ):
         skip = _make_task_skip(reason=reason)
         assert skip.reason == reason
+
+
+def test_align_task_data_filters_labels_and_invalid_features() -> None:
+    train = pd.DataFrame({"label": [0.0, np.nan, 1.0]})
+    eval_frame = pd.DataFrame({"label": [0.0, 1.0]})
+
+    train_features = FeatureBatch(
+        X=np.array([[0.0], [2.0]], dtype=np.float32),
+        valid_mask=np.array([True, False, True]),
+    )
+    eval_features = FeatureBatch(
+        X=np.array([[0.0], [1.0]], dtype=np.float32),
+        valid_mask=np.array([True, True]),
+    )
+
+    aligned = align_task_data(
+        task="label",
+        train_frame=train,
+        eval_frame=eval_frame,
+        train_features=train_features,
+        eval_features=eval_features,
+    )
+
+    assert aligned.X_train.shape == (2, 1)
+    assert aligned.y_train.tolist() == [0.0, 1.0]

@@ -185,6 +185,12 @@ class ModernMolBERTSelfiesFeaturizer:
         then pad into a tensor batch.
         """
 
+        if isinstance(selfies_strings, str):
+            raise TypeError("_tokenize_selfies_batch expects list[str], not str")
+
+        if not selfies_strings:
+            raise ValueError("Cannot tokenize an empty SELFIES batch")
+
         encoded_rows: list[list[int]] = []
 
         for text in selfies_strings:
@@ -193,7 +199,7 @@ class ModernMolBERTSelfiesFeaturizer:
                 padding=False,
                 truncation=True,
                 max_length=self.max_seq_length,
-                return_tensors=None,
+                return_tensors="pt",
             )
 
             input_ids = encoded["input_ids"]
@@ -210,9 +216,6 @@ class ModernMolBERTSelfiesFeaturizer:
             encoded_rows.append([int(x) for x in ids])
 
         pad_token_id = int(getattr(self.tokenizer, "pad_token_id", 0))
-
-        if not encoded_rows:
-            raise ValueError("Cannot tokenize an empty SELFIES batch")
 
         max_len = max(len(row) for row in encoded_rows)
         input_ids = torch.full(

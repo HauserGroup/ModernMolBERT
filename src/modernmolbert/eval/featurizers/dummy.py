@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -49,6 +49,16 @@ class DummyFeaturizer:
             if rows
             else np.empty((0, self.n_features), dtype=np.float32)
         )
-        out = FeatureBatch(X=X, valid_mask=np.asarray(valid, dtype=bool))
+
+        out = FeatureBatch(
+            X=X,
+            valid_mask=np.asarray(valid, dtype=bool),
+            metadata={
+                "featurizer": self.name,
+                "backend": "dummy",
+                "n_features": self.n_features,
+            },
+        )
+
         out.check(len(smiles))
         return out

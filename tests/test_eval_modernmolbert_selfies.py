@@ -1,7 +1,5 @@
 # tests/test_eval_modernmolbert_selfies.py
 
-from __future__ import annotations
-
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +10,8 @@ import torch
 from modernmolbert.eval.featurizers.modernmolbert_selfies import (
     ModernMolBERTSelfiesFeaturizer,
 )
+
+import modernmolbert.eval.featurizers.modernmolbert_selfies as mm_selfies
 from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 
 
@@ -93,31 +93,22 @@ class TinyModel(torch.nn.Module):
 
 
 @pytest.fixture
-def tiny_modernmolbert_dir(tmp_path: Path) -> Path:
-    """Placeholder path used by monkeypatched loaders."""
+def tiny_modernmolbert_dir(tmp_path: Path, monkeypatch) -> Path:
+    """Minimal model directory with tokenizer/model loading monkeypatched."""
     model_dir = tmp_path / "tiny-modernmolbert"
     model_dir.mkdir()
-    return model_dir
-
-
-@pytest.fixture(autouse=True)
-def patch_modernmolbert_loaders(monkeypatch):
-    """Avoid loading a real tokenizer/model checkpoint in unit tests."""
-
-    def fake_tokenizer_from_pretrained(path):
-        return TinyTokenizer()
-
-    def fake_model_from_pretrained(path):
-        return TinyModel(hidden_size=8)
 
     monkeypatch.setattr(
-        "modernmolbert.eval.featurizers.modernmolbert_selfies.APETokenizer.from_pretrained",
-        fake_tokenizer_from_pretrained,
+        mm_selfies,
+        "_load_ape_tokenizer",
+        lambda path: TinyTokenizer(),
     )
     monkeypatch.setattr(
         "modernmolbert.eval.featurizers.modernmolbert_selfies.AutoModel.from_pretrained",
-        fake_model_from_pretrained,
+        lambda path, **kwargs: TinyModel(hidden_size=8),
     )
+
+    return model_dir
 
 
 def test_modernmolbert_selfies_featurizer_valid_and_invalid_smiles(
@@ -189,9 +180,7 @@ def test_modernmolbert_selfies_featurizer_preserves_input_order_in_valid_mask(
         device="cpu",
     )
 
-    batch = featurizer.featurize_smiles(
-        ["not_a_smiles", "CCO", "also_not_smiles", "CCN"]
-    )
+    batch = featurizer.featurize_smiles(["not_a_smiles", "CCO", "also_not_smiles", "CCN"])
 
     assert batch.valid_mask.tolist() == [False, True, False, True]
     assert batch.X.shape == (2, 8)

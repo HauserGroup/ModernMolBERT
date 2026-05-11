@@ -49,6 +49,11 @@ def test_validate_args_rejects_unsupported_cuda_bf16(monkeypatch):
         val_split_mod=100,
         val_split_bucket=0,
         device_backend="cuda",
+        eval_size=1000,
+        max_eval_batches=0,
+        load_best_model_at_end=True,
+        save_steps=500,
+        eval_steps=500,
     )
 
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)

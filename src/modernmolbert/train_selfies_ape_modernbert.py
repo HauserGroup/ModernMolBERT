@@ -190,9 +190,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval_steps", type=int, default=5000)
     parser.add_argument("--save_steps", type=int, default=5000)
     parser.add_argument("--save_total_limit", type=int, default=3)
-    parser.add_argument(
-        "--device_backend", choices=["auto", "cuda", "mps", "cpu"], default="auto"
-    )
+    parser.add_argument("--device_backend", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     parser.add_argument(
         "--bf16",
         action=argparse.BooleanOptionalAction,
@@ -271,8 +269,7 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
         raise ValueError("device_backend=cuda requested but CUDA is not available")
     if backend == "cuda" and args.bf16 and not torch.cuda.is_bf16_supported():
         raise ValueError(
-            "bf16 was requested, but the current CUDA device does not support bf16. "
-            "Use --no-bf16."
+            "bf16 was requested, but the current CUDA device does not support bf16. Use --no-bf16."
         )
     if backend == "mps" and not torch.backends.mps.is_available():
         raise ValueError("device_backend=mps requested but MPS is not available")
@@ -283,9 +280,7 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
         )
 
 
-def adjust_args_for_backend(
-    args: argparse.Namespace, backend: str
-) -> argparse.Namespace:
+def adjust_args_for_backend(args: argparse.Namespace, backend: str) -> argparse.Namespace:
     # MPS and CPU are safest in full precision for this workflow.
     if backend in {"mps", "cpu"}:
         args.bf16 = False
@@ -374,9 +369,7 @@ def preview_dataset_and_tokenizer(
                 tokens = None
 
         log(f"Example {i}:")
-        print(
-            f"  raw SELFIES: {seq[:300]}{'...' if len(seq) > 300 else ''}", flush=True
-        )
+        print(f"  raw SELFIES: {seq[:300]}{'...' if len(seq) > 300 else ''}", flush=True)
         print(
             f"  token ids:   {input_ids[:30]}{' ...' if len(input_ids) > 30 else ''}",
             flush=True,
@@ -417,9 +410,7 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
 
 def load_and_validate_tokenizer(
     args: argparse.Namespace,
-) -> tuple[
-    APETokenizer, dict[str, Any], Path, Path, int, dict[str, int], dict[str, float]
-]:
+) -> tuple[APETokenizer, dict[str, Any], Path, Path, int, dict[str, int], dict[str, float]]:
     vocab_path = Path(args.tokenizer_vocab_path)
     if not vocab_path.exists():
         raise FileNotFoundError(
@@ -440,9 +431,7 @@ def load_and_validate_tokenizer(
         )
 
     metadata = load_tokenizer_metadata(metadata_path)
-    assert_metadata_representation(
-        metadata, expected_representation=SELFIES_REPRESENTATION
-    )
+    assert_metadata_representation(metadata, expected_representation=SELFIES_REPRESENTATION)
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)
@@ -466,9 +455,7 @@ def load_and_validate_tokenizer(
     )
     validate_selfies_sample_shape(validation_sequences)
 
-    ethanol_encoded = encode_sequence(tokenizer, "[C][C][O]", args.max_seq_length)[
-        "input_ids"
-    ]
+    ethanol_encoded = encode_sequence(tokenizer, "[C][C][O]", args.max_seq_length)["input_ids"]
     eligible_ethanol = eligible_token_ids(ethanol_encoded, special_ids)
     if not eligible_ethanol:
         raise ValueError("Tokenizer produced no usable SELFIES tokens for [C][C][O]")
@@ -502,8 +489,7 @@ def load_and_validate_tokenizer(
         raise ValueError("Tokenizer produced empty tokenized outputs.")
     if stats["mostly_unknown_rate"] > 0.01:
         raise ValueError(
-            "Too many sequences are mostly unknown tokens: "
-            f"{stats['mostly_unknown_rate']:.4f}"
+            f"Too many sequences are mostly unknown tokens: {stats['mostly_unknown_rate']:.4f}"
         )
 
     return (
@@ -572,9 +558,7 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Data
             f"actual_eval_size={n_eval}"
         )
 
-    eval_split = (
-        args.validation_split if args.use_validation_split else args.train_split
-    )
+    eval_split = args.validation_split if args.use_validation_split else args.train_split
     ds = get_streaming_dataset(
         args.dataset_name,
         split=eval_split,
@@ -628,16 +612,7 @@ class MolecularMLMCollator:
 
     def __post_init__(self) -> None:
         special_ids = {int(token_id) for token_id in self.special_token_ids}
-        eligible = [
-            token_id
-            for token_id in range(self.vocab_size)
-            if token_id not in special_ids
-        ]
-
-        if not eligible:
-            raise ValueError(
-                "No eligible non-special token IDs available for MLM random replacement."
-            )
+        eligible = [token_id for token_id in range(self.vocab_size) if token_id not in special_ids]
 
         self._eligible_replacement_ids = torch.tensor(eligible, dtype=torch.long)
 
@@ -667,9 +642,7 @@ class MolecularMLMCollator:
         masked_indices = torch.bernoulli(probability_matrix).bool()
 
         if self.mlm_probability > 0.0 and not masked_indices.any():
-            eligible_positions = (~special_mask & attention_mask.bool()).nonzero(
-                as_tuple=False
-            )
+            eligible_positions = (~special_mask & attention_mask.bool()).nonzero(as_tuple=False)
             if len(eligible_positions) > 0:
                 idx = int(torch.randint(len(eligible_positions), (1,)).item())
                 row_pos = eligible_positions[idx]
@@ -680,9 +653,7 @@ class MolecularMLMCollator:
         labels[~masked_indices] = -100
 
         # 80% of selected tokens become mask tokens.
-        replace_with_mask = (
-            torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
-        )
+        replace_with_mask = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
         input_ids[replace_with_mask] = self.mask_token_id
 
         # 10% become random tokens.
@@ -692,9 +663,7 @@ class MolecularMLMCollator:
             & ~replace_with_mask
         )
         if replace_with_random.any():
-            eligible_random_ids = self.eligible_random_token_ids(
-                device=input_ids.device
-            )
+            eligible_random_ids = self.eligible_random_token_ids(device=input_ids.device)
             random_indices = torch.randint(
                 low=0,
                 high=len(eligible_random_ids),
@@ -712,8 +681,14 @@ class MolecularMLMCollator:
         }
 
     def eligible_random_token_ids(
-        self, device: torch.device | None = None
+        self,
+        device: torch.device | None = None,
     ) -> torch.Tensor:
+
+        if len(self._eligible_replacement_ids) == 0:
+            raise ValueError(
+                "No eligible non-special token IDs available for MLM random replacement."
+            )
 
         if device is None:
             return self._eligible_replacement_ids
@@ -772,16 +747,10 @@ def log_training_plan(
     print(f"  max_steps:                  {args.max_steps}", flush=True)
     print(f"  max_seq_length:             {args.max_seq_length}", flush=True)
     print(f"  mlm_probability:            {args.mlm_probability}", flush=True)
-    print(
-        f"  train batch/device:         {args.per_device_train_batch_size}", flush=True
-    )
-    print(
-        f"  gradient_accumulation:      {args.gradient_accumulation_steps}", flush=True
-    )
+    print(f"  train batch/device:         {args.per_device_train_batch_size}", flush=True)
+    print(f"  gradient_accumulation:      {args.gradient_accumulation_steps}", flush=True)
     print(f"  effective batch size:       {effective_batch_size}", flush=True)
-    print(
-        f"  eval batch/device:          {args.per_device_eval_batch_size}", flush=True
-    )
+    print(f"  eval batch/device:          {args.per_device_eval_batch_size}", flush=True)
     print(
         f"  load_best_model_at_end:     {args.load_best_model_at_end}",
         flush=True,

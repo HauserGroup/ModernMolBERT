@@ -346,8 +346,10 @@ def load_prepared_moleculenet_dataset(
 
     dataset_metadata.update(
         {
+            "source": "prepared_moleculenet",
             "eval_split": eval_split,
             "dataset_dir": str(dataset_dir),
+            "merge_train_valid": merge_train_valid,
         }
     )
 

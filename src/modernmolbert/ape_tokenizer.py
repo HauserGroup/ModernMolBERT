@@ -86,8 +86,7 @@ class APETokenizer:
 
         # Calculate the attention mask (1 for tokens, 0 for padding)
         attention_mask = [
-            1 if token_id != self.vocabulary[self.pad_token] else 0
-            for token_id in encoded_inputs
+            1 if token_id != self.vocabulary[self.pad_token] else 0 for token_id in encoded_inputs
         ]
         outputs["attention_mask"] = attention_mask
 
@@ -178,29 +177,26 @@ class APETokenizer:
         batch = checkpoint_interval + pre_tokens_counts
 
         while True:
-            if save_checkpoint:
-                if len(vocabulary_frequency) == batch:
-                    self.vocabulary_frequency = dict(vocabulary_frequency)
-                    self.vocabulary = {
-                        **self.special_tokens,
-                        **{
-                            word: idx
-                            for idx, word in enumerate(
-                                vocabulary_frequency.keys(),
-                                start=len(self.special_tokens),
-                            )
-                        },
-                    }
+            if save_checkpoint and len(vocabulary_frequency) == batch:
+                self.vocabulary_frequency = dict(vocabulary_frequency)
+                self.vocabulary = {
+                    **self.special_tokens,
+                    **{
+                        word: idx
+                        for idx, word in enumerate(
+                            vocabulary_frequency.keys(),
+                            start=len(self.special_tokens),
+                        )
+                    },
+                }
 
-                    if not os.path.exists(checkpoint_path):
-                        os.makedirs(checkpoint_path)
+                if not os.path.exists(checkpoint_path):
+                    os.makedirs(checkpoint_path)
 
-                    self.save_vocabulary(f"{checkpoint_path}/checkpoint_{batch}.json")
-                    print(
-                        f"Checkpoint saved at {checkpoint_path}/checkpoint_{batch}.json"
-                    )
-                    self.save_pretrained(f"{checkpoint_path}/checkpoint_{batch}")
-                    batch += checkpoint_increment
+                self.save_vocabulary(f"{checkpoint_path}/checkpoint_{batch}.json")
+                print(f"Checkpoint saved at {checkpoint_path}/checkpoint_{batch}.json")
+                self.save_pretrained(f"{checkpoint_path}/checkpoint_{batch}")
+                batch += checkpoint_increment
 
             if len(vocabulary_frequency) >= self.max_vocab_size:
                 print("\rMax vocabulary achieved", text_padding)
@@ -220,7 +216,7 @@ class APETokenizer:
                 break
 
             merged_word = "".join(most_common_pair)
-            if merged_word not in vocabulary_frequency.keys():
+            if merged_word not in vocabulary_frequency:
                 print(
                     f"New merge found: {merged_word} {merged_counter}/{max_vocab_size} {round(merged_counter / max_vocab_size * 100, 2)}%"
                 )
@@ -256,10 +252,7 @@ class APETokenizer:
         self.vocabulary_frequency = dict(vocabulary_frequency)
         self.vocabulary = {
             **self.special_tokens,
-            **{
-                word: idx
-                for idx, word in enumerate(vocabulary_frequency.keys(), start=5)
-            },
+            **{word: idx for idx, word in enumerate(vocabulary_frequency.keys(), start=5)},
         }
         print("\nTraining complete.")
 
@@ -278,9 +271,7 @@ class APETokenizer:
 
         if pad_to_multiple_of:
             # Ensure max_length is a multiple of pad_to_multiple_of
-            max_length = (
-                (max_length - 1) // pad_to_multiple_of + 1
-            ) * pad_to_multiple_of
+            max_length = ((max_length - 1) // pad_to_multiple_of + 1) * pad_to_multiple_of
 
         padded_sequences = []
         attention_masks = []
@@ -333,18 +324,13 @@ class APETokenizer:
         return [0] * len(token_ids)
 
     def train_from_iterator(self, iterator):
-        raise NotImplementedError(
-            "train_from_iterator is not implemented for APETokenizer"
-        )
+        raise NotImplementedError("train_from_iterator is not implemented for APETokenizer")
 
     def convert_tokens_to_ids(self, tokens):
         if isinstance(tokens, str):  # Single token
             return self.vocabulary.get(tokens, self.vocabulary[self.unk_token])
         else:  # List of tokens
-            return [
-                self.vocabulary.get(token, self.vocabulary[self.unk_token])
-                for token in tokens
-            ]
+            return [self.vocabulary.get(token, self.vocabulary[self.unk_token]) for token in tokens]
 
     def update_reverse_vocabulary(self):
         """Updates the reverse vocabulary based on the current state of the vocabulary."""
@@ -359,10 +345,7 @@ class APETokenizer:
         :return: List[str], a list of string tokens corresponding to the token IDs.
         """
         # Map each token ID to its corresponding string token
-        return [
-            self.reverse_vocabulary.get(token_id, self.unk_token)
-            for token_id in token_ids
-        ]
+        return [self.reverse_vocabulary.get(token_id, self.unk_token) for token_id in token_ids]
 
     def encode(self, text, padding=False, max_length=None, add_special_tokens=False):
         """
@@ -406,9 +389,7 @@ class APETokenizer:
 
         if padding:
             if max_length is None:
-                raise ValueError(
-                    "max_length must be specified if padding is True or 'max_length'"
-                )
+                raise ValueError("max_length must be specified if padding is True or 'max_length'")
             pad_token = self.vocabulary[self.pad_token]
             while len(encoded_tokens) < max_length:
                 encoded_tokens.append(pad_token)
@@ -492,9 +473,7 @@ class APETokenizer:
             with open(special_tokens_file, encoding="utf-8") as f:
                 special_tokens = json.load(f)
         else:
-            raise FileNotFoundError(
-                f"Special tokens file {special_tokens_file} not found."
-            )
+            raise FileNotFoundError(f"Special tokens file {special_tokens_file} not found.")
 
         # Initialize the tokenizer
         tokenizer = cls()

@@ -267,3 +267,26 @@ uv run pytest tests/test_eval_*.py -q
 uv run pytest tests/test_eval_suite.py tests/test_eval_suite_configs.py -q
 
 ```
+
+## Reporting
+
+After running a suite, generate summary tables and plots with:
+
+```bash
+uv run python -m modernmolbert.eval.cli.report_benchmark_results \
+  --results_csv outputs/eval/pilot_core/results.csv \
+  --output_dir outputs/eval/pilot_core/report
+```
+
+```text
+outputs/eval/pilot_core/report/
+  tables/
+    summary.csv
+    <metric>_matrix.csv
+    <metric>_average_rank.csv
+  plots/
+    <metric>_by_dataset.png
+
+```
+
+Use `--no_plots` to write only summary tables.

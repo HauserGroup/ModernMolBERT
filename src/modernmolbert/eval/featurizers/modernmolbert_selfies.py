@@ -34,7 +34,7 @@ class ModernMolBERTSelfiesFeaturizer:
             raise ValueError(f"Unsupported pooling strategy: {self.pooling!r}")
 
         self._device = self._resolve_device(self.device)
-        self.tokenizer = APETokenizer.from_pretrained(self.tokenizer_path)
+        self.tokenizer = _load_ape_tokenizer(self.tokenizer_path)
         self.model = AutoModel.from_pretrained(self.model_dir)
         self.model.to(self._device)
         self.model.eval()
@@ -93,19 +93,9 @@ class ModernMolBERTSelfiesFeaturizer:
             for start in range(0, len(selfies_strings), effective_batch_size):
                 batch_strings = selfies_strings[start : start + effective_batch_size]
 
-                batch = self.tokenizer(
-                    batch_strings,
-                    padding=True,
-                    truncation=True,
-                    max_length=self.max_seq_length,
-                    return_tensors="pt",
-                )
+                batch = self._tokenize_selfies_batch(batch_strings)
 
-                batch = {
-                    key: value.to(self._device)
-                    for key, value in batch.items()
-                    if isinstance(value, torch.Tensor)
-                }
+                batch = {key: value.to(self._device) for key, value in batch.items()}
 
                 outputs = self.model(**batch)
                 hidden = outputs.last_hidden_state
@@ -153,9 +143,7 @@ class ModernMolBERTSelfiesFeaturizer:
             "max_seq_length": self.max_seq_length,
             "device": str(self._device),
             "hidden_size": int(getattr(self.model.config, "hidden_size", 0)),
-            "num_hidden_layers": int(
-                getattr(self.model.config, "num_hidden_layers", 0)
-            ),
+            "num_hidden_layers": int(getattr(self.model.config, "num_hidden_layers", 0)),
             "vocab_size": int(getattr(self.model.config, "vocab_size", 0)),
             "num_parameters": int(sum(p.numel() for p in self.model.parameters())),
             "n_inputs": n_inputs,
@@ -171,10 +159,7 @@ class ModernMolBERTSelfiesFeaturizer:
         if torch.cuda.is_available():
             return torch.device("cuda")
 
-        if (
-            getattr(torch.backends, "mps", None) is not None
-            and torch.backends.mps.is_available()
-        ):
+        if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
             return torch.device("mps")
 
         return torch.device("cpu")
@@ -189,3 +174,100 @@ class ModernMolBERTSelfiesFeaturizer:
         }
 
         return {int(x) for x in ids if x is not None}
+
+    def _tokenize_selfies_batch(
+        self,
+        selfies_strings: list[str],
+    ) -> dict[str, torch.Tensor]:
+        """Tokenize a batch of SELFIES strings with APETokenizer.
+
+        APETokenizer handles one string at a time, so we encode individually and
+        then pad into a tensor batch.
+        """
+
+        encoded_rows: list[list[int]] = []
+
+        for text in selfies_strings:
+            encoded = self.tokenizer(
+                text,
+                padding=False,
+                truncation=True,
+                max_length=self.max_seq_length,
+                return_tensors=None,
+            )
+
+            input_ids = encoded["input_ids"]
+
+            if isinstance(input_ids, torch.Tensor):
+                ids = input_ids.detach().cpu().tolist()
+            else:
+                ids = list(input_ids)
+
+            # Some tokenizer APIs return [[...]] for a single example.
+            if ids and isinstance(ids[0], list):
+                ids = ids[0]
+
+            encoded_rows.append([int(x) for x in ids])
+
+        pad_token_id = int(getattr(self.tokenizer, "pad_token_id", 0))
+
+        if not encoded_rows:
+            raise ValueError("Cannot tokenize an empty SELFIES batch")
+
+        max_len = max(len(row) for row in encoded_rows)
+        input_ids = torch.full(
+            (len(encoded_rows), max_len),
+            fill_value=pad_token_id,
+            dtype=torch.long,
+        )
+        attention_mask = torch.zeros(
+            (len(encoded_rows), max_len),
+            dtype=torch.long,
+        )
+
+        for i, row in enumerate(encoded_rows):
+            length = len(row)
+            input_ids[i, :length] = torch.tensor(row, dtype=torch.long)
+            attention_mask[i, :length] = 1
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+
+
+def _load_ape_tokenizer(path: str | Path) -> APETokenizer:
+    """Load APETokenizer from a file or checkpoint directory.
+
+    Supported inputs:
+    - directory containing tokenizer.json
+    - directory containing vocab.json
+    - direct path to tokenizer.json
+    - direct path to vocab.json
+    """
+
+    path = Path(path)
+
+    tokenizer = APETokenizer()
+
+    if path.is_file():
+        tokenizer.load_vocabulary(str(path))
+        return tokenizer
+
+    if path.is_dir():
+        tokenizer_json = path / "tokenizer.json"
+        vocab_json = path / "vocab.json"
+
+        if tokenizer_json.exists():
+            tokenizer.load_vocabulary(str(tokenizer_json))
+            return tokenizer
+
+        if vocab_json.exists():
+            tokenizer.load_vocabulary(str(vocab_json))
+            return tokenizer
+
+        raise FileNotFoundError(
+            f"No tokenizer vocabulary found in {path}. Expected tokenizer.json or vocab.json."
+        )
+
+    raise FileNotFoundError(f"Tokenizer path does not exist: {path}")

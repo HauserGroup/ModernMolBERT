@@ -933,5 +933,20 @@ uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
   --output_dir outputs/eval/pilot_core
 ```
 
+## Evaluation suites
+
+Benchmark suite configs live in:
+
+```text
+configs/eval_suites/
+
+uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
+  --suite configs/eval_suites/pilot_core.yaml \
+  --output_dir outputs/eval/pilot_core \
+  --overwrite
+
+
+```
+
 ## Citation
 If you use this work, please cite the accompanying paper. See [`CITATION.cff`](CITATION.cff) or use the "Cite this repository" button on GitHub.

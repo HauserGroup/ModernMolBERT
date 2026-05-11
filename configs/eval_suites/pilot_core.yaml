@@ -1,0 +1,59 @@
+name: pilot_core
+
+datasets:
+  - name: bbbp
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/bbbp
+    eval_split: test
+    merge_train_valid: true
+
+  - name: bace
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/bace
+    eval_split: test
+    merge_train_valid: true
+
+  - name: esol
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/esol
+    eval_split: test
+    merge_train_valid: true
+
+featurizers:
+  - type: ecfp4
+    name: ecfp4_2048
+    n_bits: 2048
+    radius: 2
+
+  - type: modernmolbert_selfies
+    name: modernmolbert_pilot
+    model_dir: runs/pubchem10m_mps_base_pilot_256/final_model
+    tokenizer_path: runs/pubchem10m_mps_base_pilot_256/final_model/tokenizer.json
+    max_seq_length: 256
+    pooling: mean
+    device: auto
+    batch_size: 32
+
+downstream_models:
+  classification:
+    - name: logistic_balanced
+      model_type: logistic_regression
+      standardize: true
+      params:
+        class_weight: balanced
+        max_iter: 5000
+        C: 1.0
+
+  regression:
+    - name: ridge
+      model_type: ridge
+      standardize: true
+      params:
+        alpha: 1.0
+
+seeds:
+  - 13
+
+eval_split: test
+batch_size: 64
+use_cache: true

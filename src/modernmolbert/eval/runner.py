@@ -1,24 +1,25 @@
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 
 from modernmolbert.eval.cache import get_or_compute_features
 from modernmolbert.eval.datasets import EvalDataset
-from modernmolbert.eval.downstream import (
-    FrozenDownstreamConfig,
-)
+from modernmolbert.eval.downstream import FrozenDownstreamConfig
 from modernmolbert.eval.featurizers.base import FeatureBatch, RepresentationFeaturizer
 from modernmolbert.eval.io import ensure_dir, write_json
-
 from modernmolbert.eval.task_eval import TaskResult, TaskSkip, evaluate_single_task
+
+EvalSplit = Literal["valid", "test"]
 
 
 @dataclass(frozen=True)
 class FrozenBenchmarkResult:
     dataset: str
     featurizer: str
+    eval_split: str
+    downstream_config: dict[str, Any]
     task_results: list[TaskResult]
     skipped_tasks: list[TaskSkip] = field(default_factory=list)
 
@@ -26,6 +27,8 @@ class FrozenBenchmarkResult:
         return {
             "dataset": self.dataset,
             "featurizer": self.featurizer,
+            "eval_split": self.eval_split,
+            "downstream_config": self.downstream_config,
             "task_results": [asdict(x) for x in self.task_results],
             "skipped_tasks": [asdict(x) for x in self.skipped_tasks],
         }
@@ -33,11 +36,14 @@ class FrozenBenchmarkResult:
 
 @dataclass
 class FrozenBenchmarkRunner:
-    """Run frozen-representation benchmarks with a shared downstream learner."""
+    """Run one frozen-representation benchmark configuration.
 
-    downstream_config: FrozenDownstreamConfig = field(
-        default_factory=FrozenDownstreamConfig
-    )
+    This runner evaluates one dataset with one featurizer and one downstream
+    model configuration. Feature extraction is delegated to the cache layer and
+    per-task fitting/evaluation is delegated to task_eval.py.
+    """
+
+    downstream_config: FrozenDownstreamConfig = field(default_factory=FrozenDownstreamConfig)
     cache_dir: Path | None = None
     use_cache: bool = True
     batch_size: int = 64
@@ -49,22 +55,12 @@ class FrozenBenchmarkRunner:
         dataset: EvalDataset,
         featurizer: RepresentationFeaturizer,
         output_dir: str | Path | None = None,
-        eval_split: str = "test",
+        eval_split: EvalSplit = "test",
     ) -> FrozenBenchmarkResult:
         dataset.check()
 
-        if eval_split == "test":
-            eval_frame = dataset.test
-        elif eval_split == "valid":
-            if dataset.valid is None:
-                raise ValueError(
-                    "eval_split='valid' requested but dataset has no valid split"
-                )
-            eval_frame = dataset.valid
-        else:
-            raise ValueError("eval_split must be 'valid' or 'test'")
-
         train_frame = dataset.train
+        eval_frame = _select_eval_frame(dataset, eval_split)
 
         train_features = self._features_for_split(
             dataset=dataset,
@@ -95,14 +91,18 @@ class FrozenBenchmarkRunner:
                 eval_features=eval_features,
                 downstream_config=self.downstream_config,
             )
+
             if task_result is not None:
                 task_results.append(task_result)
+
             if task_skip is not None:
                 skipped_tasks.append(task_skip)
 
         result = FrozenBenchmarkResult(
             dataset=dataset.name,
             featurizer=featurizer.name,
+            eval_split=eval_split,
+            downstream_config=_downstream_config_to_dict(self.downstream_config),
             task_results=task_results,
             skipped_tasks=skipped_tasks,
         )
@@ -140,48 +140,78 @@ class FrozenBenchmarkRunner:
         out = ensure_dir(output_dir)
         write_json(out / "results.json", result.to_dict())
 
-        rows = []
-        for task_result in result.task_results:
-            train_feature_metadata = task_result.feature_metadata.get("train", {})
-            eval_feature_metadata = task_result.feature_metadata.get("eval", {})
+        result_rows = _task_results_to_rows(result)
+        if result_rows:
+            pd.DataFrame(result_rows).to_csv(out / "results.csv", index=False)
 
-            base = {
-                "dataset": task_result.dataset,
-                "task": task_result.task,
-                "task_type": task_result.task_type,
-                "split": task_result.split,
-                "featurizer": task_result.featurizer,
-                "n_train": task_result.n_train,
-                "n_eval": task_result.n_eval,
-                "n_train_total": task_result.n_train_total,
-                "n_eval_total": task_result.n_eval_total,
-                "n_train_feature_valid": task_result.n_train_feature_valid,
-                "n_eval_feature_valid": task_result.n_eval_feature_valid,
-                "train_feature_invalid_rate": 1.0
-                - (
-                    task_result.n_train_feature_valid
-                    / max(1, task_result.n_train_total)
-                ),
-                "eval_feature_invalid_rate": 1.0
-                - (task_result.n_eval_feature_valid / max(1, task_result.n_eval_total)),
-                "train_feature_cache_key": train_feature_metadata.get("cache_key"),
-                "eval_feature_cache_key": eval_feature_metadata.get("cache_key"),
-                "train_feature_dim": train_feature_metadata.get("n_features"),
-                "eval_feature_dim": eval_feature_metadata.get("n_features"),
-            }
+        skip_rows = [asdict(skip) for skip in result.skipped_tasks]
+        if skip_rows:
+            pd.DataFrame(skip_rows).to_csv(out / "skipped_tasks.csv", index=False)
 
-            for metric_name, metric_value in task_result.metrics.items():
-                base[metric_name] = metric_value
 
-            base["model_type"] = task_result.downstream_metadata.get("downstream_model")
-            base["standardize"] = task_result.downstream_metadata.get("standardize")
+def _select_eval_frame(dataset: EvalDataset, eval_split: EvalSplit) -> pd.DataFrame:
+    if eval_split == "test":
+        return dataset.test
 
-            for key, value in task_result.downstream_metadata.items():
-                if key in {"downstream_model", "standardize"}:
-                    continue
-                base[f"downstream_{key}"] = value
+    if eval_split == "valid":
+        if dataset.valid is None:
+            raise ValueError("eval_split='valid' requested but dataset has no valid split")
+        return dataset.valid
 
-            rows.append(base)
+    raise ValueError("eval_split must be 'valid' or 'test'")
 
-        if rows:
-            pd.DataFrame(rows).to_csv(out / "results.csv", index=False)
+
+def _downstream_config_to_dict(config: FrozenDownstreamConfig) -> dict[str, Any]:
+    return {
+        "model_type": config.model_type,
+        "params": {} if config.params is None else dict(config.params),
+        "random_state": config.random_state,
+        "standardize": config.standardize,
+    }
+
+
+def _task_results_to_rows(result: FrozenBenchmarkResult) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+
+    for task_result in result.task_results:
+        train_feature_metadata = task_result.feature_metadata.get("train", {})
+        eval_feature_metadata = task_result.feature_metadata.get("eval", {})
+
+        base: dict[str, Any] = {
+            "dataset": task_result.dataset,
+            "task": task_result.task,
+            "task_type": task_result.task_type,
+            "split": task_result.split,
+            "featurizer": task_result.featurizer,
+            "downstream_model": result.downstream_config.get("model_type"),
+            "downstream_random_state": result.downstream_config.get("random_state"),
+            "n_train": task_result.n_train,
+            "n_eval": task_result.n_eval,
+            "n_train_total": task_result.n_train_total,
+            "n_eval_total": task_result.n_eval_total,
+            "n_train_feature_valid": task_result.n_train_feature_valid,
+            "n_eval_feature_valid": task_result.n_eval_feature_valid,
+            "train_feature_invalid_rate": 1.0
+            - (task_result.n_train_feature_valid / max(1, task_result.n_train_total)),
+            "eval_feature_invalid_rate": 1.0
+            - (task_result.n_eval_feature_valid / max(1, task_result.n_eval_total)),
+            "train_feature_cache_key": train_feature_metadata.get("cache_key"),
+            "eval_feature_cache_key": eval_feature_metadata.get("cache_key"),
+            "train_feature_dim": train_feature_metadata.get("n_features"),
+            "eval_feature_dim": eval_feature_metadata.get("n_features"),
+        }
+
+        for metric_name, metric_value in task_result.metrics.items():
+            base[metric_name] = metric_value
+
+        base["model_type"] = task_result.downstream_metadata.get("downstream_model")
+        base["standardize"] = task_result.downstream_metadata.get("standardize")
+
+        for key, value in task_result.downstream_metadata.items():
+            if key in {"downstream_model", "standardize"}:
+                continue
+            base[f"downstream_{key}"] = value
+
+        rows.append(base)
+
+    return rows

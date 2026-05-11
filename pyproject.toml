@@ -65,3 +65,46 @@ markers = [
     "model: tests that load trained model checkpoints or external pretrained models",
     "molformer: tests requiring the separate molformer-only environment",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "SIM108", # ternary operator — not always clearer
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101", # assert statements are fine in tests
+]
+"notebooks/**" = [
+    "E402", # module-level imports not at top (% cells)
+    "F401", # unused imports (exploratory notebooks)
+    "B018", # useless expression (cell output idiom)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["modernmolbert"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+pythonPlatform = "All"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+include = ["src", "tests"]
+ignore = ["notebooks", "scratch"]
+reportMissingImports = true
+reportMissingTypeStubs = false

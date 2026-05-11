@@ -13,6 +13,7 @@ repos:
       - id: detect-aws-credentials
         args: [--allow-missing-credentials]
       - id: detect-private-key
+      - id: check-toml
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
@@ -33,7 +34,14 @@ repos:
         verbose: true
       - id: style-files
         args: [--scope=tokens, --strict=true, --reindention=specify_reindention('#'), --indent_by=4, --start_comments_with_one_space=true]
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: [--skip, "*.bib,*.tex,*.ipynb", --ignore-words-list, "nd,ser,ba"]
+
   -   repo: https://github.com/asottile/pyupgrade
       rev: v3.21.2
       hooks:
       -   id: pyupgrade
+          args: [--py313-plus]

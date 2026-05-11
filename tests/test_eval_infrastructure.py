@@ -1,11 +1,11 @@
 import json
 import subprocess
 import sys
-import pytest
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.datasets import EvalDataset, load_csv_eval_dataset
 from modernmolbert.eval.downstream import FrozenDownstreamConfig, fit_predict_downstream
@@ -72,12 +72,8 @@ def test_load_csv_eval_dataset(tmp_path: Path) -> None:
     train_csv = tmp_path / "train.csv"
     test_csv = tmp_path / "test.csv"
 
-    pd.DataFrame({"smiles": ["CCO", "CCN"], "label": [0, 1]}).to_csv(
-        train_csv, index=False
-    )
-    pd.DataFrame({"smiles": ["CO", "CN"], "label": [0, 1]}).to_csv(
-        test_csv, index=False
-    )
+    pd.DataFrame({"smiles": ["CCO", "CCN"], "label": [0, 1]}).to_csv(train_csv, index=False)
+    pd.DataFrame({"smiles": ["CO", "CN"], "label": [0, 1]}).to_csv(test_csv, index=False)
 
     ds = load_csv_eval_dataset(
         name="csv_tiny",
@@ -192,6 +188,11 @@ def test_frozen_runner_classification(tmp_path: Path) -> None:
     assert "eval_feature_invalid_rate" in csv.columns
     assert "model_type" in csv.columns
     assert "standardize" in csv.columns
+
+    assert "downstream_model" in csv.columns
+    assert "downstream_random_state" in csv.columns
+    assert "train_feature_cache_key" in csv.columns
+    assert "eval_feature_cache_key" in csv.columns
 
 
 def test_frozen_runner_regression(tmp_path: Path) -> None:
@@ -319,9 +320,7 @@ def test_classification_metrics_one_class_returns_nans_for_rank_metrics() -> Non
     y_pred = np.array([1, 1, 1])
     y_score = np.array([0.9, 0.8, 0.7])
 
-    metrics = compute_classification_metrics(
-        y_true=y_true, y_pred=y_pred, y_score=y_score
-    )
+    metrics = compute_classification_metrics(y_true=y_true, y_pred=y_pred, y_score=y_score)
 
     assert np.isnan(metrics["balanced_accuracy"])
     assert np.isnan(metrics["roc_auc"])
@@ -564,3 +563,89 @@ def test_downstream_regression_random_forest() -> None:
     assert pred.y_pred.shape == (2,)
     assert pred.y_score is None
     assert pred.metadata["downstream_model"] == "random_forest_regressor"
+
+
+def test_runner_writes_skipped_tasks_csv(tmp_path: Path) -> None:
+    train = pd.DataFrame(
+        {
+            "smiles": ["CCO", "CCN", "CCC", "CCCC"],
+            "label": [1, 1, 1, 1],
+        }
+    )
+    test = pd.DataFrame(
+        {
+            "smiles": ["CO", "CCBr"],
+            "label": [1, 1],
+        }
+    )
+
+    ds = EvalDataset(
+        name="skip_output_test",
+        task_type="classification",
+        task_names=["label"],
+        train=train,
+        valid=None,
+        test=test,
+    )
+
+    runner = FrozenBenchmarkRunner(cache_dir=tmp_path / "cache", use_cache=False)
+    result = runner.run(
+        dataset=ds,
+        featurizer=DummyFeaturizer(n_features=8),
+        output_dir=tmp_path / "out",
+    )
+
+    assert len(result.task_results) == 0
+    assert len(result.skipped_tasks) == 1
+    assert (tmp_path / "out" / "skipped_tasks.csv").exists()
+
+    skipped = pd.read_csv(tmp_path / "out" / "skipped_tasks.csv")
+    assert skipped.loc[0, "reason"] == "classification_train_has_single_class"
+
+
+def test_runner_result_json_includes_downstream_config(tmp_path: Path) -> None:
+    train = pd.DataFrame(
+        {
+            "smiles": ["CCO", "CCN", "CCC", "CCCC"],
+            "label": [0, 0, 1, 1],
+        }
+    )
+    test = pd.DataFrame(
+        {
+            "smiles": ["CO", "CCBr"],
+            "label": [0, 1],
+        }
+    )
+
+    ds = EvalDataset(
+        name="json_metadata_test",
+        task_type="classification",
+        task_names=["label"],
+        train=train,
+        valid=None,
+        test=test,
+    )
+
+    runner = FrozenBenchmarkRunner(
+        downstream_config=FrozenDownstreamConfig(
+            model_type="logistic_regression",
+            params={"max_iter": 100},
+            random_state=17,
+            standardize=True,
+        ),
+        cache_dir=tmp_path / "cache",
+        use_cache=False,
+    )
+
+    runner.run(
+        dataset=ds,
+        featurizer=DummyFeaturizer(n_features=8),
+        output_dir=tmp_path / "out",
+    )
+
+    payload = json.loads((tmp_path / "out" / "results.json").read_text())
+
+    assert payload["dataset"] == "json_metadata_test"
+    assert payload["eval_split"] == "test"
+    assert payload["downstream_config"]["model_type"] == "logistic_regression"
+    assert payload["downstream_config"]["random_state"] == 17

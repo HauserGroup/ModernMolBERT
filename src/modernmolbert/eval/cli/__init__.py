@@ -1,1 +1,1 @@
-"""Command-line entry points for evaluation."""
+"""Command-line entry points for ModernMolBERT evaluation."""

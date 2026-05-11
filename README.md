@@ -923,5 +923,15 @@ dataset_dir = data_path("eval", "moleculenet_sanitized", "bbbp")
 output_dir = outputs_path("examples", "ecfp4_moleculenet")
 ```
 
+## Running a benchmark suite
+
+Run a config-driven benchmark suite with:
+
+```bash
+uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
+  --suite configs/eval_suites/pilot_core.yaml \
+  --output_dir outputs/eval/pilot_core
+```
+
 ## Citation
 If you use this work, please cite the accompanying paper. See [`CITATION.cff`](CITATION.cff) or use the "Cite this repository" button on GitHub.

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -60,9 +60,7 @@ class ECFP4Featurizer:
             arr = generator.GetFingerprintAsNumPy(mol).astype(np.float32, copy=False)
 
             if arr.shape != (self.n_bits,):
-                raise ValueError(
-                    f"Expected fingerprint shape ({self.n_bits},), got {arr.shape}"
-                )
+                raise ValueError(f"Expected fingerprint shape ({self.n_bits},), got {arr.shape}")
 
             rows.append(arr)
             valid_mask[i] = True

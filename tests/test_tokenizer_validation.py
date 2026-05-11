@@ -136,7 +136,7 @@ def test_ethanol_gate_fails_when_selfies_symbols_are_unknown():
 
     try:
         _assert_ethanol_not_unknown(tokenizer, special_ids)
-        assert False, "Expected ethanol gate to fail for broken tokenizer"
+        raise AssertionError("Expected ethanol gate to fail for broken tokenizer")
     except ValueError as exc:
         assert "unk_rate" in str(exc)
 
@@ -210,7 +210,7 @@ def test_find_local_dataset_raises_for_invalid_explicit_dir(tmp_path: Path):
 
     try:
         find_local_dataset(data_dir=missing, dataset_name=PUBCHEM10M_DATASET)
-        assert False, "Expected FileNotFoundError for explicit invalid data_dir"
+        raise AssertionError("Expected FileNotFoundError for explicit invalid data_dir")
     except FileNotFoundError as exc:
         assert "dataset_info.json" in str(exc)
 

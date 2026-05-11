@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from modernmolbert.eval.suite import run_benchmark_suite, suite_config_from_dict
+from modernmolbert.eval.cli.run_benchmark_suite import validate_output_dir
 
 
 def _write_toy_classification_dataset(root: Path) -> None:
@@ -212,3 +213,35 @@ def test_suite_config_rejects_missing_downstream_models(tmp_path: Path) -> None:
                 "downstream_models": {},
             }
         )
+
+
+def test_validate_output_dir_allows_missing_directory(tmp_path: Path) -> None:
+    output_dir = tmp_path / "missing"
+
+    validate_output_dir(output_dir, overwrite=False)
+
+
+def test_validate_output_dir_allows_empty_directory(tmp_path: Path) -> None:
+    output_dir = tmp_path / "empty"
+    output_dir.mkdir()
+
+    validate_output_dir(output_dir, overwrite=False)
+
+
+def test_validate_output_dir_rejects_nonempty_without_overwrite(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    (output_dir / "old.txt").write_text("old\n", encoding="utf-8")
+
+    with pytest.raises(FileExistsError, match="not empty"):
+        validate_output_dir(output_dir, overwrite=False)
+
+
+def test_validate_output_dir_overwrite_removes_existing_directory(tmp_path: Path) -> None:
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    (output_dir / "old.txt").write_text("old\n", encoding="utf-8")
+
+    validate_output_dir(output_dir, overwrite=True)
+
+    assert not output_dir.exists()

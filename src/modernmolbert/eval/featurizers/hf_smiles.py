@@ -4,7 +4,8 @@ import json
 import os
 from pathlib import Path
 import shutil
-from typing import Literal, Sequence
+from typing import Literal
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -244,9 +245,7 @@ def _maybe_prepare_sanitized_model_dir(
         return str(source_dir)
 
     cache_key = hashlib.sha256(
-        (
-            str(source_dir.resolve()) + "\n" + json.dumps(sanitized, sort_keys=True)
-        ).encode("utf-8")
+        (str(source_dir.resolve()) + "\n" + json.dumps(sanitized, sort_keys=True)).encode("utf-8")
     ).hexdigest()[:16]
 
     cache_root = Path.home() / ".cache" / "modernmolbert" / "hf_sanitized_models"
@@ -342,7 +341,7 @@ def _patch_modernbert_rope_standardization() -> None:
     except Exception:
         return
 
-    if getattr(ModernBertConfig, "_modernmolbert_rope_patch_applied", False):
+    if getattr(ModernBertConfig, "_modernmolbert_rope_patch_applied", False):  # type: ignore[attr-defined]
         return
 
     def _clean_or_build_rope(self) -> dict[str, dict[str, float | str]]:
@@ -355,8 +354,7 @@ def _patch_modernbert_rope_standardization() -> None:
             cleaned = {
                 key: value
                 for key, value in existing.items()
-                if key in {"sliding_attention", "full_attention"}
-                and isinstance(value, dict)
+                if key in {"sliding_attention", "full_attention"} and isinstance(value, dict)
             }
 
             if set(cleaned) == {"sliding_attention", "full_attention"}:
@@ -390,6 +388,6 @@ def _patch_modernbert_rope_standardization() -> None:
 
         return kwargs
 
-    ModernBertConfig.standardize_rope_params = standardize_rope_params
-    ModernBertConfig.convert_rope_params_to_dict = convert_rope_params_to_dict
-    setattr(ModernBertConfig, "_modernmolbert_rope_patch_applied", True)
+    ModernBertConfig.standardize_rope_params = standardize_rope_params  # type: ignore[attr-defined]
+    ModernBertConfig.convert_rope_params_to_dict = convert_rope_params_to_dict  # type: ignore[attr-defined]
+    ModernBertConfig._modernmolbert_rope_patch_applied = True  # type: ignore[attr-defined]

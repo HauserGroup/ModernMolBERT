@@ -23,7 +23,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, Literal
+from collections.abc import Iterator
 
 import pandas as pd
 
@@ -134,8 +135,7 @@ class EvalDataset:
 
             if self.smiles_column not in frame.columns:
                 raise ValueError(
-                    f"{split_name} split is missing SMILES column "
-                    f"{self.smiles_column!r}"
+                    f"{split_name} split is missing SMILES column {self.smiles_column!r}"
                 )
 
             # SELFIES is optional because not all datasets are necessarily
@@ -143,9 +143,7 @@ class EvalDataset:
             # can check this explicitly when needed.
             for task in self.task_names:
                 if task not in frame.columns:
-                    raise ValueError(
-                        f"{split_name} split is missing label column {task!r}"
-                    )
+                    raise ValueError(f"{split_name} split is missing label column {task!r}")
 
     def check_selfies_available(self) -> None:
         """Validate that every split contains the configured SELFIES column."""
@@ -153,8 +151,7 @@ class EvalDataset:
         for split_name, frame in self.iter_splits(include_valid=True):
             if self.selfies_column not in frame.columns:
                 raise ValueError(
-                    f"{split_name} split is missing SELFIES column "
-                    f"{self.selfies_column!r}"
+                    f"{split_name} split is missing SELFIES column {self.selfies_column!r}"
                 )
 
     def iter_splits(

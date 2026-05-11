@@ -271,6 +271,13 @@ def test_runner_cache_reuse(tmp_path: Path) -> None:
 
     cache_files = list((tmp_path / "cache").rglob("features.npy"))
     assert cache_files
+    metadata_files = list((tmp_path / "cache").rglob("metadata.json"))
+    assert metadata_files
+
+    payload = json.loads(metadata_files[0].read_text(encoding="utf-8"))
+    assert "cache_key" in payload
+    assert "molecule_hash" in payload
+    assert payload["featurizer_name"] == "dummy"
 
 
 def test_runner_records_structured_skip_for_one_class_train(tmp_path: Path) -> None:
@@ -434,3 +441,48 @@ def test_feature_batch_check_rejects_non_numeric_features() -> None:
 
     with pytest.raises(TypeError, match="numeric"):
         batch.check(n_inputs=2)
+
+
+def test_runner_outputs_feature_cache_keys(tmp_path: Path) -> None:
+    train = pd.DataFrame(
+        {
+            "smiles": ["CCO", "CCN", "CCC", "CCCC"],
+            "label": [0, 0, 1, 1],
+        }
+    )
+    test = pd.DataFrame(
+        {
+            "smiles": ["CO", "CCBr"],
+            "label": [0, 1],
+        }
+    )
+
+    ds = EvalDataset(
+        name="cache_output_test",
+        task_type="classification",
+        task_names=["label"],
+        train=train,
+        valid=None,
+        test=test,
+    )
+
+    runner = FrozenBenchmarkRunner(
+        cache_dir=tmp_path / "cache",
+        use_cache=True,
+        batch_size=2,
+    )
+
+    runner.run(
+        dataset=ds,
+        featurizer=DummyFeaturizer(name="dummy", n_features=8),
+        output_dir=tmp_path / "out",
+    )
+
+    csv = pd.read_csv(tmp_path / "out" / "results.csv")
+
+    assert "train_feature_cache_key" in csv.columns
+    assert "eval_feature_cache_key" in csv.columns
+    assert "train_feature_dim" in csv.columns
+    assert "eval_feature_dim" in csv.columns
+    assert csv.loc[0, "train_feature_dim"] == 8
+    assert csv.loc[0, "eval_feature_dim"] == 8

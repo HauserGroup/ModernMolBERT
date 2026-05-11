@@ -5,18 +5,14 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from modernmolbert.eval.cache import (
-    FeatureCache,
-    FeatureCacheKey,
-    get_or_compute_features,
-)
+from modernmolbert.eval.cache import get_or_compute_features
 from modernmolbert.eval.datasets import EvalDataset
 from modernmolbert.eval.downstream import (
     FrozenDownstreamConfig,
     fit_predict_downstream,
 )
 from modernmolbert.eval.featurizers.base import FeatureBatch, RepresentationFeaturizer
-from modernmolbert.eval.io import ensure_dir, hash_dataframe_smiles, write_json
+from modernmolbert.eval.io import ensure_dir, write_json
 from modernmolbert.eval.metrics import compute_metrics
 
 
@@ -153,26 +149,15 @@ class FrozenBenchmarkRunner:
         frame: pd.DataFrame,
         featurizer: RepresentationFeaturizer,
     ) -> FeatureBatch:
-        smiles = [str(x) for x in frame[dataset.smiles_column].tolist()]
-        smiles_hash = hash_dataframe_smiles(frame, dataset.smiles_column)
-
-        cache = FeatureCache(Path(self.cache_dir)) if self.cache_dir else None
-
-        cache_key = FeatureCacheKey(
+        return get_or_compute_features(
             dataset_name=dataset.name,
             split_name=split_name,
-            smiles_hash=smiles_hash,
-            featurizer_name=featurizer.name,
-            featurizer_metadata=_safe_featurizer_metadata(featurizer),
-        )
-
-        return get_or_compute_features(
-            cache=cache,
-            cache_key=cache_key,
-            smiles=smiles,
+            frame=frame,
+            smiles_column=dataset.smiles_column,
             featurizer=featurizer,
-            batch_size=self.batch_size,
+            cache_dir=self.cache_dir,
             use_cache=self.use_cache,
+            batch_size=self.batch_size,
         )
 
     def _run_single_task(
@@ -189,6 +174,18 @@ class FrozenBenchmarkRunner:
     ) -> tuple[TaskResult | None, TaskSkip | None]:
         train_label_mask = _valid_label_mask(train_frame, task)
         eval_label_mask = _valid_label_mask(eval_frame, task)
+
+        if train_label_mask.shape != train_features.valid_mask.shape:
+            raise ValueError(
+                "Train label mask and train feature mask have different shapes: "
+                f"{train_label_mask.shape} != {train_features.valid_mask.shape}"
+            )
+
+        if eval_label_mask.shape != eval_features.valid_mask.shape:
+            raise ValueError(
+                "Eval label mask and eval feature mask have different shapes: "
+                f"{eval_label_mask.shape} != {eval_features.valid_mask.shape}"
+            )
 
         train_keep_original = train_label_mask & train_features.valid_mask
         eval_keep_original = eval_label_mask & eval_features.valid_mask
@@ -222,8 +219,6 @@ class FrozenBenchmarkRunner:
                 n_eval_feature_valid_rows=n_eval_feature_valid,
             )
 
-        # FeatureBatch.X only contains valid featurized rows, so we must project
-        # original-frame masks down to feature-matrix masks.
         train_label_mask_among_valid = train_label_mask[train_features.valid_mask]
         eval_label_mask_among_valid = eval_label_mask[eval_features.valid_mask]
 
@@ -236,6 +231,7 @@ class FrozenBenchmarkRunner:
         if dataset.task_type == "classification":
             y_train = y_train.astype(int)
             y_eval = y_eval.astype(int)
+
             if len(np.unique(y_train)) < 2:
                 return None, TaskSkip(
                     dataset=dataset.name,
@@ -247,6 +243,9 @@ class FrozenBenchmarkRunner:
                     n_train_feature_valid_rows=n_train_feature_valid,
                     n_eval_feature_valid_rows=n_eval_feature_valid,
                 )
+        else:
+            y_train = y_train.astype(float)
+            y_eval = y_eval.astype(float)
 
         pred = fit_predict_downstream(
             task_type=dataset.task_type,
@@ -294,6 +293,9 @@ class FrozenBenchmarkRunner:
 
         rows = []
         for task_result in result.task_results:
+            train_feature_metadata = task_result.feature_metadata.get("train", {})
+            eval_feature_metadata = task_result.feature_metadata.get("eval", {})
+
             base = {
                 "dataset": task_result.dataset,
                 "task": task_result.task,
@@ -302,6 +304,10 @@ class FrozenBenchmarkRunner:
                 "featurizer": task_result.featurizer,
                 "n_train": task_result.n_train,
                 "n_eval": task_result.n_eval,
+                "n_train_total": task_result.n_train_total,
+                "n_eval_total": task_result.n_eval_total,
+                "n_train_feature_valid": task_result.n_train_feature_valid,
+                "n_eval_feature_valid": task_result.n_eval_feature_valid,
                 "train_feature_invalid_rate": 1.0
                 - (
                     task_result.n_train_feature_valid
@@ -309,12 +315,18 @@ class FrozenBenchmarkRunner:
                 ),
                 "eval_feature_invalid_rate": 1.0
                 - (task_result.n_eval_feature_valid / max(1, task_result.n_eval_total)),
+                "train_feature_cache_key": train_feature_metadata.get("cache_key"),
+                "eval_feature_cache_key": eval_feature_metadata.get("cache_key"),
+                "train_feature_dim": train_feature_metadata.get("n_features"),
+                "eval_feature_dim": eval_feature_metadata.get("n_features"),
             }
+
             for metric_name, metric_value in task_result.metrics.items():
                 base[metric_name] = metric_value
 
             base["model_type"] = task_result.downstream_metadata.get("downstream_model")
             base["standardize"] = task_result.downstream_metadata.get("standardize")
+
             for key, value in task_result.downstream_metadata.items():
                 if key in {"downstream_model", "standardize"}:
                     continue
@@ -327,27 +339,12 @@ class FrozenBenchmarkRunner:
 
 
 def _valid_label_mask(frame: pd.DataFrame, task: str) -> np.ndarray:
-    y = pd.to_numeric(frame[task], errors="coerce").to_numpy()
+    y = pd.to_numeric(frame[task], errors="coerce").to_numpy(dtype=float)
     mask = np.isfinite(y)
 
     weight_col = f"{task}__weight"
     if weight_col in frame.columns:
-        w = pd.to_numeric(frame[weight_col], errors="coerce").to_numpy()
+        w = pd.to_numeric(frame[weight_col], errors="coerce").to_numpy(dtype=float)
         mask = mask & np.isfinite(w) & (w != 0)
 
-    return mask
-
-
-def _safe_featurizer_metadata(featurizer: RepresentationFeaturizer) -> dict[str, Any]:
-    """Best-effort cache metadata from a featurizer object.
-
-    Only simple JSON-serializable values are retained.
-    """
-
-    metadata: dict[str, Any] = {}
-    for key, value in getattr(featurizer, "__dict__", {}).items():
-        if key.startswith("_"):
-            continue
-        if isinstance(value, (str, int, float, bool, type(None))):
-            metadata[key] = value
-    return metadata
+    return np.asarray(mask, dtype=bool)

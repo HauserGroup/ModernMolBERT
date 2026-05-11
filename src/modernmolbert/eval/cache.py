@@ -1,103 +1,328 @@
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict, is_dataclass
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+import tempfile
+import time
+from typing import Any
 
 import numpy as np
+import pandas as pd
 
-from modernmolbert.eval.featurizers.base import FeatureBatch
-from modernmolbert.eval.io import ensure_dir, read_json, write_json
-
-
-@dataclass(frozen=True)
-class FeatureCacheKey:
-    dataset_name: str
-    split_name: str
-    smiles_hash: str
-    featurizer_name: str
-    featurizer_metadata: dict[str, Any] = field(default_factory=dict)
-
-    def digest(self) -> str:
-        payload = json.dumps(asdict(self), sort_keys=True, default=str)
-        return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
+from modernmolbert.eval.featurizers.base import FeatureBatch, RepresentationFeaturizer
 
 
-@dataclass(frozen=True)
-class FeatureCache:
-    root: Path
+def _json_safe(value: Any) -> Any:
+    """Convert common Python objects to JSON-safe values for cache metadata."""
 
-    def split_dir(self, key: FeatureCacheKey) -> Path:
-        safe_dataset = _safe_name(key.dataset_name)
-        safe_featurizer = _safe_name(key.featurizer_name)
-        return (
-            self.root / safe_dataset / key.split_name / safe_featurizer / key.digest()
-        )
+    if isinstance(value, Path):
+        return str(value)
 
-    def exists(self, key: FeatureCacheKey) -> bool:
-        path = self.split_dir(key)
-        return (
-            (path / "features.npy").exists()
-            and (path / "valid_mask.npy").exists()
-            and (path / "metadata.json").exists()
-        )
+    if isinstance(value, np.generic):
+        return value.item()
 
-    def load(self, key: FeatureCacheKey, n_inputs: int) -> FeatureBatch:
-        path = self.split_dir(key)
-        X = np.load(path / "features.npy", allow_pickle=False)
-        valid_mask = np.load(path / "valid_mask.npy", allow_pickle=False)
-        metadata = read_json(path / "metadata.json")
-        out = FeatureBatch(X=X, valid_mask=valid_mask, metadata=metadata)
-        out.check(n_inputs)
-        return out
+    if isinstance(value, np.ndarray):
+        return value.tolist()
 
-    def save(self, key: FeatureCacheKey, features: FeatureBatch) -> Path:
-        path = ensure_dir(self.split_dir(key))
-        np.save(path / "features.npy", features.X)
-        np.save(path / "valid_mask.npy", features.valid_mask)
-        write_json(
-            path / "metadata.json",
-            {
-                "cache_key": asdict(key),
-                "feature_metadata": features.metadata,
-                "n_valid": int(features.valid_mask.sum()),
-                "n_inputs": int(features.valid_mask.shape[0]),
-                "feature_dim": int(features.X.shape[1])
-                if features.X.ndim == 2
-                else None,
-            },
-        )
-        return path
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+
+    if isinstance(value, set):
+        return sorted(_json_safe(item) for item in value)
+
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+
+    return str(value)
 
 
-def _safe_name(value: str) -> str:
-    keep = []
-    for ch in value:
-        if ch.isalnum() or ch in {"-", "_", "."}:
-            keep.append(ch)
+def hash_molecule_values(values: Sequence[Any]) -> str:
+    """Hash ordered molecule values exactly as passed to the featurizer.
+
+    The order is intentionally part of the hash because FeatureBatch.X rows and
+    valid_mask are tied to the input order.
+    """
+
+    h = hashlib.sha256()
+
+    for value in values:
+        if value is None or pd.isna(value):
+            text = "<NA>"
         else:
-            keep.append("_")
-    return "".join(keep)
+            text = str(value)
+
+        h.update(text.encode("utf-8"))
+        h.update(b"\0")
+
+    return h.hexdigest()
+
+
+def _public_featurizer_params(featurizer: RepresentationFeaturizer) -> dict[str, Any]:
+    """Return JSON-safe public featurizer parameters.
+
+    Avoid storing loaded model/tokenizer objects. This identity should reflect
+    the configuration that affects the generated features.
+    """
+
+    if is_dataclass(featurizer):
+        params = asdict(featurizer)
+    else:
+        params = {
+            key: value
+            for key, value in vars(featurizer).items()
+            if not key.startswith("_")
+        }
+
+    # Exclude heavy/runtime objects if present.
+    for key in [
+        "model",
+        "tokenizer",
+        "_device",
+        "_eligible_replacement_ids",
+    ]:
+        params.pop(key, None)
+
+    return _json_safe(params)
+
+
+def featurizer_cache_identity(
+    featurizer: RepresentationFeaturizer,
+) -> dict[str, Any]:
+    """Return a stable-ish identity for a featurizer instance."""
+
+    return {
+        "name": featurizer.name,
+        "class": (
+            f"{featurizer.__class__.__module__}.{featurizer.__class__.__qualname__}"
+        ),
+        "params": _public_featurizer_params(featurizer),
+    }
+
+
+def compute_feature_cache_key(
+    *,
+    dataset_name: str,
+    split_name: str,
+    smiles_column: str,
+    molecule_hash: str,
+    featurizer_identity: Mapping[str, Any],
+) -> str:
+    """Compute a stable cache key for one dataset split and featurizer."""
+
+    payload = {
+        "dataset_name": dataset_name,
+        "split_name": split_name,
+        "smiles_column": smiles_column,
+        "molecule_hash": molecule_hash,
+        "featurizer": _json_safe(dict(featurizer_identity)),
+    }
+
+    text = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:24]
+
+
+def feature_cache_entry_dir(cache_dir: Path, cache_key: str) -> Path:
+    """Return the directory for one cached feature entry."""
+
+    return cache_dir / "features" / cache_key
+
+
+def save_feature_batch(
+    *,
+    batch: FeatureBatch,
+    cache_entry_dir: Path,
+    metadata: Mapping[str, Any],
+) -> None:
+    """Save a FeatureBatch and metadata to disk.
+
+    Writes through a temporary directory and then atomically renames it into
+    place. This avoids partially-written cache entries.
+    """
+
+    cache_entry_dir.parent.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory(
+        prefix=f".{cache_entry_dir.name}.tmp-",
+        dir=str(cache_entry_dir.parent),
+    ) as tmp_name:
+        tmp_dir = Path(tmp_name)
+
+        np.save(tmp_dir / "features.npy", batch.X)
+        np.save(tmp_dir / "valid_mask.npy", batch.valid_mask)
+
+        metadata_out = _json_safe(dict(metadata))
+        (tmp_dir / "metadata.json").write_text(
+            json.dumps(metadata_out, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        if cache_entry_dir.exists():
+            # Replace old cache entry atomically enough for local single-process use.
+            for child in cache_entry_dir.iterdir():
+                child.unlink()
+            cache_entry_dir.rmdir()
+
+        tmp_dir.rename(cache_entry_dir)
+
+
+def load_feature_batch(
+    *,
+    cache_entry_dir: Path,
+    n_inputs: int,
+) -> FeatureBatch:
+    """Load a FeatureBatch from a cache entry directory."""
+
+    features_path = cache_entry_dir / "features.npy"
+    mask_path = cache_entry_dir / "valid_mask.npy"
+    metadata_path = cache_entry_dir / "metadata.json"
+
+    if not features_path.exists():
+        raise FileNotFoundError(f"Missing cached features: {features_path}")
+
+    if not mask_path.exists():
+        raise FileNotFoundError(f"Missing cached valid mask: {mask_path}")
+
+    if not metadata_path.exists():
+        raise FileNotFoundError(f"Missing cached metadata: {metadata_path}")
+
+    X = np.load(features_path)
+    valid_mask = np.load(mask_path)
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+
+    batch = FeatureBatch(
+        X=X,
+        valid_mask=valid_mask,
+        metadata=metadata,
+    )
+    batch.check(n_inputs=n_inputs)
+    return batch
+
+
+def _validate_cache_metadata(
+    *,
+    metadata: Mapping[str, Any],
+    dataset_name: str,
+    split_name: str,
+    smiles_column: str,
+    n_rows: int,
+    molecule_hash: str,
+    featurizer_name: str,
+) -> None:
+    """Validate that a cache entry matches the requested computation."""
+
+    checks = {
+        "dataset_name": dataset_name,
+        "split_name": split_name,
+        "smiles_column": smiles_column,
+        "n_rows": n_rows,
+        "molecule_hash": molecule_hash,
+        "featurizer_name": featurizer_name,
+    }
+
+    for key, expected in checks.items():
+        observed = metadata.get(key)
+        if observed != expected:
+            raise ValueError(
+                f"Cache metadata mismatch for {key!r}: "
+                f"expected {expected!r}, observed {observed!r}"
+            )
 
 
 def get_or_compute_features(
     *,
-    cache: FeatureCache | None,
-    cache_key: FeatureCacheKey,
-    smiles: Sequence[str],
-    featurizer,
+    dataset_name: str,
+    split_name: str,
+    frame: pd.DataFrame,
+    smiles_column: str,
+    featurizer: RepresentationFeaturizer,
+    cache_dir: Path | None,
+    use_cache: bool,
     batch_size: int,
-    use_cache: bool = True,
 ) -> FeatureBatch:
-    n_inputs = len(smiles)
+    """Load features from cache or compute them with a featurizer.
 
-    if use_cache and cache is not None and cache.exists(cache_key):
-        return cache.load(cache_key, n_inputs=n_inputs)
+    Cache identity depends only on dataset split, ordered molecule values,
+    molecule column name, and featurizer identity. It intentionally does not
+    depend on downstream model settings or random seeds.
+    """
 
-    features = featurizer.featurize_smiles(smiles, batch_size=batch_size)
-    features.check(n_inputs)
+    if smiles_column not in frame.columns:
+        raise ValueError(
+            f"Split {split_name!r} is missing SMILES column {smiles_column!r}"
+        )
 
-    if use_cache and cache is not None:
-        cache.save(cache_key, features)
+    smiles_values = frame[smiles_column].tolist()
+    molecule_hash = hash_molecule_values(smiles_values)
+    featurizer_identity = featurizer_cache_identity(featurizer)
 
-    return features
+    cache_key = compute_feature_cache_key(
+        dataset_name=dataset_name,
+        split_name=split_name,
+        smiles_column=smiles_column,
+        molecule_hash=molecule_hash,
+        featurizer_identity=featurizer_identity,
+    )
+
+    cache_entry_dir: Path | None = None
+
+    if cache_dir is not None:
+        cache_entry_dir = feature_cache_entry_dir(Path(cache_dir), cache_key)
+
+    if use_cache and cache_entry_dir is not None and cache_entry_dir.exists():
+        batch = load_feature_batch(
+            cache_entry_dir=cache_entry_dir,
+            n_inputs=len(frame),
+        )
+        _validate_cache_metadata(
+            metadata=batch.metadata,
+            dataset_name=dataset_name,
+            split_name=split_name,
+            smiles_column=smiles_column,
+            n_rows=len(frame),
+            molecule_hash=molecule_hash,
+            featurizer_name=featurizer.name,
+        )
+        return batch
+
+    batch = featurizer.featurize_smiles(
+        [str(value) if not pd.isna(value) else "" for value in smiles_values],
+        batch_size=batch_size,
+    )
+    batch.check(n_inputs=len(frame))
+
+    metadata = {
+        "cache_key": cache_key,
+        "created_at_unix": time.time(),
+        "dataset_name": dataset_name,
+        "split_name": split_name,
+        "smiles_column": smiles_column,
+        "n_rows": int(len(frame)),
+        "n_valid": int(batch.valid_mask.sum()),
+        "n_invalid": int((~batch.valid_mask).sum()),
+        "invalid_fraction": float((~batch.valid_mask).mean()) if len(frame) else 0.0,
+        "n_features": int(batch.X.shape[1]) if batch.X.ndim == 2 else 0,
+        "molecule_hash": molecule_hash,
+        "featurizer_name": featurizer.name,
+        "featurizer_identity": featurizer_identity,
+        "featurizer_metadata": batch.metadata,
+    }
+
+    batch = FeatureBatch(
+        X=batch.X,
+        valid_mask=batch.valid_mask,
+        metadata=metadata,
+    )
+    batch.check(n_inputs=len(frame))
+
+    if use_cache and cache_entry_dir is not None:
+        save_feature_batch(
+            batch=batch,
+            cache_entry_dir=cache_entry_dir,
+            metadata=metadata,
+        )
+
+    return batch

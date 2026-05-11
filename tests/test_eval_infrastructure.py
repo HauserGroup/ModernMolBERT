@@ -1,6 +1,4 @@
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -325,81 +323,6 @@ def test_classification_metrics_one_class_returns_nans_for_rank_metrics() -> Non
     assert np.isnan(metrics["balanced_accuracy"])
     assert np.isnan(metrics["roc_auc"])
     assert np.isnan(metrics["average_precision"])
-
-
-def test_cli_run_frozen_benchmark_with_dummy_featurizer(tmp_path: Path) -> None:
-    train_csv = tmp_path / "train.csv"
-    test_csv = tmp_path / "test.csv"
-    config_json = tmp_path / "dummy.json"
-    output_dir = tmp_path / "results"
-
-    pd.DataFrame(
-        {
-            "smiles": ["CCO", "CCN", "c1ccccc1", "CCCl", "CCBr", "CO"],
-            "label": [0, 0, 1, 1, 1, 0],
-        }
-    ).to_csv(train_csv, index=False)
-
-    pd.DataFrame(
-        {
-            "smiles": ["CCO", "c1ccccc1", "CCBr", "CO"],
-            "label": [0, 1, 1, 0],
-        }
-    ).to_csv(test_csv, index=False)
-
-    config_json.write_text(
-        json.dumps(
-            {
-                "type": "dummy",
-                "name": "dummy_cli",
-                "n_features": 8,
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    cmd = [
-        sys.executable,
-        "-m",
-        "modernmolbert.eval.cli.run_frozen_benchmark",
-        "--name",
-        "tiny_cli",
-        "--task_type",
-        "classification",
-        "--task_names",
-        "label",
-        "--train_csv",
-        str(train_csv),
-        "--test_csv",
-        str(test_csv),
-        "--featurizer_config",
-        str(config_json),
-        "--output_dir",
-        str(output_dir),
-        "--cache_dir",
-        str(tmp_path / "cache"),
-        "--batch_size",
-        "2",
-    ]
-
-    result = subprocess.run(
-        cmd,
-        cwd=Path(__file__).resolve().parents[1],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-        timeout=120,
-    )
-
-    assert result.returncode == 0, result.stdout
-    assert (output_dir / "results.json").exists()
-    assert (output_dir / "results.csv").exists()
-
-    payload = json.loads((output_dir / "results.json").read_text())
-    assert payload["dataset"] == "tiny_cli"
-    assert payload["featurizer"] == "dummy_cli"
-    assert len(payload["task_results"]) == 1
 
 
 def test_feature_batch_shape_check_fails_on_non_numeric_features() -> None:

@@ -32,8 +32,6 @@ class DownstreamPrediction:
 
 @dataclass(frozen=True)
 class FrozenDownstreamConfig:
-    """Configuration for one downstream model used on frozen features."""
-
     model_type: str = "auto"
     params: dict[str, object] | None = None
     random_state: int = 13
@@ -226,9 +224,7 @@ def fit_predict_downstream(
         raise ValueError(f"X_eval must be 2D, got shape {X_eval.shape}")
 
     if len(X_train) != len(y_train):
-        raise ValueError(
-            f"X_train and y_train length mismatch: {len(X_train)} != {len(y_train)}"
-        )
+        raise ValueError(f"X_train and y_train length mismatch: {len(X_train)} != {len(y_train)}")
 
     if task_type == "classification":
         y_train_int = np.asarray(y_train).astype(int)

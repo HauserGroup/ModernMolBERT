@@ -1196,6 +1196,7 @@ dependencies = [
     { name = "huggingface-hub" },
     { name = "iprogress" },
     { name = "ipykernel" },
+    { name = "matplotlib" },
     { name = "numpy" },
     { name = "python-dotenv" },
     { name = "tensorboard" },
@@ -1219,7 +1220,6 @@ eval = [
     { name = "deepchem" },
     { name = "rdkit" },
     { name = "selfies" },
-    { name = "yellowbrick" },
 ]
 eval-prep = [
     { name = "deepchem" },
@@ -1242,6 +1242,7 @@ requires-dist = [
     { name = "huggingface-hub", specifier = ">=1.14.0" },
     { name = "iprogress", specifier = ">=0.4" },
     { name = "ipykernel", specifier = ">=7.2.0" },
+    { name = "matplotlib", specifier = ">=3.10.9" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "tensorboard", specifier = ">=2.19.0" },
@@ -1261,7 +1262,6 @@ eval = [
     { name = "deepchem", specifier = ">=2.8.0" },
     { name = "rdkit", specifier = ">=2026.3.1" },
     { name = "selfies", specifier = ">=2.2.0" },
-    { name = "yellowbrick", specifier = ">=1.5" },
 ]
 eval-prep = [
     { name = "deepchem", specifier = ">=2.8.0" },
@@ -2859,20 +2859,4 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/19/3774d162f6732d1cfb0b47b4140a942a35ca82bb19b6db1f80e9e7bdc8f8/yarl-1.23.0-cp314-cp314t-win_amd64.whl", hash = "sha256:4503053d296bc6e4cbd1fad61cf3b6e33b939886c4f249ba7c78b602214fabe2", size = 97610, upload-time = "2026-03-01T22:07:45.773Z" },
     { url = "https://files.pythonhosted.org/packages/51/47/3fa2286c3cb162c71cdb34c4224d5745a1ceceb391b2bd9b19b668a8d724/yarl-1.23.0-cp314-cp314t-win_arm64.whl", hash = "sha256:44bb7bef4ea409384e3f8bc36c063d77ea1b8d4a5b2706956c0d6695f07dcc25", size = 86041, upload-time = "2026-03-01T22:07:49.026Z" },
     { url = "https://files.pythonhosted.org/packages/69/68/c8739671f5699c7dc470580a4f821ef37c32c4cb0b047ce223a7f115757f/yarl-1.23.0-py3-none-any.whl", hash = "sha256:a2df6afe50dea8ae15fa34c9f824a3ee958d785fd5d089063d960bae1daa0a3f", size = 48288, upload-time = "2026-03-01T22:07:51.388Z" },
-]
-
-[[package]]
-name = "yellowbrick"
-version = "1.5"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "cycler" },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/76/6c/91ae3fcc99173f3b90642eb8b9eb6faac4e21dba6020566c751535e72554/yellowbrick-1.5.tar.gz", hash = "sha256:99a6336dd2e7ce586a8cde67966b79c51b479d3759f3c083d7e19ffe949f6076", size = 20011001, upload-time = "2022-08-21T12:47:13.447Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/06/35/c7d44bb541c06bc41b3239b27af79ea0ecc7dbb156ee1335576f99c58b91/yellowbrick-1.5-py3-none-any.whl", hash = "sha256:4bb2895cecf94a0e736398bbac6c5d72032ba3ff2273f49df660b14ef419305d", size = 282603, upload-time = "2022-08-21T12:47:09.456Z" },
 ]

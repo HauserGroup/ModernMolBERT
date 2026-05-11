@@ -28,7 +28,7 @@ featurizers:
   - type: modernmolbert_selfies
     name: modernmolbert_pilot
     model_dir: runs/pubchem10m_mps_base_pilot_256/final_model
-    tokenizer_path: runs/pubchem10m_mps_base_pilot_256/final_model/tokenizer.json
+    tokenizer_path: runs/pubchem10m_mps_base_pilot_256/final_model
     max_seq_length: 256
     pooling: mean
     device: auto

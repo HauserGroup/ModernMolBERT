@@ -1,5 +1,20 @@
 # %%
 """
+Educational manual example.
+
+This notebook demonstrates ECFP4 featurization and a simple sklearn model on one
+
+prepared MoleculeNet dataset. It is not the canonical benchmark path.
+
+For benchmark results, use the suite runner:
+
+    uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
+
+      --suite configs/eval_suites/pilot_core.yaml \
+
+      --output_dir outputs/eval/pilot_core
+
+
 Frozen ModernMolBERT embedding baseline on prepared MoleculeNet data.
 
 This percent-format notebook demonstrates the frozen-featurizer workflow:
@@ -93,13 +108,9 @@ TOKENIZER_METADATA_PATH = MODEL_DIR / "tokenizer_metadata.json"
 
 assert MODEL_DIR.exists(), f"Missing model directory: {MODEL_DIR}"
 assert (MODEL_DIR / "config.json").exists(), f"Missing config.json in {MODEL_DIR}"
-assert (MODEL_DIR / "model.safetensors").exists(), (
-    f"Missing model.safetensors in {MODEL_DIR}"
-)
+assert (MODEL_DIR / "model.safetensors").exists(), f"Missing model.safetensors in {MODEL_DIR}"
 assert TOKENIZER_PATH.exists(), f"Missing tokenizer: {TOKENIZER_PATH}"
-assert TOKENIZER_METADATA_PATH.exists(), (
-    f"Missing tokenizer metadata: {TOKENIZER_METADATA_PATH}"
-)
+assert TOKENIZER_METADATA_PATH.exists(), f"Missing tokenizer metadata: {TOKENIZER_METADATA_PATH}"
 
 
 # %%
@@ -218,12 +229,8 @@ def keep_valid_selfies(selfies_list: list[str | None], y: np.ndarray):
 train_selfies_raw = smiles_list_to_selfies(train_smiles)
 test_selfies_raw = smiles_list_to_selfies(test_smiles)
 
-train_selfies, y_train_selfies, train_selfies_mask = keep_valid_selfies(
-    train_selfies_raw, y_train
-)
-test_selfies, y_test_selfies, test_selfies_mask = keep_valid_selfies(
-    test_selfies_raw, y_test
-)
+train_selfies, y_train_selfies, train_selfies_mask = keep_valid_selfies(train_selfies_raw, y_train)
+test_selfies, y_test_selfies, test_selfies_mask = keep_valid_selfies(test_selfies_raw, y_test)
 
 print("Train SELFIES valid:", len(train_selfies), "/", len(train_smiles))
 print("Test SELFIES valid: ", len(test_selfies), "/", len(test_smiles))
@@ -236,11 +243,7 @@ print("Example SELFIES:", train_selfies[0])
 # Load frozen ModernMolBERT and APETokenizer.
 
 device = (
-    "mps"
-    if torch.backends.mps.is_available()
-    else "cuda"
-    if torch.cuda.is_available()
-    else "cpu"
+    "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 )
 
 print("Device:", device)
@@ -474,9 +477,7 @@ OUTPUT_DIR = outputs_path("examples", "modernmolbert_moleculenet")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 safe_task_name = TASK_NAME.replace("/", "_").replace(" ", "_")
-out_path = (
-    OUTPUT_DIR / f"{DATASET_NAME}_{safe_task_name}_modernmolbert_{MODEL_KIND}.csv"
-)
+out_path = OUTPUT_DIR / f"{DATASET_NAME}_{safe_task_name}_modernmolbert_{MODEL_KIND}.csv"
 
 metrics_df.round(4).to_csv(out_path, index=False)
 

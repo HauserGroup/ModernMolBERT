@@ -1,7 +1,7 @@
 {
   "device": "auto",
   "max_seq_length": 256,
-  "model_name_or_path": "ibm/MoLFormer-XL-both-10pct",
+  "model_name_or_path": "ibm-research/MoLFormer-XL-both-10pct",
   "name": "molformer_xl_both_10pct",
   "pooling": "mean",
   "trust_remote_code": true,

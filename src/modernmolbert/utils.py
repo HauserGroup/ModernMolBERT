@@ -51,9 +51,7 @@ def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -
     return SELFIES_REPRESENTATION
 
 
-def infer_validation_split(
-    dataset_name: str, validation_split: str | None = None
-) -> str | None:
+def infer_validation_split(dataset_name: str, validation_split: str | None = None) -> str | None:
     if validation_split is not None:
         return validation_split
     if dataset_name == ZINC20_DATASET:
@@ -130,9 +128,7 @@ def find_local_dataset(
     """
     if data_dir is not None:
         if not (data_dir / "dataset_info.json").exists():
-            raise FileNotFoundError(
-                f"Invalid data_dir: {data_dir}. Missing dataset_info.json."
-            )
+            raise FileNotFoundError(f"Invalid data_dir: {data_dir}. Missing dataset_info.json.")
         return data_dir
 
     search_root = repo_root() / "data"
@@ -142,9 +138,7 @@ def find_local_dataset(
     for candidate in sorted(search_root.iterdir()):
         if not candidate.is_dir() or not (candidate / "dataset_info.json").exists():
             continue
-        if dataset_name is None or _local_dataset_matches_request(
-            candidate, dataset_name
-        ):
+        if dataset_name is None or _local_dataset_matches_request(candidate, dataset_name):
             return candidate
 
     return None
@@ -196,9 +190,7 @@ def copy_tokenizer_artifacts(
     shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")
 
 
-def assert_metadata_representation(
-    metadata: dict[str, Any], expected_representation: str
-) -> None:
+def assert_metadata_representation(metadata: dict[str, Any], expected_representation: str) -> None:
     representation = str(metadata.get("representation", "")).upper()
     if representation != expected_representation:
         raise ValueError(
@@ -281,7 +273,7 @@ def get_streaming_dataset(
         raw = load_from_disk(str(local))
         if isinstance(raw, DatasetDict):
             if split not in raw:
-                available = ", ".join(sorted(str(k) for k in raw.keys()))
+                available = ", ".join(sorted(str(k) for k in raw))
                 raise ValueError(
                     f"Local dataset at {local} has no split '{split}'. "
                     f"Available splits: {available}"
@@ -295,9 +287,7 @@ def get_streaming_dataset(
                     "Either disable --use_validation_split or save a DatasetDict with splits."
                 )
             return raw.shuffle(seed=seed).to_iterable_dataset()
-        raise ValueError(
-            f"Unsupported local dataset type at {local}: {type(raw).__name__}"
-        )
+        raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
     print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
     try:
         hf_ds = load_dataset(dataset_name, split=split, streaming=True)
@@ -397,7 +387,7 @@ def resolve_special_ids(tokenizer: APETokenizer) -> dict[str, int]:
     for name, token in SPECIAL_TOKENS.items():
         try:
             ids[name] = token_id(tokenizer, token)
-        except Exception:
+        except Exception as err:
             attr_name = name + "_id"
             if hasattr(tokenizer, attr_name):
                 ids[name] = int(getattr(tokenizer, attr_name))
@@ -405,13 +395,11 @@ def resolve_special_ids(tokenizer: APETokenizer) -> dict[str, int]:
                 raise RuntimeError(
                     f"Could not resolve ID for special token {token!r}. "
                     "Check APETokenizer special-token names."
-                )
+                ) from err
     return ids
 
 
-def encode_sequence(
-    tokenizer: APETokenizer, seq: str, max_seq_length: int
-) -> dict[str, list[int]]:
+def encode_sequence(tokenizer: APETokenizer, seq: str, max_seq_length: int) -> dict[str, list[int]]:
     encoded = tokenizer(
         seq,
         padding=False,

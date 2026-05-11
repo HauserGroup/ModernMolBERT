@@ -2,8 +2,9 @@
   "batch_size": 32,
   "device": "auto",
   "max_seq_length": 256,
-  "model_dir": "outputs/modernmolbert/final_model",
+  "model_dir": "runs/pubchem10m_mps_base_pilot_256/final_model",
+  "name": "modernmolbert_selfies",
   "pooling": "mean",
-  "tokenizer_path": "outputs/modernmolbert/final_model",
+  "tokenizer_path": "runs/pubchem10m_mps_base_pilot_256/final_model",
   "type": "modernmolbert_selfies"
 }

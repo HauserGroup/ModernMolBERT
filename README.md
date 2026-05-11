@@ -409,28 +409,6 @@ The ModernMolBERT featurizer accepts SMILES as input, converts valid SMILES to S
 
 Other featurizers and external baselines are documented in [docs/baselines.md](docs/baselines.md).
 
-## Optional one-off frozen benchmark
-
-For ad hoc debugging, a one-off frozen benchmark CLI may be used:
-
-```bash
-uv run python -m modernmolbert.eval.cli.run_frozen_benchmark \
-  --name modernmolbert_smoke \
-  --task_type classification \
-  --task_names label \
-  --train_csv path/to/train.csv \
-  --test_csv path/to/test.csv \
-  --featurizer_config configs/featurizers/modernmolbert_selfies.json \
-  --output_dir outputs/eval/modernmolbert_smoke \
-  --cache_dir outputs/eval/cache \
-  --batch_size 32
-```
-
-For reproducible benchmark results, prefer the suite runner:
-
-```bash
-uv run python -m modernmolbert.eval.cli.run_benchmark_suite
-```
 
 ## TensorBoard
 
@@ -523,6 +501,41 @@ with torch.no_grad():
 assert torch.isfinite(out.logits).all()
 print("reload ok", out.logits.shape)
 PY
+```
+
+## Evaluation
+
+Prepare MoleculeNet datasets, then run benchmark suites through the shared suite CLI.
+
+```bash
+uv run python -m modernmolbert.eval.cli.prepare_moleculenet \
+  --split scaffold \
+  --seed 13 \
+  --output_root data/eval/moleculenet_sanitized \
+  --deepchem_data_dir data/deepchem/raw \
+  --deepchem_save_dir data/deepchem/processed
+
+uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
+  --suite configs/eval_suites/pilot_core.yaml \
+  --output_dir outputs/eval/pilot_core \
+  --overwrite
+
+uv run python -m modernmolbert.eval.cli.report_benchmark_results \
+  --results_csv outputs/eval/pilot_core/results.csv \
+  --output_dir outputs/eval/pilot_core/report
+```
+
+## Benchmark suites are the canonical evaluation path
+
+For reproducible benchmark results, use the suite runner:
+
+```bash
+
+uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
+  --suite configs/eval_suites/pilot_core.yaml \
+  --output_dir outputs/eval/pilot_core \
+  --overwrite
+
 ```
 
 ### Benchmark results differ between scripts

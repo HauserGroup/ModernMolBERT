@@ -2,7 +2,8 @@ from collections.abc import Mapping
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from modernmolbert.eval.featurizers.base import RepresentationFeaturizer
 from modernmolbert.eval.featurizers.dummy import DummyFeaturizer
@@ -89,8 +90,7 @@ def load_featurizer_config(config: Mapping[str, Any] | str | Path) -> dict[str, 
 
     if config_path.suffix.lower() != ".json":
         raise ValueError(
-            f"Unsupported featurizer config format: {config_path}. "
-            "Use a JSON config file."
+            f"Unsupported featurizer config format: {config_path}. Use a JSON config file."
         )
 
     data = json.loads(config_path.read_text(encoding="utf-8"))

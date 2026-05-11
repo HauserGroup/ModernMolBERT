@@ -2,7 +2,7 @@
 """Train an APE tokenizer for SELFIES and emit metadata."""
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -47,8 +47,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Local Arrow dataset directory. If omitted, auto-detect a matching "
-            "dataset in data/."
+            "Local Arrow dataset directory. If omitted, auto-detect a matching dataset in data/."
         ),
     )
     parser.add_argument(
@@ -127,7 +126,7 @@ def main() -> None:
         "shuffle_buffer_size": args.shuffle_buffer_size,
         "seed": args.seed,
         "ape_source": args.ape_source,
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "created_at_utc": datetime.now(UTC).isoformat(),
         "vocab_size": vocab_size,
         "special_ids": special_ids,
         "tokenizer_path": str(output_vocab_path),

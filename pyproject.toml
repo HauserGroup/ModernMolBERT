@@ -10,6 +10,7 @@ dependencies = [
     "huggingface-hub>=1.14.0",
     "iprogress>=0.4",
     "ipykernel>=7.2.0",
+    "matplotlib>=3.10.9",
     "numpy>=2.4.4",
     "python-dotenv>=1.0.0",
     "tensorboard>=2.19.0",
@@ -28,7 +29,6 @@ eval = [
     "deepchem>=2.8.0",
     "rdkit>=2026.3.1",
     "selfies>=2.2.0",
-    "yellowbrick>=1.5",
 ]
 eval-prep = [
     "deepchem>=2.8.0",

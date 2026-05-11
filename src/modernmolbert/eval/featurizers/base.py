@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Any, Protocol, Sequence
+from typing import Any, Protocol
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -34,9 +35,7 @@ class FeatureBatch:
             raise TypeError(f"X must be a numpy array, got {type(self.X)!r}")
 
         if not isinstance(self.valid_mask, np.ndarray):
-            raise TypeError(
-                f"valid_mask must be a numpy array, got {type(self.valid_mask)!r}"
-            )
+            raise TypeError(f"valid_mask must be a numpy array, got {type(self.valid_mask)!r}")
 
         if self.valid_mask.dtype != bool:
             raise TypeError(f"valid_mask must be boolean, got {self.valid_mask.dtype}")

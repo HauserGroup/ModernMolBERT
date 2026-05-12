@@ -102,6 +102,67 @@ def load_example_activity_dataset(*, root: str | Path) -> EvalDataset:
         },
     )
 
+def load_esol(*, root: str | Path) -> EvalDataset:
+    root = Path(root)
+    task_names = ["target"]
+
+    train = pd.read_csv(root / "train.csv")
+    valid_path = root / "valid.csv"
+    valid = pd.read_csv(valid_path) if valid_path.exists() else None
+    test = pd.read_csv(root / "test.csv")
+
+    train = _drop_missing_labels(train, task_names=task_names)
+    test = _drop_missing_labels(test, task_names=task_names)
+    if valid is not None:
+        valid = _drop_missing_labels(valid, task_names=task_names)
+
+    return make_eval_dataset_from_splits(
+        name="esol",
+        task_type="regression",
+        task_names=task_names,
+        train=train,
+        valid=valid,
+        test=test,
+        smiles_column="smiles",
+        metadata={
+            "source": "MoleculeNet ESOL",
+            "missing_label_policy": "Dropped"
+        },
+    )
+
+def load_clintox(*, root: str | Path) -> EvalDataset:
+    root = Path(root)
+    task_names = ["FDA_APPROVED"]
+
+    train = pd.read_csv(root / "train.csv")
+    valid_path = root / "valid.csv"
+    valid = pd.read_csv(valid_path) if valid_path.exists() else None
+    test = pd.read_csv(root / "test.csv")
+
+    train = _drop_missing_labels(train, task_names=task_names)
+    test = _drop_missing_labels(test, task_names=task_names)
+    if valid is not None:
+        valid = _drop_missing_labels(valid, task_names=task_names)
+
+    _validate_binary_labels(train, task_name="FDA_APPROVED", split_name="train")
+    _validate_binary_labels(test, task_name="FDA_APPROVED", split_name="test")
+    if valid is not None:
+        _validate_binary_labels(valid, task_name="FDA_APPROVED", split_name="valid")
+
+    return make_eval_dataset_from_splits(
+        name="clintox",
+        task_type="classification",
+        task_names=task_names,
+        train=train,
+        valid=valid,
+        test=test,
+        smiles_column="smiles",
+        metadata={
+            "source": "MoleculeNet ClinTox",
+            "missing_label_policy": "Dropped"
+        },
+    )
+
 
 def register_contributed_datasets() -> None:
     """Register project-maintained contributed datasets.
@@ -125,5 +186,31 @@ def register_contributed_datasets() -> None:
     #         license="CC-BY-4.0",
     #     )
     # )
+
+    register_dataset(
+        DatasetSpec(
+            name="esol",
+            task_type="regression",
+            task_names=("target",),
+            loader=load_esol,
+            description="ESOL water solubility regression from MoleculeNet.",
+            source="https://moleculenet.org/datasets-1",
+            citation="Wu et al. MoleculeNet: a benchmark for molecular machine learning. Chemical Science (2018).",
+            license="MIT",
+        )
+    )
+
+    register_dataset(
+        DatasetSpec(
+            name="clintox",
+            task_type="classification",
+            task_names=("FDA_APPROVED",),
+            loader=load_clintox,
+            description="ClinTox FDA approval classification from MoleculeNet.",
+            source="https://moleculenet.org/datasets-1",
+            citation="Wu et al. MoleculeNet: a benchmark for molecular machine learning. Chemical Science (2018).",
+            license="MIT",
+        )
+    )
 
     return None

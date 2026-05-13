@@ -6,8 +6,6 @@ This document currently focuses on **evaluation dataset contributions**. Featuri
 
 ---
 
-Document code-based dataset contributions with strict label requirements
-
 ## Scope
 
 The benchmark stack currently supports:
@@ -378,6 +376,7 @@ The example is not registered as a real dataset by default. It is there to show 
  - Suitable for benchmarking i.e. not impossible for an featurizer e.g. no harder than a Random Forest works
  - For regression, approximately normally distributed e.g. pEC50 and not raw EC50
  - Clearly cited and appropriate license
+ - Do not implement datasets from MoleculeNet
 
 ## Checklist
 

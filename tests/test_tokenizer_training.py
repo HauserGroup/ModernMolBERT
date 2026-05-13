@@ -34,6 +34,53 @@ def test_ape_train_does_not_merge_across_molecule_boundaries():
     assert "[O][C]" not in tokenizer.vocabulary
 
 
+def test_smiles_pre_tokenize_preserves_chemical_tokens():
+    tokenizer = APETokenizer(representation="SMILES")
+
+    tokens = tokenizer.pre_tokenize("ClC[C@H](Br)C1=CC=CC=C1")
+
+    assert tokens[:6] == ["Cl", "C", "[C@H]", "(", "Br", ")"]
+    assert tokenizer.pre_tokenize("C%12CCCCC%12")[1] == "%12"
+    assert tokenizer.pre_tokenize(r"C/C=C\C")[5] == "\\"
+
+
+def test_smiles_encoding_uses_ape_merges_over_smiles_tokens():
+    tokenizer = APETokenizer(representation="SMILES")
+    tokenizer.vocabulary = {
+        "<s>": 0,
+        "<pad>": 1,
+        "</s>": 2,
+        "<unk>": 3,
+        "<mask>": 4,
+        "C": 5,
+        "O": 6,
+        "CC": 7,
+        "CCO": 8,
+    }
+    tokenizer.update_reverse_vocabulary()
+
+    ids = tokenizer.encode("CCO", add_special_tokens=True)
+
+    assert ids == [0, 8, 2]
+
+
+def test_train_supports_smiles_representation():
+    tokenizer = APETokenizer(representation="SMILES")
+    corpus = ["CCO", "CCN", "CCC"] * 20
+
+    tokenizer.train(
+        corpus=corpus,
+        representation="SMILES",
+        max_vocab_size=32,
+        min_freq_for_merge=2,
+        save_checkpoint=False,
+    )
+
+    assert tokenizer.representation == "SMILES"
+    assert "C" in tokenizer.vocabulary
+    assert any(token.startswith("CC") for token in tokenizer.vocabulary)
+
+
 def test_save_vocabulary_writes_expected_freq_file(tmp_path):
     tokenizer = APETokenizer()
     vocab_path = tmp_path / "toy_tokenizer.json"
@@ -45,13 +92,14 @@ def test_save_vocabulary_writes_expected_freq_file(tmp_path):
 
 
 def test_from_pretrained_restores_reverse_vocabulary(tmp_path):
-    tokenizer = APETokenizer()
+    tokenizer = APETokenizer(representation="SMILES")
     tokenizer.save_pretrained(str(tmp_path))
 
     loaded = APETokenizer.from_pretrained(str(tmp_path))
 
     bos_id = loaded.vocabulary[loaded.bos_token]
     assert loaded.convert_ids_to_tokens([bos_id]) == [loaded.bos_token]
+    assert loaded.representation == "SMILES"
 
 
 def test_get_special_tokens_mask_returns_input_length_masks():

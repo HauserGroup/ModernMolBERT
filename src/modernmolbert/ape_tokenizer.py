@@ -4,8 +4,27 @@ from collections import defaultdict
 import json
 import os
 import re
-from typing import Any
+from typing import Any, Literal
 from pathlib import Path
+
+
+Representation = Literal["SELFIES", "SMILES"]
+
+SELFIES_RE = re.compile(r"\[[^\]]+\]")
+SMILES_RE = re.compile(
+    r"(\[[^\]]+\]|Br?|Cl?|Si?|Se?|Li?|Na?|Mg?|Al?|Ca?|Fe?|Zn?|"
+    r"N|O|S|P|F|I|K|B|C|H|"
+    r"b|c|n|o|s|p|"
+    r"\%\d{2}|\d|"
+    r"\(|\)|\.|=|#|-|\+|\\|/|:|~|@|\?|\*|\$)"
+)
+
+
+def _normalize_representation(representation: str) -> Representation:
+    normalized = representation.upper()
+    if normalized not in {"SELFIES", "SMILES"}:
+        raise ValueError(f"representation must be 'SELFIES' or 'SMILES', got {representation!r}")
+    return normalized  # type: ignore[return-value]
 
 
 class APETokenizer:
@@ -16,7 +35,9 @@ class APETokenizer:
         eos_token="</s>",
         unk_token="<unk>",
         mask_token="<mask>",
+        representation: str = "SELFIES",
     ):
+        self.representation = _normalize_representation(representation)
         self.pad_token = pad_token
         self.bos_token = bos_token
         self.eos_token = eos_token
@@ -73,29 +94,56 @@ class APETokenizer:
         :param return_tensors: str, the type of tensors to return ('pt' for PyTorch, 'tf' for TensorFlow).
         :return: A dictionary with tokenized and encoded information.
         """
-        # Encode the text using the encode method
-        encoded_inputs = self.encode(
-            text,
-            padding=padding,
-            add_special_tokens=add_special_tokens,
-            max_length=max_length,
-        )
-
-        # Create a dictionary to hold the output
-        outputs: dict[str, Any] = {"input_ids": encoded_inputs}
-
-        # Calculate the attention mask (1 for tokens, 0 for padding)
-        attention_mask = [
-            1 if token_id != self.vocabulary[self.pad_token] else 0 for token_id in encoded_inputs
+        is_batched = isinstance(text, (list, tuple))
+        texts = list(text) if is_batched else [text]
+        encoded_batch = [
+            self.encode(
+                value,
+                padding=False,
+                add_special_tokens=add_special_tokens,
+                max_length=max_length,
+            )
+            for value in texts
         ]
-        outputs["attention_mask"] = attention_mask
 
-        # Truncate the sequences to max_length if necessary
-        if max_length is not None:
-            outputs["input_ids"] = outputs["input_ids"][:max_length]
-            outputs["attention_mask"] = outputs["attention_mask"][:max_length]
+        pad_token_id = self.vocabulary[self.pad_token]
+        should_pad = bool(padding) or return_tensors is not None
+        if should_pad:
+            if padding == "max_length" and max_length is not None:
+                target_length = max_length
+            elif padding is True or padding == "longest" or return_tensors is not None:
+                target_length = max(len(seq) for seq in encoded_batch)
+            else:
+                target_length = None
 
-        # Convert outputs to tensors if return_tensors is specified
+            if target_length is not None:
+                encoded_batch = [
+                    seq[:target_length] + [pad_token_id] * max(0, target_length - len(seq))
+                    for seq in encoded_batch
+                ]
+
+        attention_batch = [
+            [1 if token_id != pad_token_id else 0 for token_id in encoded]
+            for encoded in encoded_batch
+        ]
+
+        if return_tensors is None and not is_batched:
+            outputs: dict[str, Any] = {
+                "input_ids": encoded_batch[0],
+                "attention_mask": attention_batch[0],
+            }
+            return outputs
+
+        outputs = {"input_ids": encoded_batch, "attention_mask": attention_batch}
+
+        if return_tensors is not None:
+            lengths = {len(seq) for seq in encoded_batch}
+            if len(lengths) > 1:
+                raise ValueError(
+                    "Unable to create tensor batch from uneven sequence lengths. "
+                    "Use padding=True or padding='max_length'."
+                )
+
         if return_tensors == "pt":  # For PyTorch
             import torch
 
@@ -110,24 +158,44 @@ class APETokenizer:
         """
         return len(self.vocabulary)
 
-    def pre_tokenize(self, molecule):
-        """Pretokenize SELFIES strings into bracketed tokens.
+    def pre_tokenize(self, molecule, representation: str | None = None):
+        """Pretokenize a molecule string for the configured representation.
 
         SELFIES tokens are bracketed, e.g. [C], [=Branch1], [Ring1].
+        SMILES tokens preserve bracketed atoms, common multi-character atoms,
+        ring closures, and syntax markers before APE merges are learned.
         """
-        words = re.findall(r"\[[^\]]+\]", molecule)
-        return words
+        active_representation = (
+            self.representation
+            if representation is None
+            else _normalize_representation(representation)
+        )
+        if active_representation == "SELFIES":
+            return SELFIES_RE.findall(molecule)
+
+        tokens = []
+        cursor = 0
+        for match in SMILES_RE.finditer(molecule):
+            if match.start() > cursor:
+                tokens.extend(molecule[cursor : match.start()])
+            tokens.append(match.group(0))
+            cursor = match.end()
+        if cursor < len(molecule):
+            tokens.extend(molecule[cursor:])
+        return [token for token in tokens if token and not token.isspace()]
 
     def train(
         self,
         corpus,
         type="selfies",
+        representation: str | None = None,
         max_vocab_size: int = 5000,
         min_freq_for_merge: int = 2000,
         save_checkpoint: bool = False,
         checkpoint_path: str = "checkpoint",
         checkpoint_interval=500,
     ):
+        self.representation = _normalize_representation(representation or type)
         self.max_vocab_size = max_vocab_size
         self.min_freq_for_merge = min_freq_for_merge
         # self.max_token_length = max_token_length
@@ -135,7 +203,7 @@ class APETokenizer:
         text_padding = " " * 80
 
         # Preprocessing: tokenize each molecule separately to preserve boundaries.
-        print("Pretokenizing", end="\r")
+        print(f"Pretokenizing {self.representation}", end="\r")
         tokenized_corpus = [
             tokens for sentence in corpus if (tokens := self.pre_tokenize(sentence))
         ]
@@ -344,18 +412,27 @@ class APETokenizer:
         :param token_ids: List[int], a list of token IDs.
         :return: List[str], a list of string tokens corresponding to the token IDs.
         """
+        if isinstance(token_ids, int):
+            return self.reverse_vocabulary.get(token_ids, self.unk_token)
+
+        if token_ids and isinstance(token_ids[0], list):
+            return [self.convert_ids_to_tokens(ids) for ids in token_ids]
+
         # Map each token ID to its corresponding string token
         return [self.reverse_vocabulary.get(token_id, self.unk_token) for token_id in token_ids]
 
     def encode(self, text, padding=False, max_length=None, add_special_tokens=False):
         """
-        Encode SELFIES text into vocabulary IDs.
+        Encode molecule text into vocabulary IDs.
 
-        This operates on SELFIES pre-tokens, not raw characters. For example:
+        For SELFIES, this operates on SELFIES pre-tokens, not raw characters:
             "[C][C][O]" -> ["[C]", "[C]", "[O]"]
+        For SMILES, it operates on SMILES atom/syntax pre-tokens:
+            "CC(=O)O" -> ["C", "C", "(", "=", "O", ")", "O"]
 
-        Greedy APE matching is then done over spans of SELFIES tokens, so merged
-        vocabulary entries like "[C][C]" or "[C][C][O]" can still be used.
+        Greedy APE matching is then done over spans of representation-specific
+        tokens, so merged vocabulary entries like "[C][C]" or "CC" can still be
+        used.
         """
         encoded_tokens = []
 
@@ -415,7 +492,10 @@ class APETokenizer:
                 indent=4,
             )
 
-    def load_vocabulary(self, file_path):
+    def load_vocabulary(self, file_path, representation: str | None = None):
+        if representation is not None:
+            self.representation = _normalize_representation(representation)
+
         with open(file_path, encoding="utf_8") as f:
             self.vocabulary = json.load(f)
 
@@ -436,6 +516,19 @@ class APETokenizer:
         special_tokens_file = os.path.join(save_directory, "special_tokens.json")
         with open(special_tokens_file, "w", encoding="utf-8") as f:
             json.dump(self.special_tokens, f, ensure_ascii=False, indent=4)
+
+        tokenizer_config_file = os.path.join(save_directory, "tokenizer_config.json")
+        tokenizer_config = {
+            "tokenizer_class": self.__class__.__name__,
+            "representation": self.representation,
+            "bos_token": self.bos_token,
+            "pad_token": self.pad_token,
+            "eos_token": self.eos_token,
+            "unk_token": self.unk_token,
+            "mask_token": self.mask_token,
+        }
+        with open(tokenizer_config_file, "w", encoding="utf-8") as f:
+            json.dump(tokenizer_config, f, ensure_ascii=False, indent=4)
 
         # Save training state
         # Prepare the data to be JSON serializable
@@ -460,6 +553,12 @@ class APETokenizer:
         vocab_file = os.path.join(pretrained_directory, "vocab.json")
         special_tokens_file = os.path.join(pretrained_directory, "special_tokens.json")
         training_state_file = os.path.join(pretrained_directory, "training_state.json")
+        tokenizer_config_file = os.path.join(pretrained_directory, "tokenizer_config.json")
+
+        tokenizer_config = {}
+        if os.path.isfile(tokenizer_config_file):
+            with open(tokenizer_config_file, encoding="utf-8") as f:
+                tokenizer_config = json.load(f)
 
         # Load vocabulary
         if os.path.isfile(vocab_file):
@@ -476,7 +575,14 @@ class APETokenizer:
             raise FileNotFoundError(f"Special tokens file {special_tokens_file} not found.")
 
         # Initialize the tokenizer
-        tokenizer = cls()
+        tokenizer = cls(
+            bos_token=tokenizer_config.get("bos_token", "<s>"),
+            pad_token=tokenizer_config.get("pad_token", "<pad>"),
+            eos_token=tokenizer_config.get("eos_token", "</s>"),
+            unk_token=tokenizer_config.get("unk_token", "<unk>"),
+            mask_token=tokenizer_config.get("mask_token", "<mask>"),
+            representation=tokenizer_config.get("representation", "SELFIES"),
+        )
         tokenizer.vocabulary = vocabulary
         tokenizer.special_tokens = special_tokens
         tokenizer.update_reverse_vocabulary()

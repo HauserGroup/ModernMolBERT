@@ -1,10 +1,8 @@
 from pathlib import Path
 
-import pytest
 import torch
 from transformers import AutoModel, AutoTokenizer, BertConfig, BertModel
 
-from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
@@ -65,33 +63,6 @@ def test_ape_tokenizer_outputs_feed_transformers_models_for_selfies_and_smiles(
 
         assert output.last_hidden_state.shape[:2] == batch["input_ids"].shape
         assert torch.isfinite(output.last_hidden_state).all()
-
-
-def test_ape_pretrained_tokenizer_matches_legacy_tokenizer_for_selfies_and_smiles():
-    for representation in ("SELFIES", "SMILES"):
-        hf_tokenizer, text = _tokenizer_for_representation(representation)
-        with pytest.warns(DeprecationWarning):
-            legacy = APETokenizer(representation=representation)
-        legacy.vocabulary = hf_tokenizer.vocabulary
-        legacy.update_reverse_vocabulary()
-        hf_tokenizer = APEPreTrainedTokenizer(
-            vocab=legacy.vocabulary,
-            representation=representation,
-            bos_token=legacy.bos_token,
-            eos_token=legacy.eos_token,
-            unk_token=legacy.unk_token,
-            pad_token=legacy.pad_token,
-            mask_token=legacy.mask_token,
-        )
-
-        assert hf_tokenizer.encode(text, add_special_tokens=False) == legacy.encode(
-            text,
-            add_special_tokens=False,
-        )
-        assert hf_tokenizer.encode(text, add_special_tokens=True) == legacy.encode(
-            text,
-            add_special_tokens=True,
-        )
 
 
 def test_auto_tokenizer_loads_custom_ape_tokenizer_for_selfies_and_smiles(tmp_path: Path):

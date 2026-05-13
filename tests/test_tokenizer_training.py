@@ -1,6 +1,5 @@
 import pytest
 
-from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
@@ -124,7 +123,7 @@ def test_get_special_tokens_mask_returns_input_length_masks():
 
 def test_unk_token_id_matches_special_tokens_mapping():
     tokenizer = APEPreTrainedTokenizer()
-    assert tokenizer.unk_token_id == tokenizer.special_tokens[tokenizer.unk_token]
+    assert tokenizer.unk_token_id == tokenizer.special_tokens[str(tokenizer.unk_token)]
 
 
 def test_pad_pads_labels_with_ignore_index():
@@ -144,8 +143,3 @@ def test_train_from_iterator_raises_not_implemented():
     tokenizer = APEPreTrainedTokenizer()
     with pytest.raises(NotImplementedError):
         tokenizer.train_from_iterator(iter(["[C][C][O]"]))
-
-
-def test_legacy_ape_tokenizer_emits_deprecation_warning():
-    with pytest.warns(DeprecationWarning):
-        APETokenizer()

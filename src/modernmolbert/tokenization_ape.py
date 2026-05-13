@@ -4,8 +4,6 @@ This file is intentionally self-contained so it can be copied into a model repo
 and loaded by ``AutoTokenizer.from_pretrained(..., trust_remote_code=True)``.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import re
@@ -79,7 +77,7 @@ def ape_tokenize(
 
 
 class APEPreTrainedTokenizer(PreTrainedTokenizer):
-    """Slow Hugging Face tokenizer backend for APE molecular tokenization."""
+    """Hugging Face tokenizer backend for APE molecular tokenization. (Not fast)"""
 
     vocab_files_names = VOCAB_FILES_NAMES
     model_input_names = ["input_ids", "attention_mask"]

@@ -56,12 +56,14 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
 
 ```bash
 uv run python - <<'PY'
-from transformers import AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
 import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 model = AutoModelForMaskedLM.from_pretrained("runs/debug_selfies/final_model")
-tok = APETokenizer.from_pretrained("runs/debug_selfies/final_model")
+tok = AutoTokenizer.from_pretrained(
+    "runs/debug_selfies/final_model/ape_tokenizer",
+    trust_remote_code=True,
+)
 batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
 
 with torch.no_grad():

@@ -2,8 +2,8 @@
 """Create a fast SELFIES symbol-level tokenizer vocabulary.
 
 This does not train APE merges. It simply collects bracketed SELFIES symbols
-from PubChem10M_SMILES_SELFIES and writes a tokenizer JSON compatible with
-APETokenizer.
+from PubChem10M_SMILES_SELFIES and writes a tokenizer JSON compatible with the
+APE tokenizer.
 """
 
 import argparse
@@ -36,12 +36,8 @@ def file_sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--dataset_name", default="mikemayuare/PubChem10M_SMILES_SELFIES"
-    )
-    parser.add_argument(
-        "--output_vocab_path", default="tokenizer/selfies_ape_tokenizer.json"
-    )
+    parser.add_argument("--dataset_name", default="mikemayuare/PubChem10M_SMILES_SELFIES")
+    parser.add_argument("--output_vocab_path", default="tokenizer/selfies_ape_tokenizer.json")
     parser.add_argument("--n", type=int, default=200_000)
     parser.add_argument("--shuffle_buffer_size", type=int, default=50_000)
     parser.add_argument("--seed", type=int, default=13)

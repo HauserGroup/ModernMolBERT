@@ -25,7 +25,7 @@ SELFIES tokenizer
 ModernMolBERT focuses on:
 
 - **Input representation:** SELFIES.
-- **Tokenizer:** custom `APETokenizer`, trained separately from model training.
+- **Tokenizer:** Hugging Face-compatible `APEPreTrainedTokenizer`, trained separately from model training and loadable with `AutoTokenizer`.
 - **Model:** ModernBERT architecture trained from scratch with the SELFIES tokenizer vocabulary.
 - **Objective:** masked language modeling.
 - **Primary use:** frozen molecular featurisation.
@@ -55,7 +55,8 @@ Detailed documentation is split by topic:
 
 ```text
 src/modernmolbert/
-  ape_tokenizer.py                     # SELFIES APE tokenizer
+  tokenization_ape.py                  # Hugging Face-compatible APE tokenizer
+  ape_tokenizer.py                     # deprecated legacy tokenizer compatibility API
   train_ape_tokenizer.py               # tokenizer training CLI
   validate_tokenizer.py                # tokenizer validation CLI
   train_selfies_ape_modernbert.py      # MLM pretraining CLI
@@ -290,6 +291,15 @@ output_dir/
   run_metadata.json
   tokenizer.json
   tokenizer_metadata.json
+  vocab.json
+  tokenizer_config.json
+  special_tokens_map.json
+  tokenization_ape.py
+  ape_tokenizer/
+    vocab.json
+    tokenizer_config.json
+    special_tokens_map.json
+    tokenization_ape.py
   README.checkpoint.md
   checkpoint-*/
   final_model/
@@ -297,6 +307,15 @@ output_dir/
     model.safetensors
     tokenizer.json
     tokenizer_metadata.json
+    vocab.json
+    tokenizer_config.json
+    special_tokens_map.json
+    tokenization_ape.py
+    ape_tokenizer/
+      vocab.json
+      tokenizer_config.json
+      special_tokens_map.json
+      tokenization_ape.py
     README.checkpoint.md
 ```
 
@@ -305,12 +324,14 @@ output_dir/
 ## Reload a trained checkpoint
 
 ```python
-from transformers import AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
 import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 model = AutoModelForMaskedLM.from_pretrained("runs/cuda_base_pilot_512/final_model")
-tokenizer = APETokenizer.from_pretrained("runs/cuda_base_pilot_512/final_model")
+tokenizer = AutoTokenizer.from_pretrained(
+    "runs/cuda_base_pilot_512/final_model/ape_tokenizer",
+    trust_remote_code=True,
+)
 
 batch = tokenizer("[C][C][O]", add_special_tokens=True, return_tensors="pt")
 
@@ -320,6 +341,75 @@ with torch.no_grad():
 assert torch.isfinite(out.logits).all()
 print(out.logits.shape)
 ```
+
+## Use or train the tokenizer
+
+Load a saved APE tokenizer through the standard Transformers entry point:
+
+```python
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained(
+    "path/to/final_model/ape_tokenizer",
+    trust_remote_code=True,
+)
+
+tokens = tokenizer.tokenize("[C][C][O]")
+ids = tokenizer.convert_tokens_to_ids(tokens)
+batch = tokenizer("[C][C][O]", add_special_tokens=True, return_tensors="pt")
+print(tokens)
+print(ids)
+print(batch["input_ids"])
+```
+
+Train a new SELFIES APE tokenizer on your own in-memory data:
+
+```python
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+corpus = [
+    "[C][C][O]",
+    "[C][O][C]",
+    "[C][C][=Branch1][C][=O][O]",
+]
+
+tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+tokenizer.train(
+    corpus,
+    representation="SELFIES",
+    max_vocab_size=5000,
+    min_freq_for_merge=2,
+)
+tokenizer.save_pretrained("my_selfies_ape_tokenizer")
+```
+
+For SMILES data, set `representation="SMILES"`:
+
+```python
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+tokenizer = APEPreTrainedTokenizer(representation="SMILES")
+tokenizer.train(
+    ["CCO", "CCN", "c1ccccc1"],
+    representation="SMILES",
+    max_vocab_size=5000,
+    min_freq_for_merge=2,
+)
+tokenizer.save_pretrained("my_smiles_ape_tokenizer")
+```
+
+The CLI also supports local parquet files:
+
+```bash
+uv run python -m modernmolbert.train_ape_tokenizer \
+  --data_files "data/my_selfies/*.parquet" \
+  --selfies_column SELFIES \
+  --output_vocab_path tokenizer/my_selfies_ape_tokenizer.json \
+  --max_vocab_size 5000 \
+  --min_freq_for_merge 2
+```
+
+Then load the saved directory with `AutoTokenizer.from_pretrained(..., trust_remote_code=True)`.
 
 ## Evaluation workflow
 
@@ -405,7 +495,7 @@ The cache key depends on dataset split, ordered molecule values, molecule column
 }
 ```
 
-The ModernMolBERT featurizer accepts SMILES as input, converts valid SMILES to SELFIES internally, tokenizes with the trained `APETokenizer`, and returns pooled encoder representations.
+The ModernMolBERT featurizer accepts SMILES as input, converts valid SMILES to SELFIES internally, tokenizes with the trained APE tokenizer, and returns pooled encoder representations.
 
 Other featurizers and external baselines are documented in [docs/baselines.md](docs/baselines.md).
 
@@ -487,12 +577,14 @@ Test the final model directory directly:
 
 ```bash
 uv run python - <<'PY'
-from transformers import AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
 import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 model = AutoModelForMaskedLM.from_pretrained("runs/debug_selfies/final_model")
-tok = APETokenizer.from_pretrained("runs/debug_selfies/final_model")
+tok = AutoTokenizer.from_pretrained(
+    "runs/debug_selfies/final_model/ape_tokenizer",
+    trust_remote_code=True,
+)
 batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
 
 with torch.no_grad():

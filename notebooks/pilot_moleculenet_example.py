@@ -58,9 +58,8 @@ from sklearn.metrics import (
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer
 
-from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.paths import find_project_root, data_path, outputs_path
 
 
@@ -103,13 +102,13 @@ MODEL_DIR = Path("../runs/pubchem10m_mps_base_pilot_256/final_model")
 # If you are already inside the run directory, use:
 # MODEL_DIR = Path("final_model")
 
-TOKENIZER_PATH = MODEL_DIR / "tokenizer.json"
+TOKENIZER_PATH = MODEL_DIR / "ape_tokenizer"
 TOKENIZER_METADATA_PATH = MODEL_DIR / "tokenizer_metadata.json"
 
 assert MODEL_DIR.exists(), f"Missing model directory: {MODEL_DIR}"
 assert (MODEL_DIR / "config.json").exists(), f"Missing config.json in {MODEL_DIR}"
 assert (MODEL_DIR / "model.safetensors").exists(), f"Missing model.safetensors in {MODEL_DIR}"
-assert TOKENIZER_PATH.exists(), f"Missing tokenizer: {TOKENIZER_PATH}"
+assert TOKENIZER_PATH.exists(), f"Missing tokenizer directory: {TOKENIZER_PATH}"
 assert TOKENIZER_METADATA_PATH.exists(), f"Missing tokenizer metadata: {TOKENIZER_METADATA_PATH}"
 
 
@@ -240,7 +239,7 @@ print("Example SELFIES:", train_selfies[0])
 
 
 # %%
-# Load frozen ModernMolBERT and APETokenizer.
+# Load frozen ModernMolBERT and its APE tokenizer.
 
 device = (
     "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
@@ -248,8 +247,7 @@ device = (
 
 print("Device:", device)
 
-tokenizer = APETokenizer()
-tokenizer.load_vocabulary(str(TOKENIZER_PATH))
+tokenizer = AutoTokenizer.from_pretrained(str(TOKENIZER_PATH), trust_remote_code=True)
 
 model = AutoModel.from_pretrained(str(MODEL_DIR))
 model.to(device)
@@ -263,7 +261,6 @@ print("Vocab size:", model.config.vocab_size)
 # %%
 # Tokenization helpers.
 #
-# The APETokenizer returns 1D tensors for a single molecule with return_tensors="pt".
 # This batching helper pads manually to the longest sequence in each batch.
 
 MAX_SEQ_LENGTH = 256

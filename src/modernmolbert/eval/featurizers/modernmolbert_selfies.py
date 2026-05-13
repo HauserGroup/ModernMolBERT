@@ -5,11 +5,11 @@ from typing import Literal
 
 import numpy as np
 import torch
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer
 
-from modernmolbert.ape_tokenizer import APETokenizer
 from modernmolbert.eval.featurizers.base import FeatureBatch
 from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
 @dataclass
@@ -179,11 +179,7 @@ class ModernMolBERTSelfiesFeaturizer:
         self,
         selfies_strings: list[str],
     ) -> dict[str, torch.Tensor]:
-        """Tokenize a batch of SELFIES strings with APETokenizer.
-
-        APETokenizer handles one string at a time, so we encode individually and
-        then pad into a tensor batch.
-        """
+        """Tokenize a batch of SELFIES strings with the APE tokenizer."""
 
         if isinstance(selfies_strings, str):
             raise TypeError("_tokenize_selfies_batch expects list[str], not str")
@@ -239,10 +235,11 @@ class ModernMolBERTSelfiesFeaturizer:
         }
 
 
-def _load_ape_tokenizer(path: str | Path) -> APETokenizer:
-    """Load APETokenizer from a file or checkpoint directory.
+def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
+    """Load APE tokenizer from a file or checkpoint directory.
 
     Supported inputs:
+    - directory containing ape_tokenizer/ AutoTokenizer artifacts
     - directory containing tokenizer.json
     - directory containing vocab.json
     - direct path to tokenizer.json
@@ -251,22 +248,33 @@ def _load_ape_tokenizer(path: str | Path) -> APETokenizer:
 
     path = Path(path)
 
-    tokenizer = APETokenizer()
-
     if path.is_file():
-        tokenizer.load_vocabulary(str(path))
+        tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+        tokenizer.load_vocabulary_file(path)
         return tokenizer
 
     if path.is_dir():
+        auto_dir = path / "ape_tokenizer"
+        if auto_dir.exists():
+            loaded = AutoTokenizer.from_pretrained(
+                str(auto_dir),
+                trust_remote_code=True,
+            )
+            if loaded.__class__.__name__ != "APEPreTrainedTokenizer":
+                raise TypeError(f"Expected APEPreTrainedTokenizer, got {type(loaded)!r}")
+            return loaded
+
         tokenizer_json = path / "tokenizer.json"
         vocab_json = path / "vocab.json"
 
         if tokenizer_json.exists():
-            tokenizer.load_vocabulary(str(tokenizer_json))
+            tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+            tokenizer.load_vocabulary_file(tokenizer_json)
             return tokenizer
 
         if vocab_json.exists():
-            tokenizer.load_vocabulary(str(vocab_json))
+            tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+            tokenizer.load_vocabulary_file(vocab_json)
             return tokenizer
 
         raise FileNotFoundError(

@@ -36,7 +36,7 @@ from transformers import (
     set_seed,
 )
 
-from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
@@ -314,7 +314,7 @@ def resolve_dataset_args(args: argparse.Namespace) -> argparse.Namespace:
 
 def preview_dataset_and_tokenizer(
     args: argparse.Namespace,
-    tokenizer: APETokenizer,
+    tokenizer: APEPreTrainedTokenizer,
     special_ids: dict[str, int],
     n_examples: int = 3,
 ) -> None:
@@ -360,7 +360,7 @@ def preview_dataset_and_tokenizer(
         unk_count = sum(1 for x in eligible if x == special_ids["unk_token"])
         unk_rate = unk_count / max(1, len(eligible))
 
-        # Best effort token display. Adjust if your APETokenizer has a different method.
+        # Best effort token display. Adjust if your APE tokenizer has a different method.
         tokens = None
         if hasattr(tokenizer, "convert_ids_to_tokens"):
             try:
@@ -410,7 +410,15 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
 
 def load_and_validate_tokenizer(
     args: argparse.Namespace,
-) -> tuple[APETokenizer, dict[str, Any], Path, Path, int, dict[str, int], dict[str, float]]:
+) -> tuple[
+    APEPreTrainedTokenizer,
+    dict[str, Any],
+    Path,
+    Path,
+    int,
+    dict[str, int],
+    dict[str, float],
+]:
     vocab_path = Path(args.tokenizer_vocab_path)
     if not vocab_path.exists():
         raise FileNotFoundError(
@@ -441,8 +449,8 @@ def load_and_validate_tokenizer(
             f"metadata={recorded_sha}, file={actual_sha}"
         )
 
-    tokenizer = APETokenizer()
-    tokenizer.load_vocabulary(str(vocab_path))
+    tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
+    tokenizer.load_vocabulary_file(vocab_path)
 
     vocab_size = tokenizer_vocab_size(tokenizer)
     if vocab_size < 100:
@@ -504,7 +512,7 @@ def load_and_validate_tokenizer(
 
 
 def make_train_iterable_dataset(
-    args: argparse.Namespace, tokenizer: APETokenizer
+    args: argparse.Namespace, tokenizer: APEPreTrainedTokenizer
 ) -> IterableDataset:
     ds = get_streaming_dataset(
         args.dataset_name,
@@ -533,7 +541,7 @@ def make_train_iterable_dataset(
     return ds.map(preprocess)
 
 
-def make_eval_dataset(args: argparse.Namespace, tokenizer: APETokenizer) -> Dataset:
+def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenizer) -> Dataset:
     requested_eval_size = args.eval_size
     n_eval = requested_eval_size
 
@@ -836,7 +844,7 @@ This checkpoint expects SELFIES strings. Convert SMILES before tokenization.
 
 ## Tokenizer
 
-This model uses `APETokenizer` from `modernmolbert.ape_tokenizer`.
+This model uses `APEPreTrainedTokenizer`, loadable through `AutoTokenizer`.
 
 Keep these files with the checkpoint:
 
@@ -859,12 +867,14 @@ Keep these files with the checkpoint:
 
 ```python
 from transformers import AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
+from transformers import AutoTokenizer
 
 model = AutoModelForMaskedLM.from_pretrained("final_model")
 
-tokenizer = APETokenizer()
-tokenizer.load_vocabulary("final_model/tokenizer.json")
+tokenizer = AutoTokenizer.from_pretrained(
+    "final_model/ape_tokenizer",
+    trust_remote_code=True,
+)
 ```
 """
     with (output_dir / "README.checkpoint.md").open("w", encoding="utf-8") as f:

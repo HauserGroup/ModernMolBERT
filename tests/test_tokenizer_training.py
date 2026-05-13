@@ -1,10 +1,11 @@
 import pytest
 
 from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
 def test_ape_train_terminates_on_tiny_corpus():
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer()
     corpus = ["[C][C][O]", "[C][O][C]", "[C][C][C]"] * 20
 
     tokenizer.train(
@@ -18,7 +19,7 @@ def test_ape_train_terminates_on_tiny_corpus():
 
 
 def test_ape_train_does_not_merge_across_molecule_boundaries():
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer()
     # Each sample has exactly one token; any pair merge would require crossing
     # molecule boundaries and should therefore never happen.
     corpus = ["[C]", "[O]"] * 40
@@ -35,7 +36,7 @@ def test_ape_train_does_not_merge_across_molecule_boundaries():
 
 
 def test_smiles_pre_tokenize_preserves_chemical_tokens():
-    tokenizer = APETokenizer(representation="SMILES")
+    tokenizer = APEPreTrainedTokenizer(representation="SMILES")
 
     tokens = tokenizer.pre_tokenize("ClC[C@H](Br)C1=CC=CC=C1")
 
@@ -45,7 +46,7 @@ def test_smiles_pre_tokenize_preserves_chemical_tokens():
 
 
 def test_smiles_encoding_uses_ape_merges_over_smiles_tokens():
-    tokenizer = APETokenizer(representation="SMILES")
+    tokenizer = APEPreTrainedTokenizer(representation="SMILES")
     tokenizer.vocabulary = {
         "<s>": 0,
         "<pad>": 1,
@@ -65,7 +66,7 @@ def test_smiles_encoding_uses_ape_merges_over_smiles_tokens():
 
 
 def test_train_supports_smiles_representation():
-    tokenizer = APETokenizer(representation="SMILES")
+    tokenizer = APEPreTrainedTokenizer(representation="SMILES")
     corpus = ["CCO", "CCN", "CCC"] * 20
 
     tokenizer.train(
@@ -82,20 +83,20 @@ def test_train_supports_smiles_representation():
 
 
 def test_save_vocabulary_writes_expected_freq_file(tmp_path):
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer()
     vocab_path = tmp_path / "toy_tokenizer.json"
 
-    tokenizer.save_vocabulary(str(vocab_path))
+    tokenizer.save_vocabulary_file(vocab_path)
 
     assert vocab_path.exists()
     assert (tmp_path / "toy_tokenizer_freq.json").exists()
 
 
 def test_from_pretrained_restores_reverse_vocabulary(tmp_path):
-    tokenizer = APETokenizer(representation="SMILES")
+    tokenizer = APEPreTrainedTokenizer(representation="SMILES")
     tokenizer.save_pretrained(str(tmp_path))
 
-    loaded = APETokenizer.from_pretrained(str(tmp_path))
+    loaded = APEPreTrainedTokenizer.from_pretrained(str(tmp_path))
 
     bos_id = loaded.vocabulary[loaded.bos_token]
     assert loaded.convert_ids_to_tokens([bos_id]) == [loaded.bos_token]
@@ -103,7 +104,7 @@ def test_from_pretrained_restores_reverse_vocabulary(tmp_path):
 
 
 def test_get_special_tokens_mask_returns_input_length_masks():
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer()
     token_ids = [tokenizer.bos_token_id, 10, tokenizer.eos_token_id]
 
     with_specials = tokenizer.get_special_tokens_mask(
@@ -122,12 +123,12 @@ def test_get_special_tokens_mask_returns_input_length_masks():
 
 
 def test_unk_token_id_matches_special_tokens_mapping():
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer()
     assert tokenizer.unk_token_id == tokenizer.special_tokens[tokenizer.unk_token]
 
 
 def test_pad_pads_labels_with_ignore_index():
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer()
     batch = [
         {"input_ids": [0, 5, 2], "labels": [0, 5, 2]},
         {"input_ids": [0, 6, 7, 2], "labels": [0, 6, 7, 2]},
@@ -140,6 +141,11 @@ def test_pad_pads_labels_with_ignore_index():
 
 
 def test_train_from_iterator_raises_not_implemented():
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer()
     with pytest.raises(NotImplementedError):
         tokenizer.train_from_iterator(iter(["[C][C][O]"]))
+
+
+def test_legacy_ape_tokenizer_emits_deprecation_warning():
+    with pytest.warns(DeprecationWarning):
+        APETokenizer()

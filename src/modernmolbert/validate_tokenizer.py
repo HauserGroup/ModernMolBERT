@@ -7,7 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
 
-from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
@@ -69,8 +69,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Local Arrow dataset directory. If omitted, auto-detect a matching "
-            "dataset in data/."
+            "Local Arrow dataset directory. If omitted, auto-detect a matching dataset in data/."
         ),
     )
     parser.add_argument(
@@ -151,7 +150,7 @@ def _fail_or_warn(args: argparse.Namespace, message: str) -> bool:
 
 
 def _print_unknown_examples(
-    tokenizer: APETokenizer,
+    tokenizer: APEPreTrainedTokenizer,
     sequences: list[str],
     special_ids: dict[str, int],
     max_seq_length: int,
@@ -180,7 +179,7 @@ def _print_unknown_examples(
 
 
 def _assert_ethanol_not_unknown(
-    tokenizer: APETokenizer, special_ids: dict[str, int]
+    tokenizer: APEPreTrainedTokenizer, special_ids: dict[str, int]
 ) -> None:
     ethanol = "[C][C][O]"
     encoded = encode_sequence(tokenizer, ethanol, max_seq_length=256)["input_ids"]
@@ -191,8 +190,7 @@ def _assert_ethanol_not_unknown(
     unk_rate = sum(1 for x in eligible if x == unk_id) / len(eligible)
     if unk_rate > 0.05:
         raise ValueError(
-            "Tokenizer is not SELFIES-compatible: "
-            f"[C][C][O] unk_rate={unk_rate:.3f}, ids={encoded}"
+            f"Tokenizer is not SELFIES-compatible: [C][C][O] unk_rate={unk_rate:.3f}, ids={encoded}"
         )
 
 
@@ -211,14 +209,10 @@ def main() -> None:
         else metadata_path_for_vocab(vocab_path)
     )
     if not metadata_path.exists():
-        raise FileNotFoundError(
-            f"Tokenizer metadata missing. Expected file: {metadata_path}"
-        )
+        raise FileNotFoundError(f"Tokenizer metadata missing. Expected file: {metadata_path}")
 
     metadata = load_tokenizer_metadata(metadata_path)
-    assert_metadata_representation(
-        metadata, expected_representation=args.representation
-    )
+    assert_metadata_representation(metadata, expected_representation=args.representation)
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)
@@ -228,8 +222,8 @@ def main() -> None:
             f"metadata={recorded_sha} file={actual_sha}"
         )
 
-    tokenizer = APETokenizer()
-    tokenizer.load_vocabulary(str(vocab_path))
+    tokenizer = APEPreTrainedTokenizer(representation=args.representation)
+    tokenizer.load_vocabulary_file(vocab_path)
 
     special_ids = resolve_special_ids(tokenizer)
     vocab_size = tokenizer_vocab_size(tokenizer)
@@ -288,15 +282,12 @@ def main() -> None:
             )
         )
     if stats["empty_sequence_rate"] > 0.0:
-        warning_count += int(
-            _fail_or_warn(args, "Tokenizer produced empty tokenized sequences.")
-        )
+        warning_count += int(_fail_or_warn(args, "Tokenizer produced empty tokenized sequences."))
     if stats["mostly_unknown_rate"] > 0.01:
         warning_count += int(
             _fail_or_warn(
                 args,
-                "Too many sequences are mostly unknown tokens: "
-                f"{stats['mostly_unknown_rate']:.4f}",
+                f"Too many sequences are mostly unknown tokens: {stats['mostly_unknown_rate']:.4f}",
             )
         )
 

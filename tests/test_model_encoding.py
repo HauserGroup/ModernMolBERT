@@ -9,9 +9,9 @@ import os
 from pathlib import Path
 
 import torch
-from transformers import AutoModel
+from transformers import AutoModel, AutoTokenizer
 
-from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 _TEXTS = [
     "[C]",
@@ -32,8 +32,12 @@ def test_existing_minimal_model_encoder_output(existing_minimal_model: Path) -> 
     model = AutoModel.from_pretrained(existing_minimal_model)
     model.eval()
 
-    tok = APETokenizer()
-    tok.load_vocabulary(str(existing_minimal_model / "tokenizer.json"))
+    tokenizer_dir = existing_minimal_model / "ape_tokenizer"
+    if tokenizer_dir.exists():
+        tok = AutoTokenizer.from_pretrained(tokenizer_dir, trust_remote_code=True)
+    else:
+        tok = APEPreTrainedTokenizer()
+        tok.load_vocabulary_file(existing_minimal_model / "tokenizer.json")
 
     if verbose:
         print(f"\n[encoder-test] model_dir={existing_minimal_model}")
@@ -45,14 +49,8 @@ def test_existing_minimal_model_encoder_output(existing_minimal_model: Path) -> 
 
     for text in _TEXTS:
         batch = tok(text, add_special_tokens=True, return_tensors="pt")
-        token_strings = tok.convert_ids_to_tokens(batch["input_ids"].tolist())
-
-        # APETokenizer returns rank-1 tensors; HF models expect batch dimension.
-        for key in ("input_ids", "attention_mask"):
-            if batch[key].ndim == 1:
-                batch[key] = batch[key].unsqueeze(0)
-
         ids = batch["input_ids"][0].tolist()
+        token_strings = tok.convert_ids_to_tokens(ids)
         unk_positions = [i for i, t in enumerate(ids) if t == unk_id]
         assert not unk_positions, (text, ids, token_strings, unk_positions)
 

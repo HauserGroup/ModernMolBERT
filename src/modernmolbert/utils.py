@@ -1,5 +1,5 @@
 """
-Shared utilities for APETokenizer interaction and dataset loading.
+Shared utilities for APE tokenizer interaction and dataset loading.
 """
 
 import hashlib
@@ -15,7 +15,7 @@ import torch
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
 from tqdm.auto import tqdm
 
-from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
 SPECIAL_TOKENS: dict[str, str] = {
@@ -189,6 +189,15 @@ def copy_tokenizer_artifacts(
     shutil.copy2(vocab_path, final_model_dir / "tokenizer.json")
     shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")
 
+    metadata = load_tokenizer_metadata(metadata_path)
+    representation = str(metadata.get("representation", SELFIES_REPRESENTATION))
+    tokenizer = APEPreTrainedTokenizer(representation=representation)
+    tokenizer.load_vocabulary_file(vocab_path, representation=representation)
+    tokenizer.save_pretrained(str(output_dir))
+    tokenizer.save_pretrained(str(final_model_dir))
+    tokenizer.save_pretrained(str(output_dir / "ape_tokenizer"))
+    tokenizer.save_pretrained(str(final_model_dir / "ape_tokenizer"))
+
 
 def assert_metadata_representation(metadata: dict[str, Any], expected_representation: str) -> None:
     representation = str(metadata.get("representation", "")).upper()
@@ -345,7 +354,7 @@ def collect_corpus_for_tokenizer(
 # ---------------------------------------------------------------------------
 
 
-def tokenizer_vocab_size(tokenizer: APETokenizer) -> int:
+def tokenizer_vocab_size(tokenizer: APEPreTrainedTokenizer) -> int:
     get_vocab = getattr(tokenizer, "get_vocab", None)
     if callable(get_vocab):
         vocab = get_vocab()
@@ -359,12 +368,12 @@ def tokenizer_vocab_size(tokenizer: APETokenizer) -> int:
                 return len(value)
 
     raise AttributeError(
-        "Could not infer APETokenizer vocabulary size. "
+        "Could not infer APE tokenizer vocabulary size. "
         "Inspect the tokenizer object and adjust tokenizer_vocab_size()."
     )
 
 
-def token_id(tokenizer: APETokenizer, token: str) -> int:
+def token_id(tokenizer: APEPreTrainedTokenizer, token: str) -> int:
     if hasattr(tokenizer, "convert_tokens_to_ids"):
         out = tokenizer.convert_tokens_to_ids([token])
         return int(out[0] if isinstance(out, list) else out)
@@ -382,7 +391,7 @@ def token_id(tokenizer: APETokenizer, token: str) -> int:
     return int(ids[0])
 
 
-def resolve_special_ids(tokenizer: APETokenizer) -> dict[str, int]:
+def resolve_special_ids(tokenizer: APEPreTrainedTokenizer) -> dict[str, int]:
     ids: dict[str, int] = {}
     for name, token in SPECIAL_TOKENS.items():
         try:
@@ -394,12 +403,16 @@ def resolve_special_ids(tokenizer: APETokenizer) -> dict[str, int]:
             else:
                 raise RuntimeError(
                     f"Could not resolve ID for special token {token!r}. "
-                    "Check APETokenizer special-token names."
+                    "Check APE tokenizer special-token names."
                 ) from err
     return ids
 
 
-def encode_sequence(tokenizer: APETokenizer, seq: str, max_seq_length: int) -> dict[str, list[int]]:
+def encode_sequence(
+    tokenizer: APEPreTrainedTokenizer,
+    seq: str,
+    max_seq_length: int,
+) -> dict[str, list[int]]:
     encoded = tokenizer(
         seq,
         padding=False,
@@ -447,7 +460,7 @@ def eligible_token_ids(input_ids: list[int], special_ids: dict[str, int]) -> lis
 
 
 def compute_tokenization_stats(
-    tokenizer: APETokenizer,
+    tokenizer: APEPreTrainedTokenizer,
     sequences: list[str],
     max_seq_length: int,
     special_ids: dict[str, int],

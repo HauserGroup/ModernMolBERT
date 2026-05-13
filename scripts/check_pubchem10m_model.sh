@@ -12,8 +12,7 @@ echo "Checking model reload and encoder output..."
 echo "Model directory: ${MODEL_DIR}"
 
 uv run python - <<PY
-from transformers import AutoModel, AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
+from transformers import AutoModel, AutoModelForMaskedLM, AutoTokenizer
 import torch
 
 model_dir = "${MODEL_DIR}"
@@ -21,8 +20,10 @@ model_dir = "${MODEL_DIR}"
 mlm = AutoModelForMaskedLM.from_pretrained(model_dir)
 enc = AutoModel.from_pretrained(model_dir)
 
-tok = APETokenizer()
-tok.load_vocabulary(f"{model_dir}/tokenizer.json")
+tok = AutoTokenizer.from_pretrained(
+    f"{model_dir}/ape_tokenizer",
+    trust_remote_code=True,
+)
 
 batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
 batch = {

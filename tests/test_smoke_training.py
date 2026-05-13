@@ -55,10 +55,10 @@ def test_local_tokenizer_encode_selfies_examples() -> None:
     if tokenizer_path is None:
         pytest.skip("No local tokenizer vocabulary found under tokenizer/.")
 
-    from modernmolbert.ape_tokenizer import APETokenizer
+    from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
-    tok = APETokenizer()
-    tok.load_vocabulary(str(tokenizer_path))
+    tok = APEPreTrainedTokenizer()
+    tok.load_vocabulary_file(tokenizer_path)
 
     examples = [
         "[C]",
@@ -130,8 +130,9 @@ def test_existing_minimal_model_selfies_encoding() -> None:
         )
 
     code = f"""
-from transformers import AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
+from pathlib import Path
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 import torch
 
 model_dir = {str(final_model)!r}
@@ -140,8 +141,12 @@ tokenizer_path = {str(final_model / "tokenizer.json")!r}
 model = AutoModelForMaskedLM.from_pretrained(model_dir)
 model.eval()
 
-tok = APETokenizer()
-tok.load_vocabulary(tokenizer_path)
+tokenizer_dir = Path(model_dir) / "ape_tokenizer"
+if tokenizer_dir.exists():
+    tok = AutoTokenizer.from_pretrained(tokenizer_dir, trust_remote_code=True)
+else:
+    tok = APEPreTrainedTokenizer()
+    tok.load_vocabulary_file(tokenizer_path)
 
 examples = [
     "[C]",
@@ -161,7 +166,6 @@ special = {{
 for text in examples:
     batch = tok(text, add_special_tokens=True, return_tensors="pt")
 
-    # APETokenizer returns rank-1 tensors; HF models expect batch dimension.
     for key in ["input_ids", "attention_mask"]:
         if batch[key].ndim == 1:
             batch[key] = batch[key].unsqueeze(0)
@@ -270,22 +274,20 @@ def test_mps_base_smoke_training(tmp_path: Path) -> None:
     final_model = output_dir / "final_model"
     assert final_model.exists()
     assert (final_model / "config.json").exists()
-    assert (
-        any(final_model.glob("*.safetensors"))
-        or (final_model / "pytorch_model.bin").exists()
-    )
+    assert any(final_model.glob("*.safetensors")) or (final_model / "pytorch_model.bin").exists()
     assert (final_model / "tokenizer.json").exists()
 
     reload_code = f"""
-from transformers import AutoModelForMaskedLM
-from modernmolbert.ape_tokenizer import APETokenizer
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 import torch
 
 model = AutoModelForMaskedLM.from_pretrained({str(final_model)!r})
 model.eval()
 
-tok = APETokenizer()
-tok.load_vocabulary({str(final_model / "tokenizer.json")!r})
+tok = AutoTokenizer.from_pretrained(
+    {str(final_model / "ape_tokenizer")!r},
+    trust_remote_code=True,
+)
 
 batch = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
 

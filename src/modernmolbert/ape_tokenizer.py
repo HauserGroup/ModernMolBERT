@@ -4,6 +4,8 @@ from collections import defaultdict
 import json
 import os
 import re
+import shutil
+import warnings
 from typing import Any, Literal
 from pathlib import Path
 
@@ -37,6 +39,13 @@ class APETokenizer:
         mask_token="<mask>",
         representation: str = "SELFIES",
     ):
+        warnings.warn(
+            "APETokenizer is deprecated and will be removed in a future release. "
+            "Use modernmolbert.tokenization_ape.APEPreTrainedTokenizer or "
+            "AutoTokenizer.from_pretrained(..., trust_remote_code=True) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.representation = _normalize_representation(representation)
         self.pad_token = pad_token
         self.bos_token = bos_token
@@ -517,18 +526,40 @@ class APETokenizer:
         with open(special_tokens_file, "w", encoding="utf-8") as f:
             json.dump(self.special_tokens, f, ensure_ascii=False, indent=4)
 
-        tokenizer_config_file = os.path.join(save_directory, "tokenizer_config.json")
-        tokenizer_config = {
-            "tokenizer_class": self.__class__.__name__,
-            "representation": self.representation,
+        special_tokens_map_file = os.path.join(save_directory, "special_tokens_map.json")
+        special_tokens_map = {
             "bos_token": self.bos_token,
             "pad_token": self.pad_token,
             "eos_token": self.eos_token,
             "unk_token": self.unk_token,
             "mask_token": self.mask_token,
         }
+        with open(special_tokens_map_file, "w", encoding="utf-8") as f:
+            json.dump(special_tokens_map, f, ensure_ascii=False, indent=4)
+
+        tokenizer_config_file = os.path.join(save_directory, "tokenizer_config.json")
+        tokenizer_config = {
+            "tokenizer_class": "APEPreTrainedTokenizer",
+            "representation": self.representation,
+            "model_max_length": 512,
+            "bos_token": self.bos_token,
+            "pad_token": self.pad_token,
+            "eos_token": self.eos_token,
+            "unk_token": self.unk_token,
+            "mask_token": self.mask_token,
+            "auto_map": {
+                "AutoTokenizer": ["tokenization_ape.APEPreTrainedTokenizer", None],
+            },
+        }
         with open(tokenizer_config_file, "w", encoding="utf-8") as f:
             json.dump(tokenizer_config, f, ensure_ascii=False, indent=4)
+
+        source_tokenization_file = Path(__file__).with_name("tokenization_ape.py")
+        if source_tokenization_file.exists():
+            shutil.copy2(
+                source_tokenization_file,
+                Path(save_directory) / "tokenization_ape.py",
+            )
 
         # Save training state
         # Prepare the data to be JSON serializable

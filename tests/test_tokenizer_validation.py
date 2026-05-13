@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.validate_tokenizer import _assert_ethanol_not_unknown
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
@@ -24,8 +24,8 @@ from modernmolbert.utils import (
 )
 
 
-def _tiny_tokenizer() -> APETokenizer:
-    tok = APETokenizer()
+def _tiny_tokenizer() -> APEPreTrainedTokenizer:
+    tok = APEPreTrainedTokenizer()
     tok.vocabulary = {
         "<s>": 0,
         "<pad>": 1,
@@ -50,8 +50,8 @@ def _tiny_tokenizer() -> APETokenizer:
     return tok
 
 
-def _broken_bracket_tokenizer() -> APETokenizer:
-    tok = APETokenizer()
+def _broken_bracket_tokenizer() -> APEPreTrainedTokenizer:
+    tok = APEPreTrainedTokenizer()
     tok.vocabulary = {
         "<s>": 0,
         "<pad>": 1,
@@ -96,7 +96,7 @@ def test_tokenization_stats_and_metadata_helpers(tmp_path: Path):
     assert stats["truncation_rate"] == 0.0
 
     vocab_path = tmp_path / "selfies_ape_tokenizer.json"
-    tokenizer.save_vocabulary(str(vocab_path))
+    tokenizer.save_vocabulary_file(vocab_path)
     metadata_path = metadata_path_for_vocab(vocab_path)
     write_tokenizer_metadata(
         metadata_path,
@@ -143,7 +143,7 @@ def test_ethanol_gate_fails_when_selfies_symbols_are_unknown():
 
 def test_selfies_encoding_does_not_split_brackets():
 
-    tok = APETokenizer()
+    tok = APEPreTrainedTokenizer()
 
     tok.vocabulary = {
         "<s>": 0,

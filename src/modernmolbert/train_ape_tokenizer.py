@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from modernmolbert.ape_tokenizer import APETokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
@@ -98,7 +98,7 @@ def main() -> None:
     )
     validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
 
-    tokenizer = APETokenizer()
+    tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
     tokenizer.train(
         corpus,
         max_vocab_size=args.max_vocab_size,
@@ -107,7 +107,7 @@ def main() -> None:
     )
 
     # Phase 1: write the vocab to disk.
-    tokenizer.save_vocabulary(str(output_vocab_path))
+    tokenizer.save_vocabulary_file(output_vocab_path)
 
     # Phase 2: compute the SHA from the file that is now on disk.
     vocab_sha256 = file_sha256(output_vocab_path)

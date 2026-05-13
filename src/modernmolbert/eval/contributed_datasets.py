@@ -102,6 +102,7 @@ def load_example_activity_dataset(*, root: str | Path) -> EvalDataset:
         },
     )
 
+
 def load_esol(*, root: str | Path) -> EvalDataset:
     root = Path(root)
     task_names = ["target"]
@@ -124,11 +125,9 @@ def load_esol(*, root: str | Path) -> EvalDataset:
         valid=valid,
         test=test,
         smiles_column="smiles",
-        metadata={
-            "source": "MoleculeNet ESOL",
-            "missing_label_policy": "Dropped"
-        },
+        metadata={"source": "MoleculeNet ESOL", "missing_label_policy": "Dropped"},
     )
+
 
 def load_clintox(*, root: str | Path) -> EvalDataset:
     root = Path(root)
@@ -157,10 +156,7 @@ def load_clintox(*, root: str | Path) -> EvalDataset:
         valid=valid,
         test=test,
         smiles_column="smiles",
-        metadata={
-            "source": "MoleculeNet ClinTox",
-            "missing_label_policy": "Dropped"
-        },
+        metadata={"source": "MoleculeNet ClinTox", "missing_label_policy": "Dropped"},
     )
 
 

@@ -17,6 +17,23 @@ from sklearn.linear_model import HuberRegressor
 from sklearn.model_selection import KFold
 from sklearn.svm import SVR
 
+# ============================================================
+# CONSTANTS: edit only these
+# ============================================================
+
+RANDOM_STATE = 42
+N_FOLDS = 10
+FINGERPRINT_KIND = "torsion"  # "morgan", "rdkit", "atom_pair", "torsion"
+FP_SIZE = 2048
+
+# Only used for Morgan fingerprints.
+# radius=2 -> ECFP4, radius=3 -> ECFP6
+MORGAN_RADIUS = 4
+USE_CHIRALITY = False
+USE_HUBER_CALIBRATION = True
+BLEND_WEIGHTS = np.linspace(0.75, 0.95, 41)
+
+
 # %%
 # -----------------------------
 # Metrics
@@ -38,27 +55,56 @@ def mae(y_true, y_pred):
     return np.mean(np.abs(np.asarray(y_true) - np.asarray(y_pred)))
 
 
-# -----------------------------
-# Featurization: SMILES -> ECFP4
-# -----------------------------
+# ============================================================
+# Fingerprints
+# ============================================================
 
 
-def ecfp4_from_smiles(smiles, n_bits=2048, radius=2):
-    generator = rdFingerprintGenerator.GetMorganGenerator(
-        radius=radius,
-        fpSize=n_bits,
-    )
+def make_fingerprint_generator():
+    if FINGERPRINT_KIND == "morgan":
+        return rdFingerprintGenerator.GetMorganGenerator(
+            radius=MORGAN_RADIUS,
+            fpSize=FP_SIZE,
+            includeChirality=USE_CHIRALITY,
+        )
 
-    X = np.zeros((len(smiles), n_bits), dtype=np.float32)
+    if FINGERPRINT_KIND == "rdkit":
+        return rdFingerprintGenerator.GetRDKitFPGenerator(
+            fpSize=FP_SIZE,
+        )
+
+    if FINGERPRINT_KIND == "atom_pair":
+        return rdFingerprintGenerator.GetAtomPairGenerator(
+            fpSize=FP_SIZE,
+            includeChirality=USE_CHIRALITY,
+        )
+
+    if FINGERPRINT_KIND == "torsion":
+        return rdFingerprintGenerator.GetTopologicalTorsionGenerator(
+            fpSize=FP_SIZE,
+            includeChirality=USE_CHIRALITY,
+        )
+
+    raise ValueError(f"Unknown FINGERPRINT_KIND: {FINGERPRINT_KIND}")
+
+
+def fingerprint_from_smiles(smiles):
+    generator = make_fingerprint_generator()
+    rows = []
     valid = np.zeros(len(smiles), dtype=bool)
-
     for i, smi in enumerate(smiles):
+        if smi is None:
+            continue
         mol = Chem.MolFromSmiles(str(smi))
         if mol is None:
             continue
-
-        X[i] = generator.GetFingerprintAsNumPy(mol).astype(np.float32)
+        arr = generator.GetFingerprintAsNumPy(mol).astype(np.float32, copy=False)
+        rows.append(arr)
         valid[i] = True
+    if rows:
+        X = np.vstack(rows).astype(np.float32, copy=False)
+    else:
+        X = np.empty((0, FP_SIZE), dtype=np.float32)
 
     return X, valid
 
@@ -208,7 +254,7 @@ df = load_dataset("openadmet/pxr-challenge-train-test")["train"].to_pandas()
 smiles = df["SMILES"].tolist()
 pEC50 = df["pEC50"].values.astype(np.float32)
 
-X, valid = ecfp4_from_smiles(smiles)
+X, valid = fingerprint_from_smiles(smiles)
 
 X = X[valid]
 y = pEC50[valid]
@@ -319,9 +365,8 @@ print("RAE:", best_svr_score)
 
 blend_results = []
 
-blend_weights_fine = np.linspace(0.75, 0.95, 41)
 
-for w_svr in np.linspace(0, 1, 21):
+for w_svr in BLEND_WEIGHTS:
     pred = w_svr * best_svr_oof + (1.0 - w_svr) * best_knn_oof
     score = rae(y, pred)
     blend_results.append((score, w_svr, pred))
@@ -355,8 +400,43 @@ final_model = CalibratedBlendedRegressor(
 )
 final_model.fit(X, y)
 
-# %%
+# Get final model performance on training data
+final_pred = final_model.predict(X)
 
+print(f"Training RAE: {rae(y, final_pred):.4f}")
+print(f"Training MAE: {mae(y, final_pred):.4f}")
+
+
+# -----------------------------
+# Final performance Notes
+# -----------------------------
+# ECFP4
+# Training RAE: 0.1923
+# Training MAE: 0.1750
+# ECFP4 with chirality
+# Training RAE: 0.1835
+# Training MAE: 0.1670
+# ECFP6
+# Training RAE: 0.1645
+# Training MAE: 0.1497
+# ECFP6 with chirality
+# Training RAE: 0.1960
+# Training MAE: 0.1783
+# RDKit topological fingerprint
+# Training RAE: 0.3142
+# Training MAE: 0.2859
+# Atom pair fingerprint
+# Training RAE: 0.2619
+# Training MAE: 0.2383
+# Torsion fingerprint
+# Training RAE: 0.2619
+# Training MAE: 0.2383
+# ECFP8
+# Training RAE: 0.1882
+# Training MAE: 0.1712
+
+
+# %%
 # -----------------------------
 # Plot 1: observed vs predicted
 # -----------------------------

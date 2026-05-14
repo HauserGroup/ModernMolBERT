@@ -238,6 +238,10 @@ repomix*.xml
 # eval
 tmp_eval/
 tokenizer/tests
+tokenizer/checkpoints
+
+# pxr challenge
+notebooks/pxr/data/
 
 # Large files
 src/modernmolbert/eval/benchmarking_molecular_models/results/arxiv_preprint_2025_08.csv

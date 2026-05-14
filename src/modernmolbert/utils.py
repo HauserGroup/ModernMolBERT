@@ -562,11 +562,12 @@ def resolve_special_ids(tokenizer: APEPreTrainedTokenizer) -> dict[str, int]:
 def encode_sequence(
     tokenizer: APEPreTrainedTokenizer,
     seq: str,
-    max_seq_length: int,
+    max_seq_length: int | None,
 ) -> dict[str, list[int]]:
     encoded = tokenizer(
         seq,
         padding=False,
+        truncation=max_seq_length is not None,
         max_length=max_seq_length,
         add_special_tokens=True,
         return_tensors=None,

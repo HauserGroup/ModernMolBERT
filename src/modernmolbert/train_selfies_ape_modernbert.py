@@ -141,9 +141,9 @@ def parse_args() -> argparse.Namespace:
     # Model
     parser.add_argument(
         "--model_size",
-        choices=["base", "large"],
-        default="base",
-        help="Use the official ModernBERT-base or ModernBERT-large architecture config.",
+        choices=["small", "medium", "base", "large"],
+        default="small",
+        help="ModernBERT architecture preset.",
     )
     parser.add_argument(
         "--max_seq_length",
@@ -708,6 +708,36 @@ MODERNBERT_CONFIGS = {
     "base": "answerdotai/ModernBERT-base",
     "large": "answerdotai/ModernBERT-large",
 }
+LOCAL_MODERNBERT_PRESETS = {
+    # Designed to sit below MoLFormer-XL's ~46M params for small molecular vocabularies.
+    # To check parameter count before a full run:
+    #   uv run python -c "
+    #   from transformers import AutoConfig, AutoModelForMaskedLM
+    #   from modernmolbert.train_selfies_ape_modernbert import build_modernbert_config, LOCAL_MODERNBERT_PRESETS
+    #   import types
+    #   args = types.SimpleNamespace(model_size='small', max_seq_length=256)
+    #   config = build_modernbert_config(args, vocab_size=5000, special_ids={'pad_token':0,'bos_token':1,'eos_token':2,'unk_token':3,'mask_token':4})
+    #   model = AutoModelForMaskedLM.from_config(config)
+    #   print(f'{sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters')
+    #   "
+    "small": {
+        "hidden_size": 512,
+        "num_hidden_layers": 8,
+        "num_attention_heads": 8,
+        "intermediate_size": 768,
+        "global_attn_every_n_layers": 3,
+        "local_attention": 128,
+    },
+    # Still much smaller than official ModernBERT-base, but closer to a strong encoder.
+    "medium": {
+        "hidden_size": 512,
+        "num_hidden_layers": 10,
+        "num_attention_heads": 8,
+        "intermediate_size": 768,
+        "global_attn_every_n_layers": 3,
+        "local_attention": 128,
+    },
+}
 
 
 def build_modernbert_config(
@@ -715,13 +745,20 @@ def build_modernbert_config(
     vocab_size: int,
     special_ids: dict[str, int],
 ):
-    config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
-    # Molecular tokenizer-specific fields only.
+    if args.model_size in LOCAL_MODERNBERT_PRESETS:
+        # Start from official base config so we preserve ModernBERT-specific fields,
+        # then override only the scale-related fields.
+        config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS["base"])
+        for key, value in LOCAL_MODERNBERT_PRESETS[args.model_size].items():
+            setattr(config, key, value)
+    else:
+        config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
+    # Molecular tokenizer-specific fields.
     config.vocab_size = vocab_size
     config.pad_token_id = special_ids["pad_token"]
     config.bos_token_id = special_ids["bos_token"]
     config.eos_token_id = special_ids["eos_token"]
-    # Optional context-length override (useful for MPS/debug runs).
+    # Optional context-length override.
     if args.max_seq_length is not None:
         config.max_position_embeddings = args.max_seq_length
     return config
@@ -898,8 +935,11 @@ def main() -> None:
 
     # Resolve max_seq_length from the official model config when not explicitly set.
     if args.max_seq_length is None:
-        _tmp = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
-        args.max_seq_length = _tmp.max_position_embeddings
+        if args.model_size in LOCAL_MODERNBERT_PRESETS:
+            args.max_seq_length = 256
+        else:
+            _tmp = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
+            args.max_seq_length = _tmp.max_position_embeddings
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run one ChEMBL36 SELFIES ModernBERT-base CUDA training job.
+# Run one ChEMBL36 SELFIES ModernBERT-small CUDA training job.
 #
 # Usage:
-#   scripts/train_chembl36_cuda_base_single.sh [mlm_probability] [learning_rate] [run_name]
+#   scripts/train_chembl36_cuda_small_single.sh [mlm_probability] [learning_rate] [run_name]
 #
 # Examples:
-#   scripts/train_chembl36_cuda_base_single.sh
-#   scripts/train_chembl36_cuda_base_single.sh 0.20 1e-4
-#   CUDA_VISIBLE_DEVICES=1 scripts/train_chembl36_cuda_base_single.sh 0.15 5e-5 gpu1_mlm_0p15_lr_5e-5
+#   scripts/train_chembl36_cuda_small_single.sh
+#   scripts/train_chembl36_cuda_small_single.sh 0.35 1e-4
+#   CUDA_VISIBLE_DEVICES=1 scripts/train_chembl36_cuda_small_single.sh 0.35 3e-4 gpu1_small_mlm_0p35_lr_3e-4
 
 # Local prepared ChEMBL36 SELFIES dataset.
 DATASET_NAME="data/pretrain/chembl36_selfies"
@@ -18,36 +18,45 @@ TRAIN_SPLIT="train"
 VALIDATION_SPLIT="valid"
 
 # Expected tokenizer artifacts for ChEMBL36.
-TOKENIZER_PATH="tokenizer/chembl36_selfies_500k_ape_tokenizer.json"
-TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_500k_ape_tokenizer.metadata.json"
+# These names assume the tokenizer was trained on up to 2M ChEMBL36 SELFIES.
+TOKENIZER_PATH="tokenizer/chembl36_selfies_2m_ape_tokenizer.json"
+TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_ape_tokenizer.metadata.json"
 
-# Same training setup as train_chembl36_cuda_base_sweep.sh.
-MODEL_SIZE="base"
+# Small ModernBERT-style molecular model.
+MODEL_SIZE="small"
 MAX_SEQ_LENGTH=256
+
+# Training setup.
 MAX_STEPS=30000
 EVAL_SIZE=4096
 MAX_EVAL_BATCHES=256
+
 PER_DEVICE_TRAIN_BATCH_SIZE=8
 PER_DEVICE_EVAL_BATCH_SIZE=8
 GRADIENT_ACCUMULATION_STEPS=8
+
 WARMUP_STEPS=1500
 WEIGHT_DECAY=0.01
 MAX_GRAD_NORM=1.0
+
 SAVE_STEPS=2000
 EVAL_STEPS=2000
 LOGGING_STEPS=100
 SAVE_TOTAL_LIMIT=5
+
 NUM_WORKERS=4
 SEED=13
 
-MLM_PROBABILITY="${1:-0.15}"
+# Better default than the old BERT-style 0.15 for molecular MLM.
+MLM_PROBABILITY="${1:-0.35}"
 LEARNING_RATE="${2:-1e-4}"
-RUN_ROOT="runs/chembl36_cuda_base_lr_mlm_sweep"
+
+RUN_ROOT="runs/chembl36_cuda_small_lr_mlm_sweep"
 
 if [[ $# -ge 3 ]]; then
   RUN_NAME="$3"
 else
-  RUN_NAME="mlm_${MLM_PROBABILITY}_lr_${LEARNING_RATE}"
+  RUN_NAME="small_mlm_${MLM_PROBABILITY}_lr_${LEARNING_RATE}"
   RUN_NAME="${RUN_NAME//./p}"
 fi
 
@@ -82,7 +91,12 @@ fi
 echo "============================================================"
 echo "Starting single CUDA run: ${RUN_NAME}"
 echo "Output directory: ${OUTPUT_DIR}"
-echo "mlm_probability=${MLM_PROBABILITY}, learning_rate=${LEARNING_RATE}"
+echo "model_size=${MODEL_SIZE}"
+echo "max_seq_length=${MAX_SEQ_LENGTH}"
+echo "mlm_probability=${MLM_PROBABILITY}"
+echo "learning_rate=${LEARNING_RATE}"
+echo "effective_batch_size=$((PER_DEVICE_TRAIN_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
+echo "============================================================"
 
 uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --dataset_name "${DATASET_NAME}" \

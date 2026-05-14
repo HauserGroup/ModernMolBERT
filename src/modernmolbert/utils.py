@@ -47,6 +47,21 @@ def repo_root() -> Path:
 def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
     if selfies_column is not None:
         return selfies_column
+
+    # Try to resolve as local path and read metadata
+    if _looks_like_path(dataset_name):
+        local_path = _resolve_dataset_name_as_local_path(dataset_name)
+        if local_path is not None:
+            metadata_file = local_path / "metadata.json"
+            if metadata_file.exists():
+                try:
+                    with metadata_file.open("r", encoding="utf-8") as f:
+                        metadata = json.load(f)
+                    if isinstance(metadata, dict) and "selfies_column" in metadata:
+                        return str(metadata["selfies_column"])
+                except Exception:
+                    pass
+
     if dataset_name == ZINC20_CHEMBL36_DATASET:
         return "selfies"  # lowercase in this dataset
     if dataset_name == ZINC20_DATASET:
@@ -452,6 +467,7 @@ def collect_corpus_for_tokenizer(
     buffer_size: int,
     data_dir: Path | None = None,
     data_files: str | None = None,
+    show_progress: bool = False,
 ) -> list[str]:
     ds = get_streaming_dataset(
         dataset_name,
@@ -463,7 +479,11 @@ def collect_corpus_for_tokenizer(
     )
     corpus: list[str] = []
 
-    pbar = tqdm(total=n, desc=f"Collecting {representation} corpus for APE tokenizer")
+    pbar = tqdm(
+        total=n,
+        desc=f"Collecting {representation} corpus for APE tokenizer",
+        disable=not show_progress,
+    )
     for row in ds:
         seq = normalize_sequence(row, representation)
         if seq is None:

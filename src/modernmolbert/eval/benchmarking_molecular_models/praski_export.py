@@ -73,7 +73,24 @@ def to_praski_schema(
         if column not in out.columns:
             out[column] = pd.NA
 
-    return out[PRASKI_COLUMNS]
+    return pd.DataFrame(out.loc[:, PRASKI_COLUMNS])
+
+
+def next_result_id(frame: pd.DataFrame) -> int:
+    if frame.empty:
+        return 1
+
+    ids: list[int] = []
+    for value in frame["id"].tolist():
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+
+    if not ids:
+        return 1
+
+    return max(ids) + 1
 
 
 def empty_results_frame() -> pd.DataFrame:
@@ -151,11 +168,31 @@ def delete_result_rows(
 def append_result_row(output_csv: str | Path, row: dict) -> pd.DataFrame:
     output_csv = Path(output_csv)
     existing = read_results_csv(output_csv)
-    next_id = 1 if existing.empty else int(pd.to_numeric(existing["id"]).max()) + 1
+    next_id = next_result_id(existing)
 
     row_frame = to_praski_schema(pd.DataFrame([{**row, "id": next_id}]))
     out = pd.concat([existing, row_frame], ignore_index=True)
     out = to_praski_schema(out)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(output_csv, index=False)
+    return out
+
+
+def write_dataset_checkpoint(
+    *,
+    results_csv: str | Path,
+    checkpoint_dir: str | Path,
+    dataset: str,
+    embedder: str,
+) -> pd.DataFrame:
+    frame = read_results_csv(results_csv)
+    if frame.empty:
+        out = empty_results_frame()
+    else:
+        out = frame.loc[(frame["dataset"] == dataset) & (frame["embedder"] == embedder)].copy()
+
+    checkpoint_dir = Path(checkpoint_dir)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    output_path = checkpoint_dir / f"{dataset}.csv"
+    out.to_csv(output_path, index=False)
     return out

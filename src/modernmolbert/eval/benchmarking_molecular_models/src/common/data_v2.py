@@ -12,29 +12,29 @@ Splits = dict[str, list[int]]
 
 
 def ogb_solver(name: str, root: str, load_graphs: bool = False) -> tuple[pd.DataFrame, Splits]:
-    from ogb.graphproppred import PygGraphPropPredDataset
+    try:
+        from ogb.graphproppred import PygGraphPropPredDataset as GraphDataset
+    except ImportError:
+        from ogb.graphproppred import GraphPropPredDataset as GraphDataset
 
-    dataset = PygGraphPropPredDataset(name=name, root=root)
+    dataset: Any = GraphDataset(name=name, root=root)
 
     smiles = pd.read_csv(f"{root}/{name.replace('-', '_')}/mapping/mol.csv.gz").drop(
         columns=["mol_id"]
     )
     if load_graphs:
-        smiles["graph"] = pd.Series(
-            [
-                {
-                    "edge_index": data.edge_index.numpy(),
-                    "edge_feat": data.edge_attr.numpy(),
-                    "node_feat": data.x.numpy(),
-                    "num_nodes": data.num_nodes,
-                    "x": data.x.numpy(),  # <- important, Torch tensor breaks joblib
-                    "y": data.y.numpy(),
-                }
-                for data in dataset
-            ],
-            index=smiles.index,
-            dtype="object",
-        )
+        graph_list: list[dict[str, Any]] = []
+        for data in dataset:
+            graph_dict: dict[str, Any] = {
+                "edge_index": data.edge_index.numpy(),
+                "edge_feat": data.edge_attr.numpy(),
+                "node_feat": data.x.numpy(),
+                "num_nodes": data.num_nodes,
+                "x": data.x.numpy(),  # <- important, Torch tensor breaks joblib
+                "y": data.y.numpy(),
+            }
+            graph_list.append(graph_dict)
+        smiles["graph"] = pd.Series(graph_list, index=smiles.index, dtype="object")
 
     raw_splits = dataset.get_idx_split()
     splits: Splits = {
@@ -173,7 +173,7 @@ def load(dataset_config: Any, raw_dir: str, resolve_from_cwd: bool = True) -> Da
     if dataset_config.source.name == "TDC" and "benchmark" in dataset_config.source:
         module = get_tdc_group(dataset_config.source.group)
         solver = get_tdc_solver(dataset_config.source.benchmark)
-        raw_data, splits = solver(module, dataset_config.name, raw_dir, load_graphs=True)
+        raw_data, splits = solver(module, dataset_config.name, raw_dir)
     elif dataset_config.source.name == "TDC":
         raw_data, splits = load_tdc_module_dataset(
             module=get_tdc_group(dataset_config.source.group),
@@ -182,10 +182,9 @@ def load(dataset_config: Any, raw_dir: str, resolve_from_cwd: bool = True) -> Da
             else dataset_config.name,
             root=raw_dir,
             label=dataset_config.source.labels if "labels" in dataset_config.source else None,
-            load_graphs=True,
         )
     elif dataset_config.source.name == "OGB":
-        raw_data, splits = ogb_solver(dataset_config.name, raw_dir, load_graphs=True)
+        raw_data, splits = ogb_solver(dataset_config.name, raw_dir)
     else:
         raise ValueError(f"Unknown dataset source: {dataset_config.source.name}")
 

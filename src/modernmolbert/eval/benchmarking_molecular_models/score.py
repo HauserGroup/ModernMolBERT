@@ -9,6 +9,9 @@ from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
     load_yaml_config,
 )
 from modernmolbert.eval.benchmarking_molecular_models.src.common.types import EmbeddingConfig
+from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
+    write_dataset_checkpoint,
+)
 from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
     AVAILABLE_HEADS,
 )
@@ -70,6 +73,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--config-dir", default="config")
     parser.add_argument("--output-csv", type=Path, default=Path("data/benchmark_results.csv"))
+    parser.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=None,
+        help="Optional directory for per-dataset result checkpoint CSVs.",
+    )
     parser.add_argument("--cache", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--safe", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument(
@@ -132,6 +141,13 @@ def main():
                 model_head,
                 args.output_csv,
                 override,
+            )
+        if args.checkpoint_dir is not None:
+            write_dataset_checkpoint(
+                results_csv=args.output_csv,
+                checkpoint_dir=args.checkpoint_dir,
+                dataset=dataset_info.name,
+                embedder=short_model_name,
             )
 
 

@@ -88,6 +88,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument(
+        "--show_progress",
+        action="store_true",
+        help="Show tqdm progress bar while collecting corpus.",
+    )
+    parser.add_argument(
         "--ape_source",
         type=str,
         default="modernmolbert.local",
@@ -112,7 +117,10 @@ def main() -> None:
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
         data_files=args.data_files,
+        show_progress=args.show_progress,
     )
+    print(f"Corpus collected: {len(corpus)} sequences")
+
     validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
 
     tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
@@ -158,6 +166,10 @@ def main() -> None:
     print(f"Tokenizer vocabulary: {output_vocab_path}")
     print(f"Tokenizer metadata: {metadata_path}")
     print(f"Vocab size: {vocab_size}")
+    print(f"Vocab SHA256: {vocab_sha256}")
+    print(f"Dataset: {args.dataset_name} (column: {resolved_column})")
+    print(f"Training size: {args.tokenizer_train_size}")
+    print(f"Max vocab: {args.max_vocab_size}, Min freq: {args.min_freq_for_merge}")
 
 
 if __name__ == "__main__":

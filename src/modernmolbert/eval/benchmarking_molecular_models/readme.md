@@ -64,6 +64,58 @@ The scoring heads are `rf`, `ridge`, and `knn`. Their grids are defined in
 `src/eval/supervised/models.py`; changing them changes benchmark results and
 the `library_hash`.
 
+## ModernMolBERT Praski Run
+
+Smoke-test the trained `runs/pubchem10m_mps_base_pilot_256/final_model`
+checkpoint on `clf_AMES`:
+
+```sh
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py \
+  --datasets clf_AMES
+
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernmolbert.py \
+  --datasets clf_AMES \
+  --model-dir runs/pubchem10m_mps_base_pilot_256/final_model \
+  --tokenizer-path runs/pubchem10m_mps_base_pilot_256/final_model \
+  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
+  --batch-size 32 \
+  --device auto \
+  --max-seq-length 256 \
+  --pooling mean
+
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
+  --datasets clf_AMES \
+  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
+  --output-csv outputs/eval/praski_pubchem10m_mps_base_pilot_256_smoke/results.csv \
+  --checkpoint-dir outputs/eval/praski_pubchem10m_mps_base_pilot_256_smoke/checkpoints
+```
+
+Run the full Praski registry after the smoke run succeeds:
+
+```sh
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py \
+  --datasets all
+
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernmolbert.py \
+  --datasets all \
+  --model-dir runs/pubchem10m_mps_base_pilot_256/final_model \
+  --tokenizer-path runs/pubchem10m_mps_base_pilot_256/final_model \
+  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
+  --batch-size 32 \
+  --device auto \
+  --max-seq-length 256 \
+  --pooling mean
+
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
+  --datasets all \
+  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
+  --output-csv outputs/eval/praski_pubchem10m_mps_base_pilot_256_full/results.csv \
+  --checkpoint-dir outputs/eval/praski_pubchem10m_mps_base_pilot_256_full/checkpoints
+```
+
+Per-dataset checkpoint CSVs are written as `<checkpoint-dir>/<dataset>.csv`.
+The aggregate CSV remains the canonical result table.
+
 ## Output Schema
 
 CSV results use exactly this column order:

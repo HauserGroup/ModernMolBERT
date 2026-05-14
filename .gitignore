@@ -224,12 +224,16 @@ runs/
 outputs/
 src/modernmolbert/eval/junk/benchmarking_molecular_models_upstream
 src/modernmolbert/eval/junk/
+/*.tsv
+/*.csv
+/*.tar.gz
 
 # AI
 .github/prompts/
 .prompt.md
 .agents/
 /*.prompt.md
+repomix*.xml
 
 # eval
 tmp_eval/
@@ -239,6 +243,7 @@ tokenizer/tests
 
 # TEMP main.pdf for now
 paper/main.pdf
+paper/papers/*
 
 ## Core latex/pdflatex auxiliary files:
 *.aux

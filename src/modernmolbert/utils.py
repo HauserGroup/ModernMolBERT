@@ -10,9 +10,10 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
-
 import numpy as np
 import pandas as pd
+
+
 import torch
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
 from tqdm.auto import tqdm
@@ -46,20 +47,6 @@ def repo_root() -> Path:
 def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
     if selfies_column is not None:
         return selfies_column
-    local = (
-        _resolve_dataset_name_as_local_path(dataset_name)
-        if _looks_like_path(dataset_name)
-        else None
-    )
-    if local is not None:
-        metadata_path = local / "metadata.json"
-        if metadata_path.exists():
-            try:
-                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-            except Exception:
-                metadata = {}
-            if isinstance(metadata, dict) and metadata.get("selfies_column"):
-                return str(metadata["selfies_column"])
     if dataset_name == ZINC20_CHEMBL36_DATASET:
         return "selfies"  # lowercase in this dataset
     if dataset_name == ZINC20_DATASET:
@@ -244,7 +231,8 @@ def collect_local_parquet_corpus(
 
         order = rng.permutation(len(frame))
         for row_idx in order:
-            seq = normalize_sequence(frame.iloc[int(row_idx)].to_dict(), representation)
+            row = {str(k): v for k, v in frame.iloc[int(row_idx)].to_dict().items()}
+            seq = normalize_sequence(row, representation)
             if seq is None:
                 continue
             corpus.append(seq)
@@ -270,43 +258,16 @@ def find_local_dataset(
     dataset metadata looks compatible with *dataset_name*.
     """
     if data_dir is not None:
-        if not _is_local_dataset_dir(data_dir):
-            raise FileNotFoundError(
-                f"Invalid data_dir: {data_dir}. Expected dataset_info.json or parquet split files."
-            )
+        if not (data_dir / "dataset_info.json").exists():
+            raise FileNotFoundError(f"Invalid data_dir: {data_dir}. Missing dataset_info.json.")
         return data_dir
-
-    if dataset_name and _looks_like_path(dataset_name):
-        resolved = _resolve_dataset_name_as_local_path(dataset_name)
-        if resolved is not None:
-            return resolved
-
-        attempted = Path(dataset_name).expanduser()
-        if attempted.is_absolute():
-            attempted_paths = [attempted]
-        else:
-            attempted_paths = [
-                (Path.cwd() / attempted).resolve(),
-                (repo_root() / attempted).resolve(),
-            ]
-
-        existing_dirs = [path for path in attempted_paths if path.exists() and path.is_dir()]
-        if existing_dirs:
-            raise FileNotFoundError(
-                "Local dataset path exists but is not a recognized dataset directory. "
-                f"Expected dataset_info.json or parquet split files under: {existing_dirs}"
-            )
-        raise FileNotFoundError(
-            f"Local dataset path not found for dataset_name={dataset_name!r}. "
-            f"Checked: {attempted_paths}"
-        )
 
     search_root = repo_root() / "data"
     if not search_root.exists():
         return None
 
     for candidate in sorted(search_root.iterdir()):
-        if not candidate.is_dir() or not _is_local_dataset_dir(candidate):
+        if not candidate.is_dir() or not (candidate / "dataset_info.json").exists():
             continue
         if dataset_name is None or _local_dataset_matches_request(candidate, dataset_name):
             return candidate
@@ -448,43 +409,25 @@ def get_streaming_dataset(
 
     local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
     if local is not None:
-        if (local / "dataset_info.json").exists():
-            print(f"[data] Loading Arrow dataset from disk: {local}", flush=True)
-            raw = load_from_disk(str(local))
-            if isinstance(raw, DatasetDict):
-                if split not in raw:
-                    available = ", ".join(sorted(str(k) for k in raw))
-                    raise ValueError(
-                        f"Local dataset at {local} has no split '{split}'. "
-                        f"Available splits: {available}"
-                    )
-                return raw[split].shuffle(seed=seed).to_iterable_dataset()
-            if isinstance(raw, Dataset):
-                if split != "train":
-                    raise ValueError(
-                        f"Requested split '{split}' but local dataset at {local} "
-                        "is a single train-only Dataset. "
-                        "Either disable --use_validation_split or save a DatasetDict with splits."
-                    )
-                return raw.shuffle(seed=seed).to_iterable_dataset()
-            raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
-
-        available_splits = _available_local_parquet_splits(local)
-        if split not in available_splits:
-            available = ", ".join(sorted(available_splits)) or "<none>"
-            raise ValueError(
-                f"Local parquet dataset at {local} has no split '{split}'. Available splits: {available}"
-            )
-
-        files = _split_parquet_files(local, split)
-        print(f"[data] Streaming parquet split '{split}' from local dataset: {local}", flush=True)
-        local_stream = load_dataset(
-            "parquet",
-            data_files={split: [str(file_path) for file_path in files]},
-            split=split,
-            streaming=True,
-        )
-        return local_stream.shuffle(seed=seed, buffer_size=buffer_size)
+        print(f"[data] Loading dataset from disk: {local}", flush=True)
+        raw = load_from_disk(str(local))
+        if isinstance(raw, DatasetDict):
+            if split not in raw:
+                available = ", ".join(sorted(str(k) for k in raw))
+                raise ValueError(
+                    f"Local dataset at {local} has no split '{split}'. "
+                    f"Available splits: {available}"
+                )
+            return raw[split].shuffle(seed=seed).to_iterable_dataset()
+        if isinstance(raw, Dataset):
+            if split != "train":
+                raise ValueError(
+                    f"Requested split '{split}' but local dataset at {local} "
+                    "is a single train-only Dataset. "
+                    "Either disable --use_validation_split or save a DatasetDict with splits."
+                )
+            return raw.shuffle(seed=seed).to_iterable_dataset()
+        raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
     print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
     try:
         hf_ds = load_dataset(dataset_name, split=split, streaming=True)
@@ -510,18 +453,6 @@ def collect_corpus_for_tokenizer(
     data_dir: Path | None = None,
     data_files: str | None = None,
 ) -> list[str]:
-    if data_files is None:
-        local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
-        if local is not None and not (local / "dataset_info.json").exists():
-            print(f"[data] Reading local parquet split 'train' directly: {local}", flush=True)
-            return collect_local_parquet_corpus(
-                directory=local,
-                representation=representation,
-                n=n,
-                seed=seed,
-                split="train",
-            )
-
     ds = get_streaming_dataset(
         dataset_name,
         split="train",

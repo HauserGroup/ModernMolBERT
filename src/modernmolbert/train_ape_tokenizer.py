@@ -35,15 +35,7 @@ def parse_args() -> argparse.Namespace:
         default=str(default_selfies_tokenizer_path()),
         help="Where to write tokenizer vocabulary JSON.",
     )
-    parser.add_argument(
-        "--dataset_name",
-        type=str,
-        default=DATASET_NAME,
-        help=(
-            "HF dataset ID or local prepared dataset directory "
-            "(e.g. data/pretrain/chembl36_selfies)."
-        ),
-    )
+    parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
         "--selfies_column",
         type=str,
@@ -76,6 +68,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer_train_size", type=int, default=2_000_000)
     parser.add_argument("--max_vocab_size", type=int, default=5000)
     parser.add_argument("--min_freq_for_merge", type=int, default=2000)
+    parser.add_argument(
+        "--save_checkpoint",
+        action="store_true",
+        help="Periodically save intermediate tokenizer checkpoints during APE merge training.",
+    )
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        default="tokenizer/checkpoints",
+        help="Directory where intermediate checkpoints are saved when --save_checkpoint is set.",
+    )
+    parser.add_argument(
+        "--checkpoint_interval",
+        type=int,
+        default=500,
+        help="Checkpoint interval in learned vocabulary entries.",
+    )
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument(
@@ -111,7 +120,9 @@ def main() -> None:
         corpus,
         max_vocab_size=args.max_vocab_size,
         min_freq_for_merge=args.min_freq_for_merge,
-        save_checkpoint=False,
+        save_checkpoint=args.save_checkpoint,
+        checkpoint_path=args.checkpoint_path,
+        checkpoint_interval=args.checkpoint_interval,
     )
 
     # Phase 1: write the vocab to disk.

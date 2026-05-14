@@ -1,7 +1,4 @@
-import os
 from pathlib import Path
-
-import pytest
 
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.validate_tokenizer import _assert_ethanol_not_unknown
@@ -13,7 +10,6 @@ from modernmolbert.utils import (
     collect_corpus_for_tokenizer,
     compute_tokenization_stats,
     find_local_dataset,
-    get_streaming_dataset,
     eligible_token_ids,
     file_sha256,
     infer_selfies_column,
@@ -195,19 +191,6 @@ def test_infer_selfies_column_for_pubchem_and_zinc20():
     assert infer_selfies_column(PUBCHEM10M_DATASET, "my_col") == "my_col"
 
 
-def test_infer_selfies_column_for_local_metadata(tmp_path: Path, monkeypatch):
-    dataset_dir = tmp_path / "data" / "pretrain" / "chembl36_selfies"
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-    (dataset_dir / "train.parquet").write_text("placeholder", encoding="utf-8")
-    (dataset_dir / "metadata.json").write_text(
-        '{"selfies_column": "selfies"}',
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("modernmolbert.utils.repo_root", lambda: tmp_path)
-
-    assert infer_selfies_column("data/pretrain/chembl36_selfies", None) == "selfies"
-
-
 def test_infer_validation_split_for_pubchem_and_zinc20():
     assert infer_validation_split(PUBCHEM10M_DATASET, None) is None
     assert infer_validation_split(ZINC20_DATASET, None) == "validation"
@@ -229,7 +212,7 @@ def test_find_local_dataset_raises_for_invalid_explicit_dir(tmp_path: Path):
         find_local_dataset(data_dir=missing, dataset_name=PUBCHEM10M_DATASET)
         raise AssertionError("Expected FileNotFoundError for explicit invalid data_dir")
     except FileNotFoundError as exc:
-        assert "dataset_info.json" in str(exc) or "parquet" in str(exc)
+        assert "dataset_info.json" in str(exc)
 
 
 def test_collect_corpus_passes_data_files(monkeypatch):
@@ -264,79 +247,3 @@ def test_collect_corpus_passes_data_files(monkeypatch):
 
     assert corpus == ["[C][C][O]", "[C][O][C]"]
     assert captured.get("data_files") == "/tmp/data/*.parquet"
-
-
-def test_find_local_dataset_resolves_path_like_dataset_name(tmp_path: Path, monkeypatch):
-    dataset_name = "chembl36_selfies_tmp_local_test"
-    dataset_dir = tmp_path / "data" / "pretrain" / dataset_name
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-    (dataset_dir / "train.parquet").write_text("placeholder", encoding="utf-8")
-
-    monkeypatch.setattr("modernmolbert.utils.repo_root", lambda: tmp_path)
-
-    resolved = find_local_dataset(dataset_name=f"data/pretrain/{dataset_name}")
-
-    assert resolved == dataset_dir
-
-
-def test_find_local_dataset_path_like_fails_fast_when_missing(monkeypatch):
-    monkeypatch.setattr("modernmolbert.utils.repo_root", lambda: Path("/tmp/does-not-exist"))
-
-    try:
-        find_local_dataset(dataset_name="data/pretrain/missing")
-        raise AssertionError("Expected FileNotFoundError for missing local dataset path")
-    except FileNotFoundError as exc:
-        assert "Local dataset path not found" in str(exc)
-
-
-def test_get_streaming_dataset_uses_local_parquet_split(tmp_path: Path, monkeypatch):
-    import pandas as pd
-
-    dataset_name = "chembl36_selfies_tmp_stream_test"
-    dataset_dir = tmp_path / "data" / "pretrain" / dataset_name
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"SELFIES": ["[C][C][O]", "[C][O][C]"]}).to_parquet(
-        dataset_dir / "train.parquet",
-        index=False,
-    )
-
-    monkeypatch.setattr("modernmolbert.utils.repo_root", lambda: tmp_path)
-
-    ds = get_streaming_dataset(
-        dataset_name=f"data/pretrain/{dataset_name}",
-        seed=13,
-        buffer_size=10,
-        split="train",
-    )
-    first = next(iter(ds))
-
-    assert "SELFIES" in first
-
-
-@pytest.mark.skipif(
-    os.getenv("RUN_SLOW_TOKENIZER_TESTS") != "1",
-    reason="Optional slow integration test; set RUN_SLOW_TOKENIZER_TESTS=1 to run.",
-)
-def test_collect_corpus_from_local_parquet_dataset(tmp_path: Path, monkeypatch):
-    import pandas as pd
-
-    dataset_name = "chembl36_selfies_tmp_corpus_test"
-    dataset_dir = tmp_path / "data" / "pretrain" / dataset_name
-    dataset_dir.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({"SELFIES": ["[C][C][O]", "[C][O][C]", "[C][C][C]"]}).to_parquet(
-        dataset_dir / "train.parquet",
-        index=False,
-    )
-
-    monkeypatch.setattr("modernmolbert.utils.repo_root", lambda: tmp_path)
-
-    corpus = collect_corpus_for_tokenizer(
-        dataset_name=f"data/pretrain/{dataset_name}",
-        representation="SELFIES",
-        n=2,
-        seed=13,
-        buffer_size=10,
-    )
-
-    assert len(corpus) == 2
-    assert all(seq.startswith("[") for seq in corpus)

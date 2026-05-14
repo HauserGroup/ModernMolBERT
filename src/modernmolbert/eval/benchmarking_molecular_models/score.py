@@ -8,15 +8,18 @@ from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
     load_embedding_config,
     load_yaml_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.db import DbContex
 from modernmolbert.eval.benchmarking_molecular_models.src.common.types import EmbeddingConfig
-from modernmolbert.eval.benchmarking_molecular_models.src.eval import (
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
     AVAILABLE_HEADS,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.procedure import (
     eval_procedure,
 )
 
 
-def eval(cfg, embed_config, model_name, dataset_info, short_model_name, model_head, override):
+def eval(
+    cfg, embed_config, model_name, dataset_info, short_model_name, model_head, output_csv, override
+):
     log.info(
         f"Evaluating model {model_name} on dataset {dataset_info.name} with metric {dataset_info.metric} with head {model_head}"
     )
@@ -29,6 +32,7 @@ def eval(cfg, embed_config, model_name, dataset_info, short_model_name, model_he
                 predictions_dir=embed_config.predictions_directory,
                 model_name=short_model_name,
                 model_head=model_head,
+                output_csv=output_csv,
                 override=override,
             )
         except Exception as e:
@@ -44,6 +48,7 @@ def eval(cfg, embed_config, model_name, dataset_info, short_model_name, model_he
             predictions_dir=embed_config.predictions_directory,
             model_name=short_model_name,
             model_head=model_head,
+            output_csv=output_csv,
             override=override,
         )
 
@@ -64,6 +69,7 @@ def parse_args() -> argparse.Namespace:
         help="Scoring heads to run.",
     )
     parser.add_argument("--config-dir", default="config")
+    parser.add_argument("--output-csv", type=Path, default=Path("data/benchmark_results.csv"))
     parser.add_argument("--cache", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--safe", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument(
@@ -79,7 +85,7 @@ def main():
     root = Path(__file__).resolve().parent
     config_dir = root / args.config_dir
     cfg = load_yaml_config(config_dir / "score.yaml")
-    cfg.embedding = load_embedding_config(config_dir)
+    cfg["embedding"] = load_embedding_config(config_dir)
 
     model_name = args.model_name
     for override in args.overrides:
@@ -103,8 +109,8 @@ def main():
     dataset_names = expand_dataset_selection(config_dir, dataset_selections)
     cache = cfg.get("cache", True) if args.cache is None else args.cache
     safe = cfg.get("safe", False) if args.safe is None else args.safe
-    cfg.cache = cache
-    cfg.safe = safe
+    cfg["cache"] = cache
+    cfg["safe"] = safe
 
     embed_config = EmbeddingConfig(**cfg.embedding)
     if "gpt" in model_name.lower():
@@ -114,19 +120,19 @@ def main():
     override = not cache
     print(f"Override status {override}")
 
-    with DbContex(embed_config):
-        for dataset_name in dataset_names:
-            dataset_info = load_dataset_config(config_dir, dataset_name)
-            for model_head in args.heads:
-                eval(
-                    cfg,
-                    embed_config,
-                    model_name,
-                    dataset_info,
-                    short_model_name,
-                    model_head,
-                    override,
-                )
+    for dataset_name in dataset_names:
+        dataset_info = load_dataset_config(config_dir, dataset_name)
+        for model_head in args.heads:
+            eval(
+                cfg,
+                embed_config,
+                model_name,
+                dataset_info,
+                short_model_name,
+                model_head,
+                args.output_csv,
+                override,
+            )
 
 
 if __name__ == "__main__":

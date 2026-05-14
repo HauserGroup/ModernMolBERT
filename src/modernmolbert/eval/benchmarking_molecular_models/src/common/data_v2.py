@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
 
+from importlib import import_module
 from os.path import join
-from typing import Any
+from typing import Any, Literal
 
 from .types import Dataset
 
@@ -19,18 +20,29 @@ def ogb_solver(name: str, root: str, load_graphs: bool = False) -> tuple[pd.Data
         columns=["mol_id"]
     )
     if load_graphs:
-        smiles["graph"] = [
-            {
-                "edge_index": data.edge_index.numpy(),
-                "edge_feat": data.edge_attr.numpy(),
-                "node_feat": data.x.numpy(),
-                "num_nodes": data.num_nodes,
-                "x": data.x.numpy(),  # <- important, Torch tensor breaks joblib
-                "y": data.y.numpy(),
-            }
-            for data in dataset
-        ]
-    return smiles, dataset.get_idx_split()
+        smiles["graph"] = pd.Series(
+            [
+                {
+                    "edge_index": data.edge_index.numpy(),
+                    "edge_feat": data.edge_attr.numpy(),
+                    "node_feat": data.x.numpy(),
+                    "num_nodes": data.num_nodes,
+                    "x": data.x.numpy(),  # <- important, Torch tensor breaks joblib
+                    "y": data.y.numpy(),
+                }
+                for data in dataset
+            ],
+            index=smiles.index,
+            dtype="object",
+        )
+
+    raw_splits = dataset.get_idx_split()
+    splits: Splits = {
+        "train": list(raw_splits["train"].tolist()),
+        "valid": list(raw_splits["valid"].tolist()),
+        "test": list(raw_splits["test"].tolist()),
+    }
+    return smiles, splits
 
 
 def load_tdc_module_dataset(
@@ -50,7 +62,8 @@ def load_tdc_module_dataset(
 
     if load_graphs:
         from ogb.utils import smiles2graph
-        from tdc.chem_utils import MolConvert
+
+        MolConvert = import_module("tdc.chem_utils").MolConvert
 
         converter = MolConvert(src="SMILES", dst="PyG")
         dataset["graph"] = dataset["Drug"].map(
@@ -84,7 +97,8 @@ def tdc_admet_solver(
 
     if load_graphs:
         from ogb.utils import smiles2graph
-        from tdc.chem_utils import MolConvert
+
+        MolConvert = import_module("tdc.chem_utils").MolConvert
 
         converter = MolConvert(src="SMILES", dst="PyG")
         dataset["graph"] = dataset["Drug"].map(
@@ -95,7 +109,7 @@ def tdc_admet_solver(
             }
         )
 
-    from tdc.benchmark_group import admet_group
+    admet_group = import_module("tdc.benchmark_group").admet_group
 
     group = admet_group(path="data/")
     benchmark = group.get(name)
@@ -121,7 +135,10 @@ def tdc_admet_solver(
 
 
 def get_tdc_group(group_name: str):
-    from tdc.single_pred import ADME, HTS, Tox
+    single_pred = import_module("tdc.single_pred")
+    ADME = single_pred.ADME
+    HTS = single_pred.HTS
+    Tox = single_pred.Tox
 
     return {
         "ADME": ADME,
@@ -140,7 +157,13 @@ def build_dataset(name: str, task: str, raw_data: pd.DataFrame, splits: Splits) 
     from rdkit import Chem
 
     raw_data["smiles"] = raw_data["smiles"].map(Chem.CanonSmiles)
-    return Dataset(name=name, data=raw_data, splits=splits, task=task)
+    task_lower = task.lower()
+    if task_lower not in {"classification", "regression"}:
+        raise ValueError(f"Unknown task: {task}")
+    typed_task: Literal["classification", "regression"] = (
+        "classification" if task_lower == "classification" else "regression"
+    )
+    return Dataset(name=name, data=raw_data, splits=splits, task=typed_task)
 
 
 def load(dataset_config: Any, raw_dir: str, resolve_from_cwd: bool = True) -> Dataset:

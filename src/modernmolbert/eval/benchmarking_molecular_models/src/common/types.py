@@ -59,7 +59,6 @@ class EmbeddingConfig:
     predictions_directory: str
     data_directory: str
     clock_directory: str
-    database: str
     prepared_directory: str
     svd_directory: str
     max_invalid_embeddings: int

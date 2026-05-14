@@ -5,7 +5,7 @@ embedding tables. It does three things only:
 
 1. download and prepare benchmark datasets;
 2. score existing embedding files with the benchmark heads;
-3. export results to the public CSV schema.
+3. write results directly to the public CSV schema.
 
 External model wrappers, notebook visualizations, historical paper artifacts,
 and dependency-management scripts are intentionally not part of this package.
@@ -54,14 +54,11 @@ Run scoring for one existing embedder:
 Equivalent direct commands:
 
 ```sh
-python score.py --embedder <embedder_name>
-python -m modernmolbert.eval.benchmarking_molecular_models.export_results \
-  --database data/meta.db \
-  --output-csv data/classificationreport.csv
+python score.py --embedder <embedder_name> --output-csv data/benchmark_results.csv
 ```
 
 The stripped benchmark runner uses `argparse` plus YAML loading directly; it
-does not require Hydra or OmegaConf.
+does not require Hydra, OmegaConf, SQL, or database files.
 
 The scoring heads are `rf`, `ridge`, and `knn`. Their grids are defined in
 `src/eval/supervised/models.py`; changing them changes benchmark results and
@@ -69,7 +66,7 @@ the `library_hash`.
 
 ## Output Schema
 
-CSV exports use exactly this column order:
+CSV results use exactly this column order:
 
 ```text
 id,dataset,task,embedder,model,hyperparams,library_hash,cv_metric_name,cv_metric,test_metric_name,test_metric,key
@@ -77,7 +74,7 @@ id,dataset,task,embedder,model,hyperparams,library_hash,cv_metric_name,cv_metric
 
 Column meanings:
 
-- `id`: SQLite row id from `ClassificationReport`;
+- `id`: monotonically increasing row id assigned when appending to the CSV;
 - `dataset`: benchmark dataset name;
 - `task`: dataset task string, usually `classification` or `regression`;
 - `embedder`: embedding file/model name;

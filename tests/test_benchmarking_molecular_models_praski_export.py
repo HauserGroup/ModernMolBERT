@@ -2,6 +2,10 @@ import pandas as pd
 
 from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     PRASKI_COLUMNS,
+    append_result_row,
+    count_result_rows,
+    delete_result_rows,
+    read_results_csv,
     to_praski_schema,
 )
 
@@ -62,3 +66,49 @@ def test_to_praski_schema_regression_row() -> None:
     assert out.loc[0, "task"] == "regression"
     assert out.loc[0, "cv_metric_name"] == "rmse"
     assert out.loc[0, "test_metric_name"] == "rmse"
+
+
+def test_csv_result_store_appends_counts_and_deletes_rows(tmp_path) -> None:
+    output_csv = tmp_path / "benchmark_results.csv"
+    row = {
+        "dataset": "bbbp",
+        "task": "classification",
+        "embedder": "modernmolbert",
+        "model": "rf",
+        "hyperparams": '{"clf__n_estimators": 500}',
+        "library_hash": "abc123",
+        "cv_metric_name": "roc_auc",
+        "cv_metric": 0.75,
+        "test_metric_name": "roc_auc",
+        "test_metric": 0.80,
+    }
+
+    frame = append_result_row(output_csv, row)
+
+    assert list(frame.columns) == PRASKI_COLUMNS
+    assert output_csv.exists()
+    assert frame.loc[0, "id"] == 1
+    assert frame.loc[0, "key"] == "bbbp_modernmolbert_rf"
+    assert (
+        count_result_rows(
+            output_csv,
+            dataset="bbbp",
+            embedder="modernmolbert",
+            cv_metric_name="roc_auc",
+            model="rf",
+        )
+        == 1
+    )
+
+    append_result_row(output_csv, {**row, "model": "ridge"})
+    assert len(read_results_csv(output_csv)) == 2
+
+    out = delete_result_rows(
+        output_csv,
+        dataset="bbbp",
+        embedder="modernmolbert",
+        cv_metric_name="roc_auc",
+        model="rf",
+    )
+    assert len(out) == 1
+    assert out.loc[out.index[0], "model"] == "ridge"

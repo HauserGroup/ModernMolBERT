@@ -35,7 +35,6 @@ def test_benchmark_package_is_stripped_to_dataset_scoring_and_export() -> None:
     assert root.exists()
     assert (root / "download.py").exists()
     assert (root / "score.py").exists()
-    assert (root / "export_results.py").exists()
     assert (root / "run_scoring.sh").exists()
     assert (root / "config" / "datasets.yaml").exists()
 
@@ -55,6 +54,8 @@ def test_benchmark_package_is_stripped_to_dataset_scoring_and_export() -> None:
         "visualizations.ipynb",
         "requirements.txt",
         "base_requirements.txt",
+        "export_results.py",
+        "src/common/db.py",
     ]
     for rel_path in removed:
         assert not (root / rel_path).exists()
@@ -91,6 +92,21 @@ def test_stripped_benchmark_has_no_hydra_or_omegaconf_runtime_dependency() -> No
         assert "get_original_cwd" not in text, path
 
 
+def test_stripped_benchmark_has_no_sql_runtime() -> None:
+    root = Path("src/modernmolbert/eval/benchmarking_molecular_models")
+    checked_files = [
+        path
+        for path in root.rglob("*")
+        if path.suffix in {".py", ".yaml", ".md"} and "__pycache__" not in path.parts
+    ]
+
+    for path in checked_files:
+        text = path.read_text().lower()
+        assert "sqlite" not in text, path
+        assert "classificationreport" not in text, path
+        assert "meta.db" not in text, path
+
+
 def test_download_prepares_missing_dataset_without_network(monkeypatch, tmp_path) -> None:
     from modernmolbert.eval.benchmarking_molecular_models import download
 
@@ -106,7 +122,6 @@ def test_download_prepares_missing_dataset_without_network(monkeypatch, tmp_path
                 "predictions_directory: data/predictions",
                 "clock_directory: data/clock",
                 "svd_directory: data/svd",
-                "database: data/meta.db",
                 "max_invalid_embeddings: 50",
             ]
         )

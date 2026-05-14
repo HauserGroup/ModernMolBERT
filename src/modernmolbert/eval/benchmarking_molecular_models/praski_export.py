@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 import pandas as pd
@@ -77,39 +76,86 @@ def to_praski_schema(
     return out[PRASKI_COLUMNS]
 
 
-def export_classification_reports(
-    *,
-    database_path: str | Path,
-    output_csv: str | Path,
-) -> pd.DataFrame:
-    database_path = Path(database_path)
+def empty_results_frame() -> pd.DataFrame:
+    return pd.DataFrame(columns=PRASKI_COLUMNS)
+
+
+def read_results_csv(output_csv: str | Path) -> pd.DataFrame:
     output_csv = Path(output_csv)
+    if not output_csv.exists():
+        return empty_results_frame()
+    return to_praski_schema(pd.read_csv(output_csv))
 
-    if not database_path.exists():
-        raise FileNotFoundError(f"Benchmark database not found: {database_path}")
 
-    with sqlite3.connect(database_path) as conn:
-        frame = pd.read_sql_query(
-            """
-            SELECT
-                id,
-                dataset,
-                task,
-                embedder,
-                model,
-                hyperparams,
-                library_hash,
-                cv_metric_name,
-                cv_metric,
-                test_metric_name,
-                test_metric
-            FROM classificationreport
-            ORDER BY id
-            """,
-            conn,
-        )
+def result_mask(
+    frame: pd.DataFrame,
+    *,
+    dataset: str,
+    embedder: str,
+    cv_metric_name: str,
+    model: str,
+) -> pd.Series:
+    if frame.empty:
+        return pd.Series(dtype=bool)
+    return (
+        (frame["dataset"] == dataset)
+        & (frame["embedder"] == embedder)
+        & (frame["cv_metric_name"] == cv_metric_name)
+        & (frame["model"] == model)
+    )
 
-    out = to_praski_schema(frame)
+
+def count_result_rows(
+    output_csv: str | Path,
+    *,
+    dataset: str,
+    embedder: str,
+    cv_metric_name: str,
+    model: str,
+) -> int:
+    frame = read_results_csv(output_csv)
+    return int(
+        result_mask(
+            frame,
+            dataset=dataset,
+            embedder=embedder,
+            cv_metric_name=cv_metric_name,
+            model=model,
+        ).sum()
+    )
+
+
+def delete_result_rows(
+    output_csv: str | Path,
+    *,
+    dataset: str,
+    embedder: str,
+    cv_metric_name: str,
+    model: str,
+) -> pd.DataFrame:
+    output_csv = Path(output_csv)
+    frame = read_results_csv(output_csv)
+    mask = result_mask(
+        frame,
+        dataset=dataset,
+        embedder=embedder,
+        cv_metric_name=cv_metric_name,
+        model=model,
+    )
+    out = frame.loc[~mask].copy()
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    out.to_csv(output_csv, index=False)
+    return out
+
+
+def append_result_row(output_csv: str | Path, row: dict) -> pd.DataFrame:
+    output_csv = Path(output_csv)
+    existing = read_results_csv(output_csv)
+    next_id = 1 if existing.empty else int(pd.to_numeric(existing["id"]).max()) + 1
+
+    row_frame = to_praski_schema(pd.DataFrame([{**row, "id": next_id}]))
+    out = pd.concat([existing, row_frame], ignore_index=True)
+    out = to_praski_schema(out)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(output_csv, index=False)
     return out

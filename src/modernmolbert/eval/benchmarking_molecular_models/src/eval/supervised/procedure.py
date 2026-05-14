@@ -8,10 +8,10 @@ import logging as log
 from os.path import join
 from typing import Any
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.db import (
-    count_classification_reports,
-    create_classification_report,
-    delete_classification_reports,
+from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
+    append_result_row,
+    count_result_rows,
+    delete_result_rows,
 )
 from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
     EmbeddedDataset,
@@ -55,12 +55,14 @@ def dump_hyperparams(hyperparams: dict) -> str:
 
 
 def check_if_already_evaluated(
+    output_csv: str,
     dataset_name: str,
     model_name: str,
     metric_name: str,
     head_name: str,
 ) -> bool:
-    runs = count_classification_reports(
+    runs = count_result_rows(
+        output_csv,
         dataset=dataset_name,
         embedder=model_name,
         cv_metric_name=metric_name,
@@ -72,12 +74,14 @@ def check_if_already_evaluated(
 
 
 def delete_previous_evaluations(
+    output_csv: str,
     dataset_name: str,
     model_name: str,
     metric_name: str,
     head_name: str,
 ):
-    delete_classification_reports(
+    delete_result_rows(
+        output_csv,
         dataset=dataset_name,
         embedder=model_name,
         cv_metric_name=metric_name,
@@ -94,16 +98,21 @@ def eval_procedure(
     predictions_dir: str,
     model_name: str,
     model_head: str,
+    output_csv: str,
     override: bool = False,
 ):
     model_version_hash = get_model_version_hash()
 
-    if check_if_already_evaluated(dataset_info.name, model_name, dataset_info.metric, model_head):
+    if check_if_already_evaluated(
+        output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
+    ):
         if not override:
             log.info("Model already evaluated, skipping")
             return
         log.warning("Model already evaluated, overriding")
-        delete_previous_evaluations(dataset_info.name, model_name, dataset_info.metric, model_head)
+        delete_previous_evaluations(
+            output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
+        )
 
     if model_head == "knn" and "muv" in dataset_info.name:
         log.error("Skipping KNN evaluation for MUV datasets, not supported")
@@ -146,15 +155,18 @@ def eval_procedure(
     )
     log.info(f"Evaluation complete, test result: {result.metric_value}")
 
-    create_classification_report(
-        dataset=embedded_data.name,
-        task=embedded_data.task,
-        embedder=embedded_data.embedder,
-        model=result.model,
-        hyperparams=dump_hyperparams(result.hyperparams),
-        library_hash=model_version_hash,
-        cv_metric_name=dataset_info.metric,
-        cv_metric=result.cv_metric_value,
-        test_metric_name=result.metric_name,
-        test_metric=result.metric_value,
+    append_result_row(
+        output_csv,
+        {
+            "dataset": embedded_data.name,
+            "task": embedded_data.task,
+            "embedder": embedded_data.embedder,
+            "model": result.model,
+            "hyperparams": dump_hyperparams(result.hyperparams),
+            "library_hash": model_version_hash,
+            "cv_metric_name": dataset_info.metric,
+            "cv_metric": result.cv_metric_value,
+            "test_metric_name": result.metric_name,
+            "test_metric": result.metric_value,
+        },
     )

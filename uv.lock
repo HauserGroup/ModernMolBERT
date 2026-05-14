@@ -1235,6 +1235,12 @@ eval-transformers = [
     { name = "torch" },
     { name = "transformers" },
 ]
+pretrain-data = [
+    { name = "pandas" },
+    { name = "pyarrow" },
+    { name = "rdkit" },
+    { name = "selfies" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1278,6 +1284,12 @@ eval-prep = [
 eval-transformers = [
     { name = "torch", specifier = ">=2.11.0" },
     { name = "transformers", specifier = ">=5.8.0" },
+]
+pretrain-data = [
+    { name = "pandas", specifier = ">=3.0.2" },
+    { name = "pyarrow", specifier = ">=24.0.0" },
+    { name = "rdkit", specifier = ">=2026.3.1" },
+    { name = "selfies", specifier = ">=2.2.0" },
 ]
 
 [[package]]

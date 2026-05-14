@@ -354,13 +354,6 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         self.vocab = {str(token): int(idx) for token, idx in vocab.items()}
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
 
-    def load_vocabulary(
-        self,
-        file_path: str | os.PathLike[str],
-        representation: str | None = None,
-    ) -> None:
-        self.load_vocabulary_file(file_path, representation=representation)
-
     def train(
         self,
         corpus,

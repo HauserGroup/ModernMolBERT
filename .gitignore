@@ -220,7 +220,7 @@ __marimo__/
 # scratch
 scratch/
 runs/
-data/
+/data/
 outputs/
 
 # AI

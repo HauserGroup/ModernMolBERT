@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 
+import numpy as np
+import pandas as pd
 import torch
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
 from tqdm.auto import tqdm
@@ -44,6 +46,20 @@ def repo_root() -> Path:
 def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
     if selfies_column is not None:
         return selfies_column
+    local = (
+        _resolve_dataset_name_as_local_path(dataset_name)
+        if _looks_like_path(dataset_name)
+        else None
+    )
+    if local is not None:
+        metadata_path = local / "metadata.json"
+        if metadata_path.exists():
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except Exception:
+                metadata = {}
+            if isinstance(metadata, dict) and metadata.get("selfies_column"):
+                return str(metadata["selfies_column"])
     if dataset_name == ZINC20_CHEMBL36_DATASET:
         return "selfies"  # lowercase in this dataset
     if dataset_name == ZINC20_DATASET:
@@ -116,6 +132,133 @@ def _local_dataset_matches_request(local_dir: Path, dataset_name: str) -> bool:
     return any(requested in c or c in requested for c in candidates if c)
 
 
+def _looks_like_path(value: str) -> bool:
+    candidate = Path(value)
+    return candidate.is_absolute() or "/" in value or "\\" in value or value.startswith(".")
+
+
+def _is_local_dataset_dir(directory: Path) -> bool:
+    if not directory.is_dir():
+        return False
+    if (directory / "dataset_info.json").exists():
+        return True
+    if any(directory.glob("*.parquet")):
+        return True
+    return bool(any(directory.glob("**/*.parquet")))
+
+
+def _resolve_dataset_name_as_local_path(dataset_name: str) -> Path | None:
+    candidate = Path(dataset_name).expanduser()
+    candidates: list[Path] = []
+
+    if candidate.is_absolute():
+        candidates.append(candidate)
+    else:
+        candidates.append((Path.cwd() / candidate).resolve())
+        candidates.append((repo_root() / candidate).resolve())
+
+    seen: set[Path] = set()
+    for resolved in candidates:
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if resolved.exists() and resolved.is_dir() and _is_local_dataset_dir(resolved):
+            return resolved
+    return None
+
+
+def _available_local_parquet_splits(directory: Path) -> set[str]:
+    aliases = {
+        "train": {"train"},
+        "valid": {"valid", "validation", "val"},
+        "validation": {"validation", "valid", "val"},
+        "val": {"val", "validation", "valid"},
+        "test": {"test"},
+    }
+
+    available: set[str] = set()
+    for split_name, names in aliases.items():
+        if any((directory / f"{name}.parquet").exists() for name in names):
+            available.add(split_name)
+            continue
+        if any(directory.glob(f"**/{split_name}.parquet")):
+            available.add(split_name)
+            continue
+        if any(directory.glob(f"**/{split_name}-*.parquet")):
+            available.add(split_name)
+            continue
+    return available
+
+
+def _split_parquet_files(directory: Path, split: str) -> list[Path]:
+    aliases = {
+        "train": ["train"],
+        "valid": ["valid", "validation", "val"],
+        "validation": ["validation", "valid", "val"],
+        "val": ["val", "validation", "valid"],
+        "test": ["test"],
+    }
+
+    files: list[Path] = []
+    for name in aliases.get(split, [split]):
+        files.extend(directory.glob(f"{name}.parquet"))
+        files.extend(directory.glob(f"{name}-*.parquet"))
+
+    if not files:
+        for name in aliases.get(split, [split]):
+            files.extend(directory.glob(f"**/{name}.parquet"))
+            files.extend(directory.glob(f"**/{name}-*.parquet"))
+
+    return sorted(set(files))
+
+
+def collect_local_parquet_corpus(
+    *,
+    directory: Path,
+    representation: str,
+    n: int,
+    seed: int,
+    split: str = "train",
+) -> list[str]:
+    files = _split_parquet_files(directory, split)
+    if not files:
+        available = ", ".join(sorted(_available_local_parquet_splits(directory))) or "<none>"
+        raise ValueError(
+            f"Local parquet dataset at {directory} has no split '{split}'. Available splits: {available}"
+        )
+
+    rng = np.random.default_rng(seed)
+    corpus: list[str] = []
+    pbar = tqdm(total=n, desc=f"Collecting {representation} corpus for APE tokenizer")
+
+    for file_path in files:
+        try:
+            frame = pd.read_parquet(file_path, columns=[representation])
+        except ValueError as exc:
+            raise ValueError(
+                f"Parquet file {file_path} does not contain column {representation!r}."
+            ) from exc
+
+        if len(frame) == 0:
+            continue
+
+        order = rng.permutation(len(frame))
+        for row_idx in order:
+            seq = normalize_sequence(frame.iloc[int(row_idx)].to_dict(), representation)
+            if seq is None:
+                continue
+            corpus.append(seq)
+            pbar.update(1)
+            if len(corpus) >= n:
+                pbar.close()
+                return corpus
+
+    pbar.close()
+    if not corpus:
+        raise RuntimeError("Tokenizer corpus is empty. Check dataset column names.")
+    return corpus
+
+
 def find_local_dataset(
     data_dir: Path | None = None,
     dataset_name: str | None = None,
@@ -127,16 +270,43 @@ def find_local_dataset(
     dataset metadata looks compatible with *dataset_name*.
     """
     if data_dir is not None:
-        if not (data_dir / "dataset_info.json").exists():
-            raise FileNotFoundError(f"Invalid data_dir: {data_dir}. Missing dataset_info.json.")
+        if not _is_local_dataset_dir(data_dir):
+            raise FileNotFoundError(
+                f"Invalid data_dir: {data_dir}. Expected dataset_info.json or parquet split files."
+            )
         return data_dir
+
+    if dataset_name and _looks_like_path(dataset_name):
+        resolved = _resolve_dataset_name_as_local_path(dataset_name)
+        if resolved is not None:
+            return resolved
+
+        attempted = Path(dataset_name).expanduser()
+        if attempted.is_absolute():
+            attempted_paths = [attempted]
+        else:
+            attempted_paths = [
+                (Path.cwd() / attempted).resolve(),
+                (repo_root() / attempted).resolve(),
+            ]
+
+        existing_dirs = [path for path in attempted_paths if path.exists() and path.is_dir()]
+        if existing_dirs:
+            raise FileNotFoundError(
+                "Local dataset path exists but is not a recognized dataset directory. "
+                f"Expected dataset_info.json or parquet split files under: {existing_dirs}"
+            )
+        raise FileNotFoundError(
+            f"Local dataset path not found for dataset_name={dataset_name!r}. "
+            f"Checked: {attempted_paths}"
+        )
 
     search_root = repo_root() / "data"
     if not search_root.exists():
         return None
 
     for candidate in sorted(search_root.iterdir()):
-        if not candidate.is_dir() or not (candidate / "dataset_info.json").exists():
+        if not candidate.is_dir() or not _is_local_dataset_dir(candidate):
             continue
         if dataset_name is None or _local_dataset_matches_request(candidate, dataset_name):
             return candidate
@@ -278,25 +448,43 @@ def get_streaming_dataset(
 
     local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
     if local is not None:
-        print(f"[data] Loading dataset from disk: {local}", flush=True)
-        raw = load_from_disk(str(local))
-        if isinstance(raw, DatasetDict):
-            if split not in raw:
-                available = ", ".join(sorted(str(k) for k in raw))
-                raise ValueError(
-                    f"Local dataset at {local} has no split '{split}'. "
-                    f"Available splits: {available}"
-                )
-            return raw[split].shuffle(seed=seed).to_iterable_dataset()
-        if isinstance(raw, Dataset):
-            if split != "train":
-                raise ValueError(
-                    f"Requested split '{split}' but local dataset at {local} "
-                    "is a single train-only Dataset. "
-                    "Either disable --use_validation_split or save a DatasetDict with splits."
-                )
-            return raw.shuffle(seed=seed).to_iterable_dataset()
-        raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
+        if (local / "dataset_info.json").exists():
+            print(f"[data] Loading Arrow dataset from disk: {local}", flush=True)
+            raw = load_from_disk(str(local))
+            if isinstance(raw, DatasetDict):
+                if split not in raw:
+                    available = ", ".join(sorted(str(k) for k in raw))
+                    raise ValueError(
+                        f"Local dataset at {local} has no split '{split}'. "
+                        f"Available splits: {available}"
+                    )
+                return raw[split].shuffle(seed=seed).to_iterable_dataset()
+            if isinstance(raw, Dataset):
+                if split != "train":
+                    raise ValueError(
+                        f"Requested split '{split}' but local dataset at {local} "
+                        "is a single train-only Dataset. "
+                        "Either disable --use_validation_split or save a DatasetDict with splits."
+                    )
+                return raw.shuffle(seed=seed).to_iterable_dataset()
+            raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
+
+        available_splits = _available_local_parquet_splits(local)
+        if split not in available_splits:
+            available = ", ".join(sorted(available_splits)) or "<none>"
+            raise ValueError(
+                f"Local parquet dataset at {local} has no split '{split}'. Available splits: {available}"
+            )
+
+        files = _split_parquet_files(local, split)
+        print(f"[data] Streaming parquet split '{split}' from local dataset: {local}", flush=True)
+        local_stream = load_dataset(
+            "parquet",
+            data_files={split: [str(file_path) for file_path in files]},
+            split=split,
+            streaming=True,
+        )
+        return local_stream.shuffle(seed=seed, buffer_size=buffer_size)
     print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
     try:
         hf_ds = load_dataset(dataset_name, split=split, streaming=True)
@@ -322,6 +510,18 @@ def collect_corpus_for_tokenizer(
     data_dir: Path | None = None,
     data_files: str | None = None,
 ) -> list[str]:
+    if data_files is None:
+        local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
+        if local is not None and not (local / "dataset_info.json").exists():
+            print(f"[data] Reading local parquet split 'train' directly: {local}", flush=True)
+            return collect_local_parquet_corpus(
+                directory=local,
+                representation=representation,
+                n=n,
+                seed=seed,
+                split="train",
+            )
+
     ds = get_streaming_dataset(
         dataset_name,
         split="train",

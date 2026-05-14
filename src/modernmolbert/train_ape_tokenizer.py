@@ -35,7 +35,15 @@ def parse_args() -> argparse.Namespace:
         default=str(default_selfies_tokenizer_path()),
         help="Where to write tokenizer vocabulary JSON.",
     )
-    parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
+    parser.add_argument(
+        "--dataset_name",
+        type=str,
+        default=DATASET_NAME,
+        help=(
+            "HF dataset ID or local prepared dataset directory "
+            "(e.g. data/pretrain/chembl36_selfies)."
+        ),
+    )
     parser.add_argument(
         "--selfies_column",
         type=str,

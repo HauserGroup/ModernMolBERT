@@ -1,0 +1,48 @@
+datasets:
+  - name: bbbp
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/bbbp
+    eval_split: test
+    merge_train_valid: true
+
+  - name: bace
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/bace
+    eval_split: test
+    merge_train_valid: true
+
+  - name: clintox
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/clintox
+    eval_split: test
+    merge_train_valid: true
+
+  - name: tox21
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/tox21
+    eval_split: test
+    merge_train_valid: true
+
+  - name: sider
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/sider
+    eval_split: test
+    merge_train_valid: true
+
+  - name: esol
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/esol
+    eval_split: test
+    merge_train_valid: true
+
+  - name: freesolv
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/freesolv
+    eval_split: test
+    merge_train_valid: true
+
+  - name: lipophilicity
+    loader: prepared_moleculenet
+    dataset_dir: data/eval/moleculenet_sanitized/lipophilicity
+    eval_split: test
+    merge_train_valid: true

@@ -222,6 +222,7 @@ scratch/
 runs/
 /data/
 outputs/
+src/modernmolbert/eval/junk/benchmarking_molecular_models_upstream
 
 # AI
 .github/prompts/

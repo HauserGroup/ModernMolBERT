@@ -12,7 +12,10 @@ dependencies = [
     "ipykernel>=7.2.0",
     "matplotlib>=3.10.9",
     "numpy>=2.4.4",
+    "pandas>=3.0.2",
     "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.3",
+    "scikit-learn>=1.8.0",
     "tensorboard>=2.19.0",
     "torch>=2.11.0",
     "tqdm>=4.67.3",
@@ -64,6 +67,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 include = ["modernmolbert*"]
+
+[tool.setuptools.package-data]
+modernmolbert = ["eval/benchmarking_molecular_models/datasets.yaml"]
 
 [tool.pytest.ini_options]
 markers = [

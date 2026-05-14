@@ -1,117 +1,256 @@
 from pathlib import Path
+import subprocess
+import sys
 
+import numpy as np
 import pandas as pd
+import pytest
 
-from modernmolbert.eval.benchmarking_molecular_models.data import (
-    load_dataset_catalog,
-    select_dataset_configs,
+from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+    expand_dataset_selection,
+    load_dataset_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.heads import (
-    downstream_configs_for_heads,
-    frozen_downstream_config,
+from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+    Dataset,
+    EmbeddedDataset,
 )
-from modernmolbert.eval.benchmarking_molecular_models.run import (
-    _write_summary,
-    build_suite_config,
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+    multioutput_auroc_score,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+    get_knn_distance,
+    tanimoto_count_distance,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
+    fit_and_eval_embedding,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+    get_model_version_hash,
 )
 
 
-def test_active_benchmark_package_contains_no_upstream_model_zoo() -> None:
-    active = Path("src/modernmolbert/eval/benchmarking_molecular_models")
+def test_benchmark_package_is_stripped_to_dataset_scoring_and_export() -> None:
+    root = Path("src/modernmolbert/eval/benchmarking_molecular_models")
 
-    assert active.exists()
-    assert not (active / "model_wrappers").exists()
-    assert not (active / ".git").exists()
-    assert not (active / "embed_wrapper.sh").exists()
-    assert not (active / "run_scoring.sh").exists()
+    assert root.exists()
+    assert (root / "download.py").exists()
+    assert (root / "score.py").exists()
+    assert (root / "export_results.py").exists()
+    assert (root / "run_scoring.sh").exists()
+    assert (root / "config" / "datasets.yaml").exists()
+
+    removed = [
+        "docs",
+        "results",
+        "config/dataset",
+        "config/experiment",
+        "config/model",
+        "embed.py",
+        "embed_wrapper.sh",
+        "run_embed.sh",
+        "get_embedding_size.py",
+        "embedding_size.json",
+        "fixup.ipynb",
+        "selfies_debugger.ipynb",
+        "visualizations.ipynb",
+        "requirements.txt",
+        "base_requirements.txt",
+    ]
+    for rel_path in removed:
+        assert not (root / rel_path).exists()
 
 
-def test_dataset_catalog_selects_prepared_moleculenet_configs() -> None:
-    catalog = load_dataset_catalog()
+def test_dataset_registry_is_single_yaml() -> None:
+    config_dir = Path("src/modernmolbert/eval/benchmarking_molecular_models/config")
 
-    assert "bbbp" in catalog
-    assert catalog["bbbp"]["loader"] == "prepared_moleculenet"
+    assert expand_dataset_selection(config_dir, ["clf_ogbg-mol*"]) == [
+        "clf_ogbg-molbace",
+        "clf_ogbg-molbbbp",
+        "clf_ogbg-molclintox",
+        "clf_ogbg-molhiv",
+        "clf_ogbg-molmuv",
+        "clf_ogbg-molsider",
+        "clf_ogbg-moltox21",
+        "clf_ogbg-moltoxcast",
+    ]
+    assert load_dataset_config(config_dir, "clf_AMES").name == "AMES"
 
-    configs = select_dataset_configs(["bbbp"], prepared_root="/tmp/prepared")
 
-    assert configs == [
-        {
-            "name": "bbbp",
-            "loader": "prepared_moleculenet",
-            "dataset_dir": "/tmp/prepared/bbbp",
-            "eval_split": "test",
-            "merge_train_valid": True,
-        }
+def test_stripped_benchmark_has_no_hydra_or_omegaconf_runtime_dependency() -> None:
+    root = Path("src/modernmolbert/eval/benchmarking_molecular_models")
+    checked_files = [
+        path
+        for path in root.rglob("*")
+        if path.suffix in {".py", ".yaml"} and "__pycache__" not in path.parts
     ]
 
-
-def test_head_configs_are_limited_to_lightweight_downstream_heads() -> None:
-    configs = downstream_configs_for_heads(["logreg", "ridge"], seed=17)
-
-    assert [x["model_type"] for x in configs["classification"]] == ["logistic_regression"]
-    assert [x["model_type"] for x in configs["regression"]] == ["ridge"]
-    assert frozen_downstream_config("logreg", seed=17).model_type == "logistic_regression"
+    for path in checked_files:
+        text = path.read_text()
+        assert "hydra" not in text.lower(), path
+        assert "omegaconf" not in text.lower(), path
+        assert "get_original_cwd" not in text, path
 
 
-def test_build_suite_config_uses_only_modernmolbert_featurizer() -> None:
-    suite = build_suite_config(
-        model_path="runs/model/final_model",
-        datasets=["bbbp"],
-        prepared_root="/tmp/prepared",
-        heads=["logreg"],
-        seed=13,
-        use_cache=False,
+def test_download_prepares_missing_dataset_without_network(monkeypatch, tmp_path) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models import download
+
+    config_dir = tmp_path / "config"
+    (config_dir / "embedding").mkdir(parents=True)
+    (config_dir / "embedding" / "default.yaml").write_text(
+        "\n".join(
+            [
+                "raw_directory: data/raw",
+                "embedded_directory: data/embedded",
+                "data_directory: data/downloaded",
+                "prepared_directory: data/prepared",
+                "predictions_directory: data/predictions",
+                "clock_directory: data/clock",
+                "svd_directory: data/svd",
+                "database: data/meta.db",
+                "max_invalid_embeddings: 50",
+            ]
+        )
+    )
+    (config_dir / "downloader.yaml").write_text("cache: true\ndatasets:\n  - tiny_clf\n")
+    (config_dir / "datasets.yaml").write_text(
+        "\n".join(
+            [
+                "datasets:",
+                "  tiny_clf:",
+                "    name: tiny",
+                "    metric: roc_auc",
+                "    task: classification",
+                "    source:",
+                "      name: OGB",
+            ]
+        )
+    )
+    fake_dataset = Dataset(
+        name="tiny",
+        task="classification",
+        data=pd.DataFrame({"smiles": ["C"], "label": [1]}),
+        splits={"train": [0], "valid": [], "test": []},
+    )
+    calls = []
+
+    def fake_load(dataset_config, raw_dir):
+        calls.append((dataset_config.name, raw_dir))
+        return fake_dataset
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(download, "load", fake_load)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "download.py",
+            "--config-dir",
+            str(config_dir),
+        ],
     )
 
-    assert len(suite.featurizers) == 1
-    assert suite.featurizers[0].config["type"] == "modernmolbert_selfies"
-    assert suite.featurizers[0].config["model_dir"] == "runs/model/final_model"
-    assert suite.datasets[0].config["dataset_dir"] == "/tmp/prepared/bbbp"
-    assert [x.name for x in suite.downstream_models] == ["logistic_regression"]
-    assert suite.use_cache is False
+    download.main()
+
+    assert calls == [("tiny", "data/raw")]
+    assert (tmp_path / "data/prepared/tiny.joblib").exists()
+    assert (tmp_path / "data/prepared/tiny.json").exists()
 
 
-def test_build_suite_config_default_parity_uses_standard_heads() -> None:
-    suite = build_suite_config(
-        model_path="runs/model/final_model",
-        datasets=["bbbp"],
-        prepared_root="/tmp/prepared",
-        heads=["auto"],
+def test_local_tanimoto_count_distance_matches_count_vector_formula() -> None:
+    x = np.array([1, 2, 0, 4])
+    y = np.array([1, 1, 3, 0])
+
+    assert tanimoto_count_distance(x, y) == pytest.approx(1.0 - 2 / 10)
+    assert get_knn_distance(np.dtype("int64")) is tanimoto_count_distance
+    assert get_knn_distance(np.dtype("float32")) == "cosine"
+
+
+def test_multioutput_auroc_masks_nan_labels_per_output() -> None:
+    y_true = np.array(
+        [
+            [0, 1],
+            [1, np.nan],
+            [0, 0],
+            [1, 1],
+        ],
+        dtype=float,
+    )
+    y_score = np.array(
+        [
+            [0.1, 0.8],
+            [0.9, 0.6],
+            [0.2, 0.3],
+            [0.8, 0.9],
+        ]
     )
 
-    assert [x.name for x in suite.downstream_models] == ["logistic_regression", "ridge"]
+    assert multioutput_auroc_score(y_true, y_score) == 1.0
 
 
-def test_build_suite_config_lightweight_parity_uses_lightweight_heads() -> None:
-    suite = build_suite_config(
-        model_path="runs/model/final_model",
-        datasets=["bbbp"],
-        prepared_root="/tmp/prepared",
-        heads=["auto"],
-        parity="lightweight",
+def test_model_version_hash_is_stable_digest() -> None:
+    digest = get_model_version_hash()
+
+    assert digest == get_model_version_hash()
+    assert isinstance(digest, str)
+    assert len(digest) == 16
+
+
+def test_fit_and_eval_embedding_binary_classification_knn() -> None:
+    X = np.array([[i, i % 3] for i in range(20)], dtype=float)
+    y = pd.DataFrame({"label": [0] * 10 + [1] * 10})
+    dataset = EmbeddedDataset(
+        name="tiny",
+        task="classification",
+        embedder="toy_embedder",
+        splits={
+            "train": list(range(0, 10)),
+            "valid": list(range(10, 15)),
+            "test": list(range(15, 20)),
+        },
+        X=X,
+        y=y,
     )
 
-    assert [x.name for x in suite.downstream_models] == ["rf", "ridge", "knn"]
-    assert {x.config.model_type for x in suite.downstream_models} == {
-        "lightweight_parity_classifier"
-    }
-
-
-def test_write_summary_selects_best_metric_per_dataset_task(tmp_path: Path) -> None:
-    frame = pd.DataFrame(
-        {
-            "dataset": ["bbbp", "bbbp", "esol", "esol"],
-            "task": ["label", "label", "y", "y"],
-            "downstream_name": ["a", "b", "ridge", "ridge2"],
-            "roc_auc": [0.7, 0.8, None, None],
-            "rmse": [None, None, 1.5, 1.2],
-        }
+    result = fit_and_eval_embedding(
+        dataset=dataset,
+        metric_name="roc_auc",
+        model_head="knn",
+        memory_weight=32,
     )
 
-    out = tmp_path / "summary.csv"
-    _write_summary(frame, out)
+    assert result.model == "knn"
+    assert result.y_test_pred.shape == (5, 2)
+    assert "clf__n_neighbors" in result.hyperparams
 
-    summary = pd.read_csv(out)
 
-    assert summary.loc[summary["dataset"] == "bbbp", "downstream_name"].item() == "b"
-    assert summary.loc[summary["dataset"] == "esol", "downstream_name"].item() == "ridge2"
+def test_regression_path_still_exposes_predict_proba_limitation() -> None:
+    X = np.array([[i, i + 1] for i in range(20)], dtype=float)
+    y = pd.DataFrame({"label": np.linspace(0.0, 1.0, 20)})
+    dataset = EmbeddedDataset(
+        name="tiny_reg",
+        task="regression",
+        embedder="toy_embedder",
+        splits={
+            "train": list(range(0, 10)),
+            "valid": list(range(10, 15)),
+            "test": list(range(15, 20)),
+        },
+        X=X,
+        y=y,
+    )
+
+    with pytest.raises(AttributeError, match="predict_proba"):
+        fit_and_eval_embedding(
+            dataset=dataset,
+            metric_name="mae",
+            model_head="ridge",
+            memory_weight=32,
+        )
+
+
+def test_run_scoring_requires_embedder_name() -> None:
+    script = Path("src/modernmolbert/eval/benchmarking_molecular_models/run_scoring.sh")
+    result = subprocess.run(["bash", str(script)], capture_output=True, text=True, check=False)
+
+    assert result.returncode == 1
+    assert "Usage:" in result.stdout

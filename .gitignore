@@ -239,6 +239,9 @@ repomix*.xml
 tmp_eval/
 tokenizer/tests
 
+# Large files
+src/modernmolbert/eval/benchmarking_molecular_models/results/arxiv_preprint_2025_08.csv
+
 # LaTex
 
 # TEMP main.pdf for now

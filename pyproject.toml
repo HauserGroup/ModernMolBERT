@@ -37,6 +37,7 @@ eval = [
 ]
 eval-prep = [
     "deepchem>=2.8.0",
+    "ogb>=1.3.6",
     "pandas>=3.0.2",
     "pyarrow>=24.0.0",
     "rdkit>=2026.3.1",
@@ -69,7 +70,10 @@ where = ["src"]
 include = ["modernmolbert*"]
 
 [tool.setuptools.package-data]
-modernmolbert = ["eval/benchmarking_molecular_models/datasets.yaml"]
+modernmolbert = [
+    "eval/benchmarking_molecular_models/config/*.yaml",
+    "eval/benchmarking_molecular_models/config/embedding/*.yaml",
+]
 
 [tool.pytest.ini_options]
 markers = [

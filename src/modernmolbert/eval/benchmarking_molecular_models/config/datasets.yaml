@@ -1,0 +1,191 @@
+datasets:
+  clf_AMES:
+    name: AMES
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: TOX
+  clf_Bioavailability_Ma:
+    name: Bioavailability_Ma
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_CYP1A2_Veith:
+    name: CYP1A2_Veith
+    metric: roc_auc
+    ranking_metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      group: ADME
+  clf_CYP2C19_Veith:
+    name: CYP2C19_Veith
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      group: ADME
+  clf_CYP2C9_Substrate_CarbonMangels:
+    name: CYP2C9_Substrate_CarbonMangels
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_CYP2C9_Veith:
+    name: CYP2C9_Veith
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_CYP2D6_Substrate_CarbonMangels:
+    name: CYP2D6_Substrate_CarbonMangels
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_CYP2D6_Veith:
+    name: CYP2D6_Veith
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_CYP3A4_Substrate_CarbonMangels:
+    name: CYP3A4_Substrate_CarbonMangels
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_CYP3A4_Veith:
+    name: CYP3A4_Veith
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_DILI:
+    name: DILI
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: TOX
+  clf_HIA_Hou:
+    name: HIA_Hou
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_PAMPA_NCATS:
+    name: PAMPA_NCATS
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      group: ADME
+  clf_Pgp_Broccatelli:
+    name: Pgp_Broccatelli
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: ADME
+  clf_SARSCoV2_3CLPro_Diamond:
+    name: SARSCoV2_3CLPro_Diamond
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      group: HTS
+  clf_SARSCoV2_Vitro_Touret:
+    name: SARSCoV2_Vitro_Touret
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      group: HTS
+  clf_hERG:
+    name: hERG
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      benchmark: admet
+      group: TOX
+  clf_hERG_Karim:
+    name: hERG_Karim
+    metric: roc_auc
+    task: classification
+    source:
+      name: TDC
+      group: TOX
+  clf_ogbg-molbace:
+    name: ogbg-molbace
+    metric: roc_auc
+    task: classification
+    source:
+      name: OGB
+  clf_ogbg-molbbbp:
+    name: ogbg-molbbbp
+    metric: roc_auc
+    task: classification
+    source:
+      name: OGB
+  clf_ogbg-molclintox:
+    name: ogbg-molclintox
+    metric: roc_auc
+    task: classification
+    source:
+      name: OGB
+  clf_ogbg-molhiv:
+    name: ogbg-molhiv
+    metric: roc_auc
+    task: classification
+    source:
+      name: OGB
+  clf_ogbg-molmuv:
+    name: ogbg-molmuv
+    metric: roc_auc
+    task: classification
+    memory_weight: 16
+    source:
+      name: OGB
+  clf_ogbg-molsider:
+    name: ogbg-molsider
+    metric: roc_auc
+    task: classification
+    source:
+      name: OGB
+  clf_ogbg-moltox21:
+    name: ogbg-moltox21
+    metric: roc_auc
+    task: classification
+    memory_weight: 4
+    source:
+      name: OGB
+  clf_ogbg-moltoxcast:
+    name: ogbg-moltoxcast
+    metric: roc_auc
+    task: classification
+    memory_weight: 16
+    source:
+      name: OGB

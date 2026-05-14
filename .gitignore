@@ -223,11 +223,13 @@ runs/
 /data/
 outputs/
 src/modernmolbert/eval/junk/benchmarking_molecular_models_upstream
+src/modernmolbert/eval/junk/
 
 # AI
 .github/prompts/
 .prompt.md
 .agents/
+/*.prompt.md
 
 # eval
 tmp_eval/

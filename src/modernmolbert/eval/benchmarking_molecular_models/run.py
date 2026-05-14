@@ -15,6 +15,10 @@ from modernmolbert.eval.benchmarking_molecular_models.data import (
 )
 from modernmolbert.eval.benchmarking_molecular_models.heads import (
     downstream_configs_for_heads,
+    lightweight_parity_downstream_configs_for_heads,
+)
+from modernmolbert.eval.benchmarking_molecular_models.lightweight_parity import (
+    run_lightweight_parity_suite,
 )
 from modernmolbert.eval.suite import (
     BenchmarkSuiteConfig,
@@ -23,6 +27,7 @@ from modernmolbert.eval.suite import (
 )
 
 Pooling = Literal["mean", "cls"]
+ParityMode = Literal["none", "lightweight"]
 
 
 def build_suite_config(
@@ -41,11 +46,20 @@ def build_suite_config(
     seed: int = 13,
     use_cache: bool = True,
     eval_split: Literal["valid", "test"] = "test",
+    parity: ParityMode = "none",
 ) -> BenchmarkSuiteConfig:
     """Build a ModernMolBERT-only suite for the existing eval runner."""
 
     model_path = Path(model_path)
     resolved_tokenizer_path = Path(tokenizer_path) if tokenizer_path is not None else model_path
+    if parity not in {"none", "lightweight"}:
+        raise ValueError("parity must be 'none' or 'lightweight'")
+
+    downstream_models = (
+        lightweight_parity_downstream_configs_for_heads(heads or ["auto"])
+        if parity == "lightweight"
+        else downstream_configs_for_heads(heads or ["auto"], seed=seed)
+    )
 
     config = {
         "name": "modernmolbert_molecular_benchmark",
@@ -66,7 +80,7 @@ def build_suite_config(
                 "batch_size": embed_batch_size,
             }
         ],
-        "downstream_models": downstream_configs_for_heads(heads or ["auto"], seed=seed),
+        "downstream_models": downstream_models,
         "seeds": [seed],
         "eval_split": eval_split,
         "batch_size": batch_size,
@@ -92,6 +106,7 @@ def run_modernmolbert_benchmark(
     seed: int = 13,
     use_cache: bool = True,
     eval_split: Literal["valid", "test"] = "test",
+    parity: ParityMode = "none",
 ) -> pd.DataFrame:
     """Run the focused ModernMolBERT frozen-representation benchmark."""
 
@@ -111,14 +126,23 @@ def run_modernmolbert_benchmark(
         seed=seed,
         use_cache=use_cache,
         eval_split=eval_split,
+        parity=parity,
     )
 
-    results = run_benchmark_suite(
-        suite=suite,
-        output_dir=output_dir,
-        cache_dir=output_dir / "embeddings",
-        write_single_run_outputs=False,
-    )
+    if parity == "lightweight":
+        results = run_lightweight_parity_suite(
+            suite=suite,
+            output_dir=output_dir,
+            cache_dir=output_dir / "embeddings",
+            heads=heads or ["auto"],
+        )
+    else:
+        results = run_benchmark_suite(
+            suite=suite,
+            output_dir=output_dir,
+            cache_dir=output_dir / "embeddings",
+            write_single_run_outputs=False,
+        )
 
     _write_jsonl(results, output_dir / "results.jsonl")
     _write_summary(results, output_dir / "summary.csv")
@@ -141,6 +165,7 @@ def run_modernmolbert_benchmark(
             "seed": seed,
             "use_cache": use_cache,
             "eval_split": eval_split,
+            "parity": parity,
         },
     )
 
@@ -183,6 +208,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--eval-split", choices=["valid", "test"], default="test")
+    parser.add_argument(
+        "--parity",
+        choices=["none", "lightweight"],
+        default="none",
+        help=(
+            "Use an opt-in parity mode. 'lightweight' matches the lightweight "
+            "classification scoring/model-selection path and rejects regression datasets."
+        ),
+    )
     parser.add_argument("--no-cache", action="store_true")
 
     return parser.parse_args()
@@ -206,6 +240,7 @@ def main() -> None:
         seed=args.seed,
         use_cache=not args.no_cache,
         eval_split=args.eval_split,
+        parity=args.parity,
     )
 
     print(f"Wrote results: {args.output_dir / 'results.csv'}", flush=True)

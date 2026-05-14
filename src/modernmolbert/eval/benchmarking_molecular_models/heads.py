@@ -15,6 +15,8 @@ HeadName = Literal[
     "random_forest_regressor",
 ]
 
+LightweightParityHeadName = Literal["auto", "rf", "ridge", "knn"]
+
 
 def normalize_head_name(head: str) -> str:
     aliases = {
@@ -81,6 +83,35 @@ def downstream_configs_for_heads(
     return {
         "classification": classification,
         "regression": regression,
+    }
+
+
+def lightweight_parity_downstream_configs_for_heads(
+    heads: list[str],
+) -> dict[str, list[dict[str, object]]]:
+    """Build placeholder suite configs for lightweight parity classification heads."""
+
+    if not heads or "auto" in heads:
+        heads = ["rf", "ridge", "knn"]
+
+    classification: list[dict[str, object]] = []
+    for head in heads:
+        if head not in {"rf", "ridge", "knn"}:
+            raise ValueError(
+                f"Unsupported lightweight parity head {head!r}. Use auto, rf, ridge, or knn."
+            )
+        classification.append(
+            {
+                "name": head,
+                "model_type": "lightweight_parity_classifier",
+                "standardize": False,
+                "params": {},
+            }
+        )
+
+    return {
+        "classification": classification,
+        "regression": [],
     }
 
 

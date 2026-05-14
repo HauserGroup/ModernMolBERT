@@ -71,6 +71,32 @@ def test_build_suite_config_uses_only_modernmolbert_featurizer() -> None:
     assert suite.use_cache is False
 
 
+def test_build_suite_config_default_parity_uses_standard_heads() -> None:
+    suite = build_suite_config(
+        model_path="runs/model/final_model",
+        datasets=["bbbp"],
+        prepared_root="/tmp/prepared",
+        heads=["auto"],
+    )
+
+    assert [x.name for x in suite.downstream_models] == ["logistic_regression", "ridge"]
+
+
+def test_build_suite_config_lightweight_parity_uses_lightweight_heads() -> None:
+    suite = build_suite_config(
+        model_path="runs/model/final_model",
+        datasets=["bbbp"],
+        prepared_root="/tmp/prepared",
+        heads=["auto"],
+        parity="lightweight",
+    )
+
+    assert [x.name for x in suite.downstream_models] == ["rf", "ridge", "knn"]
+    assert {x.config.model_type for x in suite.downstream_models} == {
+        "lightweight_parity_classifier"
+    }
+
+
 def test_write_summary_selects_best_metric_per_dataset_task(tmp_path: Path) -> None:
     frame = pd.DataFrame(
         {

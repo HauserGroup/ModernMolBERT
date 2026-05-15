@@ -154,7 +154,16 @@ def parse_args() -> argparse.Namespace:
     )
 
     # MLM
-    parser.add_argument("--mlm_probability", type=float, default=0.30)
+    parser.add_argument(
+        "--mlm_probability",
+        type=float,
+        default=0.30,
+        help=(
+            "Fraction of eligible tokens to mask. For span/hetero_span strategies the "
+            "budget is round(n_eligible × mlm_probability); short sequences may exceed "
+            "this rate when a single span covers the full budget in one draw."
+        ),
+    )
     parser.add_argument(
         "--masking_strategy",
         type=str,
@@ -173,8 +182,8 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.4,
         help=(
-            "Success probability for the geometric distribution used to sample span lengths. "
-            "Mean span length = 1/p_geom. Default 0.4 → mean ≈ 2.5 APE tokens. "
+            "Success probability for the geometric distribution used to sample span lengths "
+            "(mean span length = 1/span_p_geom ≈ 2.5 APE tokens at default 0.4). "
             "Only used when --masking_strategy is 'span' or 'hetero_span'."
         ),
     )
@@ -183,7 +192,9 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=6,
         help=(
-            "Maximum span length in APE tokens. Sampled lengths are clamped to this value. "
+            "Maximum span length in APE tokens. Individual sampled lengths are clamped to "
+            "this value. Adjacent independent spans can form longer contiguous masked runs — "
+            "this parameter bounds individual draws, not total run length. "
             "Only used when --masking_strategy is 'span' or 'hetero_span'."
         ),
     )
@@ -193,7 +204,8 @@ def parse_args() -> argparse.Namespace:
         default=2.0,
         help=(
             "Sampling weight multiplier for span-start positions whose APE token contains "
-            "a heteroatom. Non-heteroatom positions receive weight 1.0. "
+            "a heteroatom bracket (N, O, S, P, F, Cl, Br, I, Se, Si). "
+            "Non-heteroatom-containing positions receive weight 1.0. "
             "Only used when --masking_strategy is 'hetero_span'."
         ),
     )
@@ -321,13 +333,15 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
             "--load_best_model_at_end requires --save_steps to equal --eval_steps "
             "so every evaluated checkpoint can be selected as best."
         )
+    if args.masking_strategy not in {"standard", "span", "hetero_span"}:
+        raise ValueError(f"Unknown masking_strategy: {args.masking_strategy!r}")
     if args.masking_strategy in {"span", "hetero_span"}:
         if not (0.0 < args.span_p_geom < 1.0):
             raise ValueError("span_p_geom must be in (0, 1)")
         if args.span_max_length < 1:
             raise ValueError("span_max_length must be >= 1")
     if args.masking_strategy == "hetero_span" and args.heteroatom_start_weight <= 0.0:
-        raise ValueError("heteroatom_start_weight must be positive")
+        raise ValueError("heteroatom_start_weight must be > 0")
 
 
 def adjust_args_for_backend(args: argparse.Namespace, backend: str) -> argparse.Namespace:
@@ -693,8 +707,15 @@ class MolecularMLMCollator:
                 raise ValueError("span_p_geom must be in (0, 1)")
             if self.span_max_length < 1:
                 raise ValueError("span_max_length must be >= 1")
+            self._geom_dist: torch.distributions.Geometric | None = torch.distributions.Geometric(
+                torch.tensor(self.span_p_geom)
+            )
+        else:
+            self._geom_dist = None
 
         if self.masking_strategy == "hetero_span":
+            if self.heteroatom_start_weight <= 0.0:
+                raise ValueError("heteroatom_start_weight must be > 0")
             self._token_start_weights = self._build_token_start_weights()
         else:
             self._token_start_weights = None
@@ -815,11 +836,17 @@ class MolecularMLMCollator:
         return self._eligible_replacement_ids.to(device)
 
     def _build_token_start_weights(self) -> torch.Tensor:
-        """Return a (vocab_size,) weight tensor for heteroatom-biased span starts.
+        """Return a (vocab_size,) float weight tensor for heteroatom-biased span starts.
 
-        Tokens whose string representation contains at least one heteroatom SELFIES
-        bracket receive weight ``heteroatom_start_weight``; all others receive 1.0.
-        Special-token IDs receive weight 0.0 as a defensive guard.
+        Covered heteroatom set: N, O, S, P, F, Cl, Br, I, Se, Si.
+        Elements not in this set (e.g. B, Sn, As, Ge) receive weight 1.0.
+        If intentional coverage of additional elements is needed, extend
+        _HETEROATOM_IN_BRACKET accordingly.
+
+        Token IDs in special_token_ids receive weight 0.0 as a defensive guard;
+        the eligible-position filter in _sample_span_mask is the primary barrier.
+        Tokens matching the heteroatom pattern receive weight heteroatom_start_weight.
+        All other tokens receive weight 1.0.
         """
         weights = torch.ones(self.vocab_size, dtype=torch.float32)
         special_ids = set(self.special_token_ids)
@@ -838,12 +865,16 @@ class MolecularMLMCollator:
     ) -> torch.Tensor:
         """Sample a span-based boolean mask for one sequence.
 
-        Spans are drawn using a geometric distribution for length, with starts
-        sampled uniformly (span) or heteroatom-weighted (hetero_span).
-        Sampling continues until masked positions reach round(n_eligible * mlm_probability)
-        or no further eligible starts exist.
+        Contiguous spans of APE tokens are sampled until the number of newly
+        masked positions reaches round(n_eligible × mlm_probability).
+        Span lengths are drawn from a Geometric(span_p_geom) distribution and
+        clamped to span_max_length. For hetero_span, span-start positions are
+        sampled with weights proportional to heteroatom content.
 
-        Returns a bool tensor of shape (seq_len,).
+        Adjacent independent spans may produce contiguous masked runs longer than
+        span_max_length — the parameter bounds individual draws, not total runs.
+        On very short sequences the actual masked fraction may exceed mlm_probability
+        because a single span can cover the entire budget in one draw.
         """
         seq_len = input_ids_row.size(0)
         masked = torch.zeros(seq_len, dtype=torch.bool)
@@ -854,28 +885,33 @@ class MolecularMLMCollator:
         if len(eligible_pos) == 0:
             return masked
 
-        budget = max(1, round(len(eligible_pos) * self.mlm_probability))
-        geom = torch.distributions.Geometric(torch.tensor(self.span_p_geom))
+        n_eligible = len(eligible_pos)
+        budget = max(1, round(n_eligible * self.mlm_probability))
+
+        # Pre-sample all geometric span lengths in one vectorised call.
+        max_draws = budget * 5
+        assert self._geom_dist is not None
+        span_lengths = (
+            self._geom_dist.sample((max_draws,)).long() + 1  # shift k≥0 → k≥1
+        ).clamp(max=self.span_max_length)
 
         if self.masking_strategy == "hetero_span" and self._token_start_weights is not None:
             tok_ids_at_eligible = input_ids_row[eligible_pos]
             pos_weights = self._token_start_weights[tok_ids_at_eligible].clone()
         else:
-            pos_weights = torch.ones(len(eligible_pos), dtype=torch.float32)
+            pos_weights = torch.ones(n_eligible, dtype=torch.float32)
 
-        max_attempts = budget * 20
-        attempt = 0
+        masked_count = 0
 
-        while int(masked.sum().item()) < budget and attempt < max_attempts:
-            attempt += 1
-
+        for draw_idx in range(max_draws):
+            if masked_count >= budget:
+                break
             if pos_weights.sum().item() == 0.0:
                 break
+
             start_local = int(torch.multinomial(pos_weights, num_samples=1).item())
             start = int(eligible_pos[start_local].item())
-
-            span_len = int(geom.sample().item()) + 1  # geometric gives k>=0, shift to k>=1
-            span_len = min(span_len, self.span_max_length)
+            span_len = int(span_lengths[draw_idx].item())
             end = min(start + span_len, seq_len)
 
             for pos in range(start, end):
@@ -887,7 +923,14 @@ class MolecularMLMCollator:
                 pos_weights[start_local] = 0.0
                 continue
 
+            new_count = int((~masked[start:end]).sum().item())
             masked[start:end] = True
+            masked_count += new_count
+
+            # Zero weights for covered eligible positions so subsequent draws
+            # explore unmasked territory.
+            covered = (eligible_pos >= start) & (eligible_pos < end)
+            pos_weights[covered] = 0.0
 
         return masked
 
@@ -1216,9 +1259,7 @@ def main() -> None:
         span_p_geom=args.span_p_geom,
         span_max_length=args.span_max_length,
         heteroatom_start_weight=args.heteroatom_start_weight,
-        ids_to_tokens=(
-            dict(tokenizer.ids_to_tokens) if args.masking_strategy == "hetero_span" else {}
-        ),
+        ids_to_tokens=dict(tokenizer.ids_to_tokens),
     )
 
     report_to = [] if args.report_to == "none" else [args.report_to]
@@ -1281,6 +1322,14 @@ def main() -> None:
     )
 
     world_size = training_args.world_size if hasattr(training_args, "world_size") else 1
+
+    if args.masking_strategy in {"span", "hetero_span"} and args.num_workers < 2:
+        log(
+            "Warning: masking_strategy='span'/'hetero_span' runs in Python on the "
+            "data-loader path. Consider --num_workers >= 4 to overlap collation with "
+            "GPU compute and avoid becoming a training bottleneck."
+        )
+
     log_training_plan(args, backend, n_params=n_params, world_size=world_size)
 
     trainer = Trainer(

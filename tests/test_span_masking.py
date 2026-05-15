@@ -1,7 +1,5 @@
 """Tests for span and hetero_span masking strategies in MolecularMLMCollator."""
 
-from typing import Any
-
 import pytest
 import torch
 
@@ -13,24 +11,33 @@ from modernmolbert.train_selfies_ape_modernbert import MolecularMLMCollator
 # ---------------------------------------------------------------------------
 
 SPECIAL_IDS = [0, 1, 2, 3, 4]  # bos, pad, eos, unk, mask
-VOCAB_SIZE = 32
+VOCAB_SIZE = 100
 
 
-def _make_collator(strategy: str, **kwargs) -> MolecularMLMCollator:
-    defaults: dict[str, Any] = dict(
+def _make_collator(
+    strategy: str = "standard",
+    mlm_probability: float = 0.15,
+    span_max_length: int = 6,
+    span_p_geom: float = 0.4,
+    heteroatom_start_weight: float = 2.0,
+    ids_to_tokens: dict | None = None,
+    vocab_size: int = VOCAB_SIZE,
+) -> MolecularMLMCollator:
+    if ids_to_tokens is None:
+        ids_to_tokens = {i: f"[T{i}]" for i in range(10, vocab_size)}
+        ids_to_tokens.update({0: "<s>", 1: "<pad>", 2: "</s>", 3: "<unk>", 4: "<mask>"})
+    return MolecularMLMCollator(
         pad_token_id=1,
         mask_token_id=4,
-        vocab_size=VOCAB_SIZE,
-        mlm_probability=0.3,
+        vocab_size=vocab_size,
+        mlm_probability=mlm_probability,
         special_token_ids=SPECIAL_IDS,
         masking_strategy=strategy,
-        span_p_geom=0.4,
-        span_max_length=6,
-        heteroatom_start_weight=2.0,
-        ids_to_tokens={i: f"[TOK{i}]" for i in range(VOCAB_SIZE)},
+        span_p_geom=span_p_geom,
+        span_max_length=span_max_length,
+        heteroatom_start_weight=heteroatom_start_weight,
+        ids_to_tokens=ids_to_tokens,
     )
-    defaults.update(kwargs)
-    return MolecularMLMCollator(**defaults)
 
 
 def _examples():
@@ -62,6 +69,11 @@ def test_invalid_span_max_length_raises():
         _make_collator("span", span_max_length=0)
 
 
+def test_invalid_heteroatom_start_weight_raises():
+    with pytest.raises(ValueError, match="heteroatom_start_weight"):
+        _make_collator("hetero_span", heteroatom_start_weight=0.0)
+
+
 def test_standard_strategy_no_validation():
     # standard strategy ignores span params — should not raise
     c = _make_collator("standard", span_p_geom=0.0, span_max_length=0)
@@ -76,8 +88,8 @@ def test_standard_strategy_no_validation():
 @pytest.mark.parametrize("strategy", ["standard", "span", "hetero_span"])
 def test_output_shapes_match_standard(strategy):
     torch.manual_seed(42)
-    std = _make_collator("standard")
-    coll = _make_collator(strategy)
+    std = _make_collator("standard", mlm_probability=0.3)
+    coll = _make_collator(strategy, mlm_probability=0.3)
     examples = _examples()
 
     std_batch = std(examples)
@@ -96,7 +108,7 @@ def test_output_shapes_match_standard(strategy):
 @pytest.mark.parametrize("strategy", ["standard", "span", "hetero_span"])
 def test_padding_positions_never_masked(strategy):
     torch.manual_seed(0)
-    coll = _make_collator(strategy)
+    coll = _make_collator(strategy, mlm_probability=0.3)
     batch = coll(_examples())
     pad_positions = batch["attention_mask"] == 0
     assert torch.all(batch["labels"][pad_positions] == -100), (
@@ -107,13 +119,11 @@ def test_padding_positions_never_masked(strategy):
 @pytest.mark.parametrize("strategy", ["standard", "span", "hetero_span"])
 def test_special_tokens_never_masked(strategy):
     torch.manual_seed(0)
-    coll = _make_collator(strategy)
+    coll = _make_collator(strategy, mlm_probability=0.3)
     batch = coll(_examples())
-    # BOS (0) and EOS (2) must never be in the masked set.
-    # Simpler check: no position where input was a special token has label != -100
-    examples = _examples()
     from torch.nn.utils.rnn import pad_sequence
 
+    examples = _examples()
     ids = [torch.tensor(ex["input_ids"], dtype=torch.long) for ex in examples]
     original = pad_sequence(ids, batch_first=True, padding_value=1)
     special_mask = torch.zeros_like(original, dtype=torch.bool)
@@ -161,23 +171,49 @@ def test_span_produces_contiguous_runs():
     assert found_multi, "span strategy never produced a run of length >= 2"
 
 
-def test_span_max_length_bounds_individual_spans():
-    """span_max_length clamps each individual drawn span, not total run length.
-
-    Adjacent independent spans can produce longer contiguous runs — that is
-    expected. What we verify here is that the collator produces valid output
-    and that runs observed in practice are not pathologically long relative
-    to the parameter (a soft bound, not a hard one on total runs).
-    """
-    torch.manual_seed(0)
-    max_len = 3
-    coll = _make_collator("span", mlm_probability=0.5, span_max_length=max_len)
-    examples = [{"input_ids": [0] + list(range(5, 25)) + [2]}]
-    for _ in range(20):
+def test_span_max_length_single_draw():
+    """With budget=1 and span_max_length=1, exactly 1 position is masked."""
+    for seed in range(10):
+        torch.manual_seed(seed)
+        # 1 BOS + 20 body + 1 EOS = 22 total; 20 eligible.
+        # budget = max(1, round(20 * 0.05)) = 1
+        coll = _make_collator("span", mlm_probability=0.05, span_max_length=1)
+        examples = [{"input_ids": [0] + list(range(5, 25)) + [2]}]
         batch = coll(examples)
-        # Basic invariants must still hold.
-        assert (batch["labels"] != -100).any()
-        assert torch.all(batch["labels"][batch["attention_mask"] == 0] == -100)
+        n_masked = int((batch["labels"] != -100).sum().item())
+        assert n_masked == 1, (
+            f"seed={seed}: expected 1 masked position with budget=1 and "
+            f"span_max_length=1, got {n_masked}"
+        )
+
+
+def test_span_max_length_clamps_individual_draw():
+    """Single-draw budget: max contiguous run ≤ span_max_length."""
+
+    def max_run(labels_row: torch.Tensor) -> int:
+        masked = (labels_row != -100).tolist()
+        best = cur = 0
+        for m in masked:
+            cur = cur + 1 if m else 0
+            best = max(best, cur)
+        return best
+
+    # 10 eligible positions, mlm_probability=0.05 → budget = max(1, round(10*0.05)) = 1
+    for max_len in [1, 2, 3, 4, 6]:
+        for seed in range(8):
+            torch.manual_seed(seed)
+            coll = _make_collator(
+                "span",
+                mlm_probability=0.05,
+                span_max_length=max_len,
+                span_p_geom=0.01,  # very low p → geometric returns large pre-clamp values
+            )
+            examples = [{"input_ids": [0] + list(range(5, 15)) + [2]}]
+            batch = coll(examples)
+            run = max_run(batch["labels"][0])
+            assert run <= max_len, (
+                f"seed={seed}, span_max_length={max_len}: max run {run} exceeds span_max_length"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -208,16 +244,16 @@ def test_build_token_start_weights_heteroatom_elevated():
     }
     coll = _make_collator(
         "hetero_span",
-        vocab_size=9,
         ids_to_tokens=ids_to_tokens,
-        heteroatom_start_weight=3.0,
+        vocab_size=9,
+        heteroatom_start_weight=2.0,
     )
     weights = coll._token_start_weights
     assert weights is not None
     assert weights[5].item() == 1.0, "[C] should have weight 1.0"
-    assert weights[6].item() == 3.0, "[N] should have heteroatom weight"
-    assert weights[7].item() == 3.0, "[O] should have heteroatom weight"
-    assert weights[8].item() == 3.0, "[Cl] should have heteroatom weight"
+    assert weights[6].item() == 2.0, "[N] should have heteroatom weight"
+    assert weights[7].item() == 2.0, "[O] should have heteroatom weight"
+    assert weights[8].item() == 2.0, "[Cl] should have heteroatom weight"
 
 
 def test_hetero_span_output_valid():
@@ -226,7 +262,7 @@ def test_hetero_span_output_valid():
         **{sid: f"<special{sid}>" for sid in SPECIAL_IDS},
         **{i: "[N]" if i % 3 == 0 else "[C]" for i in range(5, VOCAB_SIZE)},
     }
-    coll = _make_collator("hetero_span", ids_to_tokens=ids_to_tokens)
+    coll = _make_collator("hetero_span", ids_to_tokens=ids_to_tokens, mlm_probability=0.3)
     batch = coll(_examples())
     assert (batch["labels"] != -100).any()
     assert torch.all(batch["labels"][batch["attention_mask"] == 0] == -100)

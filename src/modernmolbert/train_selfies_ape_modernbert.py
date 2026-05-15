@@ -888,6 +888,8 @@ class MolecularMLMCollator:
                 continue
 
             masked[start:end] = True
+            covered_starts = (eligible_pos >= start) & (eligible_pos < end)
+            pos_weights[covered_starts] = 0.0
 
         return masked
 

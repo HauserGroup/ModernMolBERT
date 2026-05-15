@@ -226,6 +226,18 @@ def parse_args() -> argparse.Namespace:
         help="Call huggingface_hub.login using HF_TOKEN before loading datasets/models.",
     )
 
+    # Experimental: functional-group masking (MLM-FG).
+    parser.add_argument(
+        "--masking_strategy",
+        choices=["standard", "functional_group"],
+        default="standard",
+        help=(
+            "Token masking strategy. 'standard' masks independent tokens (default). "
+            "'functional_group' masks entire rings/functional groups as units (MLM-FG). "
+            "Requires the dataset to contain a 'selfies' column (ChEMBL36 parquet already does)."
+        ),
+    )
+
     return parser.parse_args()
 
 
@@ -536,7 +548,10 @@ def make_train_iterable_dataset(
     def preprocess(row: dict[str, Any]) -> dict[str, Any]:
         seq = normalize_sequence(row, args.selfies_column)
         assert seq is not None
-        return encode_sequence(tokenizer, seq, args.max_seq_length)
+        encoded: dict[str, Any] = encode_sequence(tokenizer, seq, args.max_seq_length)
+        if args.masking_strategy == "functional_group":
+            encoded["selfies"] = seq
+        return encoded
 
     return ds.map(preprocess)
 
@@ -576,7 +591,7 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenize
         data_files=args.data_files,
     )
 
-    rows: list[dict[str, list[int]]] = []
+    rows: list[dict[str, Any]] = []
     pbar = tqdm(total=n_eval, desc="Building finite validation set")
 
     for row in ds:
@@ -589,7 +604,10 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenize
         ):
             continue
 
-        rows.append(encode_sequence(tokenizer, seq, args.max_seq_length))
+        encoded: dict[str, Any] = encode_sequence(tokenizer, seq, args.max_seq_length)
+        if args.masking_strategy == "functional_group":
+            encoded["selfies"] = seq
+        rows.append(encoded)
         pbar.update(1)
         if len(rows) >= n_eval:
             break
@@ -704,6 +722,122 @@ class MolecularMLMCollator:
         return self._eligible_replacement_ids.to(device)
 
 
+@dataclass
+class FunctionalGroupMLMCollator(MolecularMLMCollator):
+    """MLM-FG collator: masks whole rings/functional groups rather than individual tokens.
+
+    Experimental. Falls back to standard token-level masking per-molecule when
+    substructure detection or SELFIES→APE mapping fails.
+
+    Substructure detection uses sf.decoder(selfies) → RDKit, which guarantees
+    that RDKit atom index k corresponds to SELFIES atom token k. The stored
+    canonical SMILES is intentionally not used here — its atom ordering may
+    differ from the SELFIES encoding order.
+
+    Extra field vs. MolecularMLMCollator:
+      tokenizer_vocab  -- APE vocab dict for span simulation
+    """
+
+    tokenizer_vocab: dict[str, int] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.tokenizer_vocab is None:
+            raise ValueError("FunctionalGroupMLMCollator requires tokenizer_vocab.")
+
+    def __call__(self, examples: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
+        from modernmolbert.masking import build_fg_masked_indices, map_atoms_to_ape_positions
+
+        ids = [
+            torch.tensor(ex["input_ids"], dtype=torch.long)
+            for ex in examples
+            if len(ex["input_ids"]) > 0
+        ]
+
+        if not ids:
+            raise ValueError("Received an empty batch after tokenization.")
+
+        input_ids = pad_sequence(ids, batch_first=True, padding_value=self.pad_token_id)
+        attention_mask = (input_ids != self.pad_token_id).long()
+        labels = input_ids.clone()
+
+        special_mask = torch.zeros_like(labels, dtype=torch.bool)
+        for sid in self.special_token_ids:
+            special_mask |= labels.eq(sid)
+
+        # Build masked_indices row by row using FG substructure mapping.
+        masked_indices = torch.zeros_like(labels, dtype=torch.bool)
+        seq_len = labels.shape[1]
+
+        valid_examples = [ex for ex in examples if len(ex["input_ids"]) > 0]
+        for row_idx, ex in enumerate(valid_examples):
+            selfies = ex.get("selfies", "")
+            special_positions = {col for col in range(seq_len) if special_mask[row_idx, col].item()}
+            pad_positions = {
+                col for col in range(seq_len) if attention_mask[row_idx, col].item() == 0
+            }
+            excluded = special_positions | pad_positions
+
+            fg_mask: list[bool] | None = None
+
+            if selfies:
+                substructure_positions = map_atoms_to_ape_positions(selfies, self.tokenizer_vocab)
+                if substructure_positions is not None:
+                    # Shift by 1 to account for BOS token prepended by tokenizer.
+                    shifted = [{p + 1 for p in group} for group in substructure_positions]
+                    fg_mask = build_fg_masked_indices(
+                        shifted,
+                        seq_len=seq_len,
+                        mlm_probability=self.mlm_probability,
+                        special_token_positions=excluded,
+                    )
+
+            if fg_mask is None:
+                # Fallback: standard per-token Bernoulli masking for this row.
+                prob_row = torch.full((seq_len,), self.mlm_probability)
+                prob_row[list(excluded)] = 0.0
+                fg_mask_tensor = torch.bernoulli(prob_row).bool()
+                fg_mask = fg_mask_tensor.tolist()
+
+            masked_indices[row_idx] = torch.tensor(fg_mask, dtype=torch.bool)
+
+        # Guardrail: force at least one masked position if nothing was selected.
+        if self.mlm_probability > 0.0 and not masked_indices.any():
+            eligible_positions = (~special_mask & attention_mask.bool()).nonzero(as_tuple=False)
+            if len(eligible_positions) > 0:
+                idx = int(torch.randint(len(eligible_positions), (1,)).item())
+                row_pos = eligible_positions[idx]
+                masked_indices[int(row_pos[0].item()), int(row_pos[1].item())] = True
+
+        labels[~masked_indices] = -100
+
+        # Apply standard 80/10/10 replacement strategy.
+        replace_with_mask = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+        input_ids[replace_with_mask] = self.mask_token_id
+
+        replace_with_random = (
+            torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
+            & masked_indices
+            & ~replace_with_mask
+        )
+        if replace_with_random.any():
+            eligible_random_ids = self.eligible_random_token_ids(device=input_ids.device)
+            random_indices = torch.randint(
+                low=0,
+                high=len(eligible_random_ids),
+                size=labels.shape,
+                device=input_ids.device,
+            )
+            random_words = eligible_random_ids[random_indices]
+            input_ids[replace_with_random] = random_words[replace_with_random]
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+
+
 MODERNBERT_CONFIGS = {
     "base": "answerdotai/ModernBERT-base",
     "large": "answerdotai/ModernBERT-large",
@@ -792,6 +926,7 @@ def log_training_plan(
     print(f"  max_steps:                  {args.max_steps}", flush=True)
     print(f"  max_seq_length:             {args.max_seq_length}", flush=True)
     print(f"  mlm_probability:            {args.mlm_probability}", flush=True)
+    print(f"  masking_strategy:           {args.masking_strategy}", flush=True)
     print(f"  train batch/device:         {args.per_device_train_batch_size}", flush=True)
     print(f"  gradient_accumulation:      {args.gradient_accumulation_steps}", flush=True)
     print(f"  effective batch size:       {effective_batch_size}", flush=True)
@@ -1012,13 +1147,25 @@ def main() -> None:
     )
     log(f"Model parameters: {n_params / 1e6:.2f}M")
 
-    collator = MolecularMLMCollator(
-        pad_token_id=special_ids["pad_token"],
-        mask_token_id=special_ids["mask_token"],
-        vocab_size=vocab_size,
-        mlm_probability=args.mlm_probability,
-        special_token_ids=list(special_ids.values()),
-    )
+    if args.masking_strategy == "functional_group":
+        collator: MolecularMLMCollator = FunctionalGroupMLMCollator(
+            pad_token_id=special_ids["pad_token"],
+            mask_token_id=special_ids["mask_token"],
+            vocab_size=vocab_size,
+            mlm_probability=args.mlm_probability,
+            special_token_ids=list(special_ids.values()),
+            tokenizer_vocab=tokenizer.vocab,
+        )
+        log("Masking strategy: functional_group (MLM-FG, experimental)")
+    else:
+        collator = MolecularMLMCollator(
+            pad_token_id=special_ids["pad_token"],
+            mask_token_id=special_ids["mask_token"],
+            vocab_size=vocab_size,
+            mlm_probability=args.mlm_probability,
+            special_token_ids=list(special_ids.values()),
+        )
+        log("Masking strategy: standard")
 
     report_to = [] if args.report_to == "none" else [args.report_to]
 

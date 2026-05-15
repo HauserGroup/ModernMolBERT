@@ -120,7 +120,7 @@ def eval_procedure(
         output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
     ):
         if not override:
-            log.info(
+            log.warning(
                 f"Already evaluated — skipping. "
                 f"dataset={dataset_info.name!r} embedder={model_name!r} head={model_head!r}"
             )

@@ -76,10 +76,39 @@ def test_prepare_chembl36_frame_dedupes_clean_split_keys() -> None:
 
 def test_prepare_chembl36_frame_requires_smiles_column() -> None:
     with pytest.raises(ValueError, match="missing required columns"):
-        prepare_chembl36_frame(pd.DataFrame({"x": ["CCO"]}), config=ChemBL36SelfiesPrepConfig())
+        prepare_chembl36_frame(
+            pd.DataFrame({"x": ["CCO"]}),
+            config=ChemBL36SelfiesPrepConfig(),
+        )
 
 
-def test_split_by_hash_returns_non_overlapping_splits() -> None:
+def test_split_by_hash_default_returns_train_valid_only() -> None:
+    frame = pd.DataFrame(
+        {
+            "split_key": [f"mol_{i}" for i in range(1000)],
+            "selfies": ["[C]" for _ in range(1000)],
+        }
+    )
+
+    train, valid, test = split_by_hash(
+        frame,
+        key_column="split_key",
+        valid_fraction=0.1,
+        seed=13,
+    )
+
+    assert len(train) > 0
+    assert len(valid) > 0
+    assert test is None
+
+    train_keys = set(train["split_key"])
+    valid_keys = set(valid["split_key"])
+
+    assert train_keys.isdisjoint(valid_keys)
+    assert len(train_keys | valid_keys) == len(frame)
+
+
+def test_split_by_hash_can_create_non_overlapping_test_split() -> None:
     frame = pd.DataFrame(
         {
             "split_key": [f"mol_{i}" for i in range(1000)],
@@ -97,6 +126,7 @@ def test_split_by_hash_returns_non_overlapping_splits() -> None:
 
     assert len(train) > 0
     assert len(valid) > 0
+    assert test is not None
     assert len(test) > 0
 
     train_keys = set(train["split_key"])
@@ -106,9 +136,32 @@ def test_split_by_hash_returns_non_overlapping_splits() -> None:
     assert train_keys.isdisjoint(valid_keys)
     assert train_keys.isdisjoint(test_keys)
     assert valid_keys.isdisjoint(test_keys)
+    assert len(train_keys | valid_keys | test_keys) == len(frame)
 
 
-def test_split_by_hash_changes_with_seed() -> None:
+def test_split_by_hash_changes_with_seed_without_test_split() -> None:
+    frame = pd.DataFrame({"split_key": [f"mol_{i}" for i in range(1000)]})
+
+    train_a, valid_a, test_a = split_by_hash(
+        frame,
+        key_column="split_key",
+        valid_fraction=0.1,
+        seed=13,
+    )
+    train_b, valid_b, test_b = split_by_hash(
+        frame,
+        key_column="split_key",
+        valid_fraction=0.1,
+        seed=14,
+    )
+
+    assert test_a is None
+    assert test_b is None
+    assert set(train_a["split_key"]) != set(train_b["split_key"])
+    assert set(valid_a["split_key"]) != set(valid_b["split_key"])
+
+
+def test_split_by_hash_changes_with_seed_with_test_split() -> None:
     frame = pd.DataFrame({"split_key": [f"mol_{i}" for i in range(1000)]})
 
     train_a, valid_a, test_a = split_by_hash(
@@ -126,6 +179,8 @@ def test_split_by_hash_changes_with_seed() -> None:
         seed=14,
     )
 
+    assert test_a is not None
+    assert test_b is not None
     assert set(train_a["split_key"]) != set(train_b["split_key"])
     assert set(valid_a["split_key"]) != set(valid_b["split_key"])
     assert set(test_a["split_key"]) != set(test_b["split_key"])

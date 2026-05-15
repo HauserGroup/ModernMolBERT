@@ -18,7 +18,7 @@ class ChemBL36SelfiesPrepConfig:
     output_dir: Path = Path("data/pretrain/chembl36_selfies")
     seed: int = 13
     valid_fraction: float = 0.01
-    test_fraction: float = 0.01
+    test_fraction: float = 0.0
     max_rows: int | None = None
     dedupe_column: str = "standard_inchi_key"
     min_heavy_atoms: int = 3
@@ -58,7 +58,14 @@ def prepare_chembl36_selfies(config: ChemBL36SelfiesPrepConfig) -> None:
         test_fraction=config.test_fraction,
         seed=config.seed,
     )
-    splits = {"train": train, "valid": valid, "test": test}
+
+    splits: dict[str, pd.DataFrame] = {
+        "train": train,
+        "valid": valid,
+    }
+
+    if test is not None:
+        splits["test"] = test
 
     for split_name, split_frame in splits.items():
         split_frame.to_parquet(config.output_dir / f"{split_name}.parquet", index=False)
@@ -81,13 +88,21 @@ def prepare_chembl36_selfies(config: ChemBL36SelfiesPrepConfig) -> None:
             "prepared_total": int(len(prepared)),
             "train": int(len(train)),
             "valid": int(len(valid)),
-            "test": int(len(test)),
+            **({"test": int(len(test))} if test is not None else {}),
         },
         "columns": list(prepared.columns),
         "split_overlap": compute_split_overlap_stats(
             splits,
             key="smiles_canonical_clean",
         ),
+        "split_policy": {
+            "method": "deterministic_hash",
+            "key_column": "split_key",
+            "seed": config.seed,
+            "valid_fraction": config.valid_fraction,
+            "test_fraction": config.test_fraction,
+            "has_test": test is not None,
+        },
         "versions": collect_preparation_versions(),
         "created_at_utc": datetime.now(UTC).isoformat(),
         "creation_command": "python -m modernmolbert.data.prepare_chembl36_selfies",
@@ -329,36 +344,57 @@ def split_by_hash(
     *,
     key_column: str,
     valid_fraction: float,
-    test_fraction: float,
+    test_fraction: float = 0.0,
     seed: int = 13,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    """Split rows deterministically from a stable key, independent of row order."""
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+    """Split rows deterministically from a stable key, independent of row order.
+
+    By default this returns train/valid only. A test split is created only when
+    test_fraction > 0. For MLM pretraining, the validation split is used for
+    monitoring and checkpoint selection; downstream benchmark test splits are
+    used for final model evaluation.
+    """
 
     if key_column not in frame.columns:
         raise ValueError(f"Input frame is missing split key column {key_column!r}")
     if not 0.0 < valid_fraction < 1.0:
         raise ValueError("valid_fraction must be between 0 and 1")
-    if not 0.0 < test_fraction < 1.0:
-        raise ValueError("test_fraction must be between 0 and 1")
+    if not 0.0 <= test_fraction < 1.0:
+        raise ValueError("test_fraction must be between 0 and 1, inclusive of 0")
     if valid_fraction + test_fraction >= 1.0:
         raise ValueError("valid_fraction + test_fraction must be < 1")
 
     values = frame[key_column].map(lambda x: hash_to_unit_interval(f"{seed}:{x}"))
 
-    test_mask = values < test_fraction
-    valid_mask = (values >= test_fraction) & (values < test_fraction + valid_fraction)
-    train_mask = ~(test_mask | valid_mask)
+    if test_fraction > 0.0:
+        test_mask = values < test_fraction
+        valid_mask = (values >= test_fraction) & (values < test_fraction + valid_fraction)
+        train_mask = ~(test_mask | valid_mask)
+
+        train = frame.loc[train_mask].reset_index(drop=True)
+        valid = frame.loc[valid_mask].reset_index(drop=True)
+        test = frame.loc[test_mask].reset_index(drop=True)
+
+        if len(train) == 0 or len(valid) == 0 or len(test) == 0:
+            raise RuntimeError(
+                "Hash split produced an empty split. Increase dataset size or fractions."
+            )
+
+        return train, valid, test
+
+    valid_mask = values < valid_fraction
+    train_mask = ~valid_mask
 
     train = frame.loc[train_mask].reset_index(drop=True)
     valid = frame.loc[valid_mask].reset_index(drop=True)
-    test = frame.loc[test_mask].reset_index(drop=True)
 
-    if len(train) == 0 or len(valid) == 0 or len(test) == 0:
+    if len(train) == 0 or len(valid) == 0:
         raise RuntimeError(
-            "Hash split produced an empty split. Increase dataset size or fractions."
+            "Hash split produced an empty train or valid split. "
+            "Increase dataset size or valid_fraction."
         )
 
-    return train, valid, test
+    return train, valid, None
 
 
 def write_example_tsv(
@@ -393,12 +429,16 @@ def compute_split_overlap_stats(
         key_sets[split_name] = {str(value) for value in frame[key].dropna().tolist()}
 
     out: dict[str, Any] = {}
-    for left, right in [("train", "valid"), ("train", "test"), ("valid", "test")]:
-        overlap = key_sets.get(left, set()) & key_sets.get(right, set())
-        out[f"{left}_{right}"] = {
-            "n_overlap": int(len(overlap)),
-            "examples": sorted(overlap)[:20],
-        }
+    split_names = list(splits)
+
+    for i, left in enumerate(split_names):
+        for right in split_names[i + 1 :]:
+            overlap = key_sets.get(left, set()) & key_sets.get(right, set())
+            out[f"{left}_{right}"] = {
+                "n_overlap": int(len(overlap)),
+                "examples": sorted(overlap)[:20],
+            }
+
     return out
 
 

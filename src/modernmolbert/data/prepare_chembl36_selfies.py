@@ -22,8 +22,22 @@ def parse_args() -> argparse.Namespace:
         default=Path("data/pretrain/chembl36_selfies"),
     )
     parser.add_argument("--seed", type=int, default=13)
-    parser.add_argument("--valid_fraction", type=float, default=0.01)
-    parser.add_argument("--test_fraction", type=float, default=0.01)
+    parser.add_argument(
+        "--valid_fraction",
+        type=float,
+        default=0.01,
+        help="Validation fraction used for MLM monitoring and checkpoint selection.",
+    )
+    parser.add_argument(
+        "--test_fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional held-out pretraining test fraction. Defaults to 0.0 because "
+            "MLM pretraining usually only needs train/validation; downstream "
+            "benchmarks provide the final test evaluation."
+        ),
+    )
     parser.add_argument("--max_rows", type=int, default=None)
     parser.add_argument("--dedupe_column", default="standard_inchi_key")
     parser.add_argument("--min_heavy_atoms", type=int, default=3)

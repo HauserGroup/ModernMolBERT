@@ -127,6 +127,17 @@ The metadata records the tokenizer representation, vocabulary hash, special toke
 
 ## Training workflow
 
+### 0. Prepare the pretrain dataset
+
+Prepare the ChEMBL36 SELFIES dataset for pretraining:
+
+```bash
+uv run python -m modernmolbert.data.prepare_chembl36_selfies \
+  --output_dir data/pretrain/chembl36_selfies
+```
+
+This prepares the dataset with no test split by default. The prepared dataset will be used for model pretraining in the training steps below.
+
 ### 1. Train the SELFIES tokenizer
 
 ```bash

@@ -187,51 +187,20 @@ class ModernMolBERTSelfiesFeaturizer:
         if not selfies_strings:
             raise ValueError("Cannot tokenize an empty SELFIES batch")
 
-        encoded_rows: list[list[int]] = []
-
-        for text in selfies_strings:
-            encoded = self.tokenizer(
-                text,
-                padding=False,
-                truncation=True,
-                max_length=self.max_seq_length,
-                return_tensors="pt",
-            )
-
-            input_ids = encoded["input_ids"]
-
-            if isinstance(input_ids, torch.Tensor):
-                ids = input_ids.detach().cpu().tolist()
-            else:
-                ids = list(input_ids)
-
-            # Some tokenizer APIs return [[...]] for a single example.
-            if ids and isinstance(ids[0], list):
-                ids = ids[0]
-
-            encoded_rows.append([int(x) for x in ids])
-
-        pad_token_id = int(getattr(self.tokenizer, "pad_token_id", 0))
-
-        max_len = max(len(row) for row in encoded_rows)
-        input_ids = torch.full(
-            (len(encoded_rows), max_len),
-            fill_value=pad_token_id,
-            dtype=torch.long,
+        # Batch tokenization: one call for the whole list instead of a per-string
+        # loop + manual padding. On MPS the model forward is fast enough that the
+        # old Python loop became the bottleneck.
+        encoded = self.tokenizer(
+            selfies_strings,
+            padding=True,
+            truncation=True,
+            max_length=self.max_seq_length,
+            return_tensors="pt",
         )
-        attention_mask = torch.zeros(
-            (len(encoded_rows), max_len),
-            dtype=torch.long,
-        )
-
-        for i, row in enumerate(encoded_rows):
-            length = len(row)
-            input_ids[i, :length] = torch.tensor(row, dtype=torch.long)
-            attention_mask[i, :length] = 1
 
         return {
-            "input_ids": input_ids,
-            "attention_mask": attention_mask,
+            "input_ids": encoded["input_ids"],
+            "attention_mask": encoded["attention_mask"],
         }
 
 

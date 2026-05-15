@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""Train an APE tokenizer for SELFIES and emit metadata."""
+"""Train an APE tokenizer for SELFIES and emit metadata.
+
+uv run python -m modernmolbert.train_ape_tokenizer \
+  --output_vocab_path tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json \
+  --dataset_name data/pretrain/chembl36_selfies \
+  --selfies_column selfies \
+  --data_files data/pretrain/chembl36_selfies/train.parquet \
+  --tokenizer_train_size 2000000 \
+  --max_vocab_size 5000 \
+  --min_freq_for_merge 2000 \
+  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
+"""
 
 import argparse
 import re
@@ -71,24 +82,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_vocab_size", type=int, default=5000)
     parser.add_argument("--min_freq_for_merge", type=int, default=2000)
     parser.add_argument(
-        "--extra_vocab_symbols_path",
-        type=Path,
-        default=None,
-        help=(
-            "Optional text file containing one extra token per line. "
-            "Use this to force rare valid SELFIES symbols into the vocabulary."
-        ),
-    )
-    parser.add_argument(
-        "--extra_vocab_selfies_path",
-        type=Path,
-        default=None,
-        help=(
-            "Optional text file containing SELFIES strings. All bracketed SELFIES "
-            "symbols observed in this file are forced into the vocabulary."
-        ),
-    )
-    parser.add_argument(
         "--save_checkpoint",
         action="store_true",
         help="Periodically save intermediate tokenizer checkpoints during APE merge training.",
@@ -104,6 +97,28 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=500,
         help="Checkpoint interval in learned vocabulary entries.",
+    )
+    parser.add_argument(
+        "--extra_vocab_symbols_path",
+        type=Path,
+        default=None,
+        help=(
+            "Optional text file with one primitive SELFIES token per line, e.g. "
+            "[C@@H1]. These tokens are force-added after APE merge training and "
+            "before saving the final vocabulary. Do not pass full SELFIES molecule "
+            "strings here."
+        ),
+    )
+    parser.add_argument(
+        "--extra_vocab_selfies_path",
+        type=Path,
+        default=None,
+        help=(
+            "Optional text file with one full SELFIES molecule string per line. "
+            "All bracketed primitive SELFIES symbols are extracted and force-added "
+            "after APE merge training. Prefer --extra_vocab_symbols_path when you "
+            "already have a symbol list."
+        ),
     )
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)

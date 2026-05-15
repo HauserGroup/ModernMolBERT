@@ -234,6 +234,7 @@ src/modernmolbert/eval/junk/
 .agents/
 /*.prompt.md
 repomix*.xml
+CLAUDE.md
 
 # eval
 tmp_eval/

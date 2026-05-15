@@ -1,41 +1,77 @@
-#!/usr/bin/env python3
 """Export SELFIES coverage data from prepared benchmark datasets.
 
-Reads .joblib files in the prepared directory and converts benchmark SMILES to
-SELFIES.
+This is a diagnostic/tokenizer-coverage utility, not a benchmark runner.
 
-Two output modes are supported:
+It reads prepared `.joblib` benchmark datasets, converts their SMILES strings to
+SELFIES, and exports either:
 
-1. symbols:
-   Writes one primitive SELFIES symbol per line, e.g. [C@@H1].
-   Use this with:
-       --extra_vocab_symbols_path
+1. primitive SELFIES symbol counts, e.g.
+       [C@@H1]    18109
+       [/C]       15660
 
-2. selfies:
-   Writes one full SELFIES string per line.
-   Use this with:
-       --extra_vocab_selfies_path
+2. unique primitive SELFIES symbols, e.g.
+       [C@@H1]
+       [/C]
 
-Examples:
-    uv run python -m modernmolbert.eval.benchmarking_molecular_models.export_benchmark_corpus \
-        --prepared_dir data/prepared \
-        --output tokenizer/extra_symbols/benchmark_missing_selfies_symbols.txt \
-        --mode symbols \
-        --split all
+3. full SELFIES strings, one molecule per line.
 
-    uv run python -m modernmolbert.eval.benchmarking_molecular_models.export_benchmark_corpus \
-        --prepared_dir data/prepared \
-        --output data/prepared/benchmark_selfies_symbols_source.txt \
-        --mode selfies \
-        --split all
+The main use case is checking whether a tokenizer trained on the pretraining
+corpus maps valid SELFIES primitive symbols from downstream datasets to `<unk>`.
+If common symbols are missing, they can be force-added to the tokenizer vocabulary
+as atomic symbols after APE merge training.
+
+Important:
+    Do not confuse primitive SELFIES symbols with full SELFIES strings.
+
+    Primitive symbol:
+        [C@@H1]
+
+    Full SELFIES molecule:
+        [C][C@@H1][Branch1][C][O][C]
+
+For tokenizer extension, prefer primitive symbols, not full SELFIES molecules.
+
+Recommended workflow:
+    1. Export benchmark symbol counts:
+        uv run python -m modernmolbert.eval.benchmarking_molecular_models.export_benchmark_corpus \\
+          --prepared_dir data/prepared \\
+          --output tokenizer/extra_symbols/benchmark_selfies_symbol_counts.tsv \\
+          --mode symbol_counts \\
+          --split all
+
+    2. Filter to missing, sufficiently common symbols:
+        uv run python exploratory/tokenization/filter_missing_selfies_symbols.py \\
+          --vocab tokenizer/chembl36_selfies_2m_ape_tokenizer.json \\
+          --symbol_counts tokenizer/extra_symbols/benchmark_selfies_symbol_counts.tsv \\
+          --output tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \\
+          --min_count 10
+
+    3. Train tokenizer with forced primitive-symbol coverage:
+        uv run python -m modernmolbert.train_ape_tokenizer \\
+          --output_vocab_path tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json \\
+          --dataset_name data/pretrain/chembl36_selfies \\
+          --selfies_column selfies \\
+          --tokenizer_train_size 2000000 \\
+          --max_vocab_size 5000 \\
+          --min_freq_for_merge 2000 \\
+          --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt
+
+Leakage note:
+    This utility should be used to add primitive SELFIES alphabet symbols only.
+    It should not be used to train APE merge rules on benchmark molecules, pretrain
+    MLM on benchmark molecules, or use benchmark labels/test performance. Adding
+    common valid SELFIES primitives is tokenizer alphabet coverage, not model
+    selection.
 """
 
 import argparse
 import re
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from collections.abc import Iterable
+from typing import Any
 
 import joblib
 import pandas as pd
@@ -67,11 +103,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode",
-        choices=["symbols", "selfies"],
+        choices=["symbols", "selfies", "symbol_counts"],
         default="symbols",
         help=(
             "'symbols' writes primitive SELFIES tokens, one per line. "
-            "'selfies' writes full SELFIES strings, one per line."
+            "'selfies' writes full SELFIES strings, one per line. "
+            "'symbol_counts' writes a TSV of symbol\\tcount sorted by count descending "
+            "(input for filter_missing_selfies_symbols.py)."
         ),
     )
     parser.add_argument(
@@ -99,7 +137,7 @@ def log(message: str) -> None:
     print(message, flush=True)
 
 
-def get_dataset_frame(dataset: object, path: Path) -> pd.DataFrame:
+def get_dataset_frame(dataset: Any, path: Path) -> pd.DataFrame:
     """Extract a pandas DataFrame from a prepared benchmark joblib object."""
 
     if hasattr(dataset, "data"):
@@ -181,7 +219,7 @@ def main() -> None:
 
     seen_smiles: set[str] = set()
     unique_selfies: set[str] = set()
-    unique_symbols: set[str] = set()
+    symbol_counts: Counter[str] = Counter()
 
     total_input_rows = 0
     total_selected_rows = 0
@@ -238,7 +276,7 @@ def main() -> None:
                 log(
                     f"  Progress {path.stem}: selected_rows={row_idx:,}, "
                     f"file_new={file_new:,}, total_new={total_new_smiles:,}, "
-                    f"symbols={len(unique_symbols):,}, selfies={len(unique_selfies):,}, "
+                    f"symbols={len(symbol_counts):,}, selfies={len(unique_selfies):,}, "
                     f"failures={sf_failures:,}, elapsed={elapsed:.1f}s"
                 )
 
@@ -258,27 +296,35 @@ def main() -> None:
             if args.mode == "selfies":
                 unique_selfies.add(selfies)
             else:
-                unique_symbols.update(SELFIES_SYMBOL_RE.findall(selfies))
+                symbol_counts.update(SELFIES_SYMBOL_RE.findall(selfies))
 
         elapsed_file = time.perf_counter() - file_start
         log(
             f"  Done {path.stem}: selected={file_selected:,}, "
             f"new_smiles={file_new:,}, failures={file_failures:,}, "
-            f"symbols={len(unique_symbols):,}, selfies={len(unique_selfies):,}, "
+            f"symbols={len(symbol_counts):,}, selfies={len(unique_selfies):,}, "
             f"elapsed={elapsed_file:.1f}s"
         )
         log("")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
-    if args.mode == "symbols":
-        values = sorted(unique_symbols)
+    if args.mode == "symbol_counts":
+        with args.output.open("w", encoding="utf-8") as f:
+            f.write("symbol\tcount\n")
+            for symbol, count in symbol_counts.most_common():
+                f.write(f"{symbol}\t{count}\n")
+        values = list(symbol_counts.keys())
+    elif args.mode == "symbols":
+        values = sorted(symbol_counts.keys())
+        with args.output.open("w", encoding="utf-8") as f:
+            for value in values:
+                f.write(f"{value}\n")
     else:
         values = sorted(unique_selfies)
-
-    with args.output.open("w", encoding="utf-8") as f:
-        for value in values:
-            f.write(f"{value}\n")
+        with args.output.open("w", encoding="utf-8") as f:
+            for value in values:
+                f.write(f"{value}\n")
 
     elapsed_total = time.perf_counter() - start_total
 
@@ -289,7 +335,7 @@ def main() -> None:
     log(f"Unique SMILES:          {len(seen_smiles):,}")
     log(f"SELFIES failures:       {sf_failures:,}")
     log(f"Unique SELFIES:         {len(unique_selfies):,}")
-    log(f"Unique symbols:         {len(unique_symbols):,}")
+    log(f"Unique symbols:         {len(symbol_counts):,}")
     log(f"Output rows:            {len(values):,}")
     log(f"Output:                 {args.output}")
     log(f"Elapsed:                {elapsed_total:.1f}s")

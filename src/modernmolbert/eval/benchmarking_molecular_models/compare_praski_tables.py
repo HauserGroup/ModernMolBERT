@@ -65,14 +65,45 @@ HIGHER_IS_BETTER = {
     "mse": False,
 }
 
+SCALE_TO_PERCENT: frozenset[str] = frozenset({"roc_auc", "auroc", "average_precision", "ap"})
+
+SUMMARY_TABLE_SENTINEL_COLS: frozenset[str] = frozenset(
+    {"Mean_rank", "Mean_AUROC", "rank_best", "metric_best", "Mean_rank_↓", "Mean_AUROC_↑"}
+)
+
+
+def _metric_scale(metric: str) -> float:
+    """Display scale factor: 100 for bounded probability metrics, 1 otherwise."""
+    return 100.0 if metric.strip().lower() in SCALE_TO_PERCENT else 1.0
+
+
+def _add_display_metric(df: pd.DataFrame) -> pd.DataFrame:
+    """Add display_metric = test_metric * per-row scale based on metric type."""
+    df = df.copy()
+    df["display_metric"] = [
+        row["test_metric"] * _metric_scale(str(row["metric"])) for _, row in df.iterrows()
+    ]
+    return df
+
 
 def load_praski_csv(path: str | Path) -> pd.DataFrame:
     path = Path(path)
-    df = pd.read_csv(path)
+    sep = "\t" if path.suffix.lower() == ".tsv" else ","
+    df = pd.read_csv(path, sep=sep)
+
+    sentinel_found = SUMMARY_TABLE_SENTINEL_COLS & set(df.columns)
+    if sentinel_found:
+        raise ValueError(
+            f"{path.name} looks like a pre-computed summary table "
+            f"(has columns: {sorted(sentinel_found)}). "
+            "load_praski_csv expects raw per-dataset benchmark results. "
+            "Bundled Praski TSVs (Praski_table_1.tsv etc.) are reference artifacts, "
+            f"not input to this script. Required columns: {sorted(REQUIRED_COLUMNS)}."
+        )
 
     missing = REQUIRED_COLUMNS - set(df.columns)
     if missing:
-        raise ValueError(f"{path} is missing required columns: {sorted(missing)}")
+        raise ValueError(f"{path.name} is missing required columns: {sorted(missing)}")
 
     df = df.copy()
     df["test_metric"] = pd.to_numeric(df["test_metric"], errors="coerce")
@@ -119,13 +150,17 @@ def rank_within_dataset(
 
 
 def select_best_head_per_dataset_embedder(df: pd.DataFrame) -> pd.DataFrame:
-    """One row per dataset × embedder, selecting the best downstream head by test metric."""
+    """One row per dataset × embedder, selecting the best downstream head by cv_metric.
+
+    Head is chosen by cross-validation score (cv_metric) to keep model selection fair.
+    The test_metric of the selected row is then reported.
+    """
     parts = []
 
     for (_, metric), group in df.groupby(["dataset", "metric"], dropna=False):
         higher = metric_higher_is_better(str(metric))
         group = group.sort_values(
-            "test_metric",
+            "cv_metric",
             ascending=not higher,
         )
         best = group.groupby(["dataset", "embedder"], as_index=False).first()
@@ -145,12 +180,12 @@ def summarize_head_specific(df: pd.DataFrame, *, head: str) -> pd.DataFrame:
     if sub.empty:
         return pd.DataFrame(columns=["embedder", f"rank_{head}", f"score_{head}"])
 
-    ranked = rank_within_dataset(sub)
+    ranked = _add_display_metric(rank_within_dataset(sub))
 
     out = ranked.groupby("embedder", as_index=False).agg(
         **{
             f"rank_{head}": ("rank", "mean"),
-            f"score_{head}": ("test_metric", "mean"),
+            f"score_{head}": ("display_metric", "mean"),
             f"n_{head}": ("dataset", "nunique"),
         }
     )
@@ -160,11 +195,11 @@ def summarize_head_specific(df: pd.DataFrame, *, head: str) -> pd.DataFrame:
 def make_table6_like(df: pd.DataFrame) -> pd.DataFrame:
     """Praski Table 6-like: per embedder ranks/scores for best, knn, rf, and linear."""
     best = select_best_head_per_dataset_embedder(df)
-    best_ranked = rank_within_dataset(best)
+    best_ranked = _add_display_metric(rank_within_dataset(best))
 
     table = best_ranked.groupby("embedder", as_index=False).agg(
         rank_best=("rank", "mean"),
-        score_best=("test_metric", "mean"),
+        score_best=("display_metric", "mean"),
         n_best=("dataset", "nunique"),
     )
 
@@ -198,9 +233,6 @@ def make_table6_like(df: pd.DataFrame) -> pd.DataFrame:
         "n_linear",
     ]
     table = table[[col for col in ordered if col in table.columns]]
-
-    metric_cols = [col for col in table.columns if col.startswith("metric_")]
-    table[metric_cols] = table[metric_cols] * 100.0
 
     return table.sort_values("rank_best", ascending=True)
 
@@ -241,15 +273,13 @@ def make_table1_like(df: pd.DataFrame, *, collapse_names: bool = True) -> pd.Dat
     else:
         best = best.rename(columns={"embedder": "Model"})
 
-    ranked = rank_within_dataset(best)
+    ranked = _add_display_metric(rank_within_dataset(best))
 
     out = ranked.groupby("Model", as_index=False).agg(
         Mean_rank=("rank", "mean"),
-        Mean_metric=("test_metric", "mean"),
+        Mean_metric=("display_metric", "mean"),
         N_datasets=("dataset", "nunique"),
     )
-
-    out["Mean_metric"] = out["Mean_metric"] * 100.0
 
     return out.sort_values(["Mean_rank", "Mean_metric"], ascending=[True, False])
 

@@ -14,20 +14,47 @@ This directory contains the reference baseline tables from the Praski et al. ben
 
 ## Usage
 
-These tables serve as:
-1. **Reference baselines** for comparing new embedder implementations
-2. **Dataset documentation** (table 4 describes the benchmark scope)
-3. **Head-specific performance tracking** (table 6 shows head-specific strengths/weaknesses)
+The bundled TSVs here are **reference artifacts only** — human-readable baselines from the paper.
+They are not direct input to the comparison script.
 
-To compare a new embedder against these baselines, use:
+To compare a new embedder against these baselines, first run the benchmark to produce a raw
+per-dataset result CSV (one row per dataset × embedder × head), then pass that CSV to the
+comparison script:
 
 ```bash
-uv run python -m modernmolbert.eval.benchmarking_molecular_models.praski_compare \
-  --baseline src/modernmolbert/eval/benchmarking_molecular_models/benchmarks/praski/Praski_table_1.tsv \
-  --ours <your_results.csv> \
-  --our-embedder <embedder_name> \
-  --output-dir <comparison_output>
+uv run python -m modernmolbert.eval.benchmarking_molecular_models.compare_praski_tables \
+  --baseline data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv \
+  --ours outputs/eval/results.csv \
+  --our-embedder ModernMolBERT_SELFIES_ChEMBL36_2M \
+  --output-dir outputs/eval/comparison
 ```
+
+If your results are already in the same file as the baselines (single combined CSV), omit `--ours`:
+
+```bash
+uv run python -m modernmolbert.eval.benchmarking_molecular_models.compare_praski_tables \
+  --baseline data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv \
+  --our-embedder ModernMolBERT_SELFIES_ChEMBL36_2M \
+  --output-dir outputs/eval/comparison
+```
+
+To annotate any result table with model family and class metadata:
+
+```bash
+uv run python -m modernmolbert.eval.benchmarking_molecular_models.annotate_model_table \
+  --input data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv \
+  --output outputs/eval/annotated_results.csv
+```
+
+**Output files** written to `--output-dir`:
+
+| File | Contents |
+|------|----------|
+| `table6_like.csv` | Mean rank and mean metric per model for best head, kNN, RF, and linear/ridge |
+| `table1_like.csv` | Compact summary: mean rank and mean metric after best-head selection |
+| `dataset_winners.csv` | Best embedder/head per dataset (use `--write-debug-tables`) |
+| `pairwise_vs_ours.csv` | Win/loss breakdown vs our embedder on shared datasets |
+| `manifest.csv` | Input paths, row counts, and dataset/embedder counts |
 
 ## Citation
 

@@ -9,14 +9,15 @@ Tokenizer training is intentionally a separate command:
 
 import argparse
 import hashlib
+import re
 import time
 import json
 import math
 import platform
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 import os
 
 from dotenv import load_dotenv
@@ -154,6 +155,48 @@ def parse_args() -> argparse.Namespace:
 
     # MLM
     parser.add_argument("--mlm_probability", type=float, default=0.30)
+    parser.add_argument(
+        "--masking_strategy",
+        type=str,
+        choices=["standard", "span", "hetero_span"],
+        default="standard",
+        help=(
+            "MLM masking strategy. "
+            "'standard': independent Bernoulli per token (original). "
+            "'span': budget-based contiguous APE-token span masking. "
+            "'hetero_span': span masking with span-start positions weighted toward "
+            "APE tokens that contain heteroatoms (N, O, S, P, F, Cl, Br, I, Se, Si)."
+        ),
+    )
+    parser.add_argument(
+        "--span_p_geom",
+        type=float,
+        default=0.4,
+        help=(
+            "Success probability for the geometric distribution used to sample span lengths. "
+            "Mean span length = 1/p_geom. Default 0.4 → mean ≈ 2.5 APE tokens. "
+            "Only used when --masking_strategy is 'span' or 'hetero_span'."
+        ),
+    )
+    parser.add_argument(
+        "--span_max_length",
+        type=int,
+        default=6,
+        help=(
+            "Maximum span length in APE tokens. Sampled lengths are clamped to this value. "
+            "Only used when --masking_strategy is 'span' or 'hetero_span'."
+        ),
+    )
+    parser.add_argument(
+        "--heteroatom_start_weight",
+        type=float,
+        default=2.0,
+        help=(
+            "Sampling weight multiplier for span-start positions whose APE token contains "
+            "a heteroatom. Non-heteroatom positions receive weight 1.0. "
+            "Only used when --masking_strategy is 'hetero_span'."
+        ),
+    )
 
     # Training
     parser.add_argument("--max_steps", type=int, default=150_000)
@@ -278,6 +321,13 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
             "--load_best_model_at_end requires --save_steps to equal --eval_steps "
             "so every evaluated checkpoint can be selected as best."
         )
+    if args.masking_strategy in {"span", "hetero_span"}:
+        if not (0.0 < args.span_p_geom < 1.0):
+            raise ValueError("span_p_geom must be in (0, 1)")
+        if args.span_max_length < 1:
+            raise ValueError("span_max_length must be >= 1")
+    if args.masking_strategy == "hetero_span" and args.heteroatom_start_weight <= 0.0:
+        raise ValueError("heteroatom_start_weight must be positive")
 
 
 def adjust_args_for_backend(args: argparse.Namespace, backend: str) -> argparse.Namespace:
@@ -617,12 +667,37 @@ class MolecularMLMCollator:
     vocab_size: int
     mlm_probability: float
     special_token_ids: list[int]
+    masking_strategy: str = "standard"
+    span_p_geom: float = 0.4
+    span_max_length: int = 6
+    heteroatom_start_weight: float = 2.0
+    ids_to_tokens: dict[int, str] = field(default_factory=dict)
+
+    # ClassVar: excluded from __init__ by dataclass machinery.
+    # Ordered longest-first so alternation matches Cl before C, Br before B, Se before S.
+    _HETEROATOM_IN_BRACKET: ClassVar[re.Pattern] = re.compile(
+        r"\["
+        r"[=#/\\@+\-]*"
+        r"(?:Cl|Br|Se|Si|[NOSPFI])"
+        r"[^\]]*"
+        r"\]"
+    )
 
     def __post_init__(self) -> None:
         special_ids = {int(token_id) for token_id in self.special_token_ids}
         eligible = [token_id for token_id in range(self.vocab_size) if token_id not in special_ids]
-
         self._eligible_replacement_ids = torch.tensor(eligible, dtype=torch.long)
+
+        if self.masking_strategy in {"span", "hetero_span"}:
+            if not (0.0 < self.span_p_geom < 1.0):
+                raise ValueError("span_p_geom must be in (0, 1)")
+            if self.span_max_length < 1:
+                raise ValueError("span_max_length must be >= 1")
+
+        if self.masking_strategy == "hetero_span":
+            self._token_start_weights = self._build_token_start_weights()
+        else:
+            self._token_start_weights = None
 
     def __call__(self, examples: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
         ids = [
@@ -638,25 +713,16 @@ class MolecularMLMCollator:
         attention_mask = (input_ids != self.pad_token_id).long()
         labels = input_ids.clone()
 
-        probability_matrix = torch.full(labels.shape, self.mlm_probability)
-
         special_mask = torch.zeros_like(labels, dtype=torch.bool)
         for sid in self.special_token_ids:
             special_mask |= labels.eq(sid)
 
-        probability_matrix.masked_fill_(special_mask, 0.0)
-        probability_matrix.masked_fill_(attention_mask.eq(0), 0.0)
-
-        masked_indices = torch.bernoulli(probability_matrix).bool()
-
-        if self.mlm_probability > 0.0 and not masked_indices.any():
-            eligible_positions = (~special_mask & attention_mask.bool()).nonzero(as_tuple=False)
-            if len(eligible_positions) > 0:
-                idx = int(torch.randint(len(eligible_positions), (1,)).item())
-                row_pos = eligible_positions[idx]
-                row = int(row_pos[0].item())
-                col = int(row_pos[1].item())
-                masked_indices[row, col] = True
+        if self.masking_strategy == "standard":
+            masked_indices = self._sample_standard_mask(labels, attention_mask, special_mask)
+        elif self.masking_strategy in {"span", "hetero_span"}:
+            masked_indices = self._sample_batch_span_mask(input_ids, attention_mask, special_mask)
+        else:
+            raise ValueError(f"Unknown masking_strategy: {self.masking_strategy!r}")
 
         labels[~masked_indices] = -100
 
@@ -688,6 +754,51 @@ class MolecularMLMCollator:
             "labels": labels,
         }
 
+    def _sample_standard_mask(
+        self,
+        labels: torch.Tensor,
+        attention_mask: torch.Tensor,
+        special_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        probability_matrix = torch.full(labels.shape, self.mlm_probability)
+        probability_matrix.masked_fill_(special_mask, 0.0)
+        probability_matrix.masked_fill_(attention_mask.eq(0), 0.0)
+        masked_indices = torch.bernoulli(probability_matrix).bool()
+
+        if self.mlm_probability > 0.0 and not masked_indices.any():
+            eligible_positions = (~special_mask & attention_mask.bool()).nonzero(as_tuple=False)
+            if len(eligible_positions) > 0:
+                idx = int(torch.randint(len(eligible_positions), (1,)).item())
+                row_pos = eligible_positions[idx]
+                row = int(row_pos[0].item())
+                col = int(row_pos[1].item())
+                masked_indices[row, col] = True
+
+        return masked_indices
+
+    def _sample_batch_span_mask(
+        self,
+        input_ids: torch.Tensor,
+        attention_mask: torch.Tensor,
+        special_mask: torch.Tensor,
+    ) -> torch.Tensor:
+        batch_size = input_ids.size(0)
+        masked_indices = torch.zeros_like(input_ids, dtype=torch.bool)
+        for i in range(batch_size):
+            row_mask = self._sample_span_mask(
+                input_ids_row=input_ids[i],
+                attention_mask_row=attention_mask[i],
+                special_mask_row=special_mask[i],
+            )
+            if not row_mask.any():
+                eligible = (~special_mask[i] & attention_mask[i].bool()).nonzero(as_tuple=False)
+                if len(eligible) > 0:
+                    rand_idx = int(torch.randint(len(eligible), (1,)).item())
+                    col = int(eligible[rand_idx].item())
+                    row_mask[col] = True
+            masked_indices[i] = row_mask
+        return masked_indices
+
     def eligible_random_token_ids(
         self,
         device: torch.device | None = None,
@@ -702,6 +813,83 @@ class MolecularMLMCollator:
             return self._eligible_replacement_ids
 
         return self._eligible_replacement_ids.to(device)
+
+    def _build_token_start_weights(self) -> torch.Tensor:
+        """Return a (vocab_size,) weight tensor for heteroatom-biased span starts.
+
+        Tokens whose string representation contains at least one heteroatom SELFIES
+        bracket receive weight ``heteroatom_start_weight``; all others receive 1.0.
+        Special-token IDs receive weight 0.0 as a defensive guard.
+        """
+        weights = torch.ones(self.vocab_size, dtype=torch.float32)
+        special_ids = set(self.special_token_ids)
+        for tok_id, tok_str in self.ids_to_tokens.items():
+            if tok_id in special_ids:
+                weights[tok_id] = 0.0
+            elif self._HETEROATOM_IN_BRACKET.search(tok_str):
+                weights[tok_id] = float(self.heteroatom_start_weight)
+        return weights
+
+    def _sample_span_mask(
+        self,
+        input_ids_row: torch.Tensor,
+        attention_mask_row: torch.Tensor,
+        special_mask_row: torch.Tensor,
+    ) -> torch.Tensor:
+        """Sample a span-based boolean mask for one sequence.
+
+        Spans are drawn using a geometric distribution for length, with starts
+        sampled uniformly (span) or heteroatom-weighted (hetero_span).
+        Sampling continues until masked positions reach round(n_eligible * mlm_probability)
+        or no further eligible starts exist.
+
+        Returns a bool tensor of shape (seq_len,).
+        """
+        seq_len = input_ids_row.size(0)
+        masked = torch.zeros(seq_len, dtype=torch.bool)
+
+        eligible_mask = (~special_mask_row) & attention_mask_row.bool()
+        eligible_pos = eligible_mask.nonzero(as_tuple=False).squeeze(1)
+
+        if len(eligible_pos) == 0:
+            return masked
+
+        budget = max(1, round(len(eligible_pos) * self.mlm_probability))
+        geom = torch.distributions.Geometric(torch.tensor(self.span_p_geom))
+
+        if self.masking_strategy == "hetero_span" and self._token_start_weights is not None:
+            tok_ids_at_eligible = input_ids_row[eligible_pos]
+            pos_weights = self._token_start_weights[tok_ids_at_eligible].clone()
+        else:
+            pos_weights = torch.ones(len(eligible_pos), dtype=torch.float32)
+
+        max_attempts = budget * 20
+        attempt = 0
+
+        while int(masked.sum().item()) < budget and attempt < max_attempts:
+            attempt += 1
+
+            if pos_weights.sum().item() == 0.0:
+                break
+            start_local = int(torch.multinomial(pos_weights, num_samples=1).item())
+            start = int(eligible_pos[start_local].item())
+
+            span_len = int(geom.sample().item()) + 1  # geometric gives k>=0, shift to k>=1
+            span_len = min(span_len, self.span_max_length)
+            end = min(start + span_len, seq_len)
+
+            for pos in range(start, end):
+                if not attention_mask_row[pos].item() or special_mask_row[pos].item():
+                    end = pos
+                    break
+
+            if end <= start:
+                pos_weights[start_local] = 0.0
+                continue
+
+            masked[start:end] = True
+
+        return masked
 
 
 MODERNBERT_CONFIGS = {
@@ -792,6 +980,12 @@ def log_training_plan(
     print(f"  max_steps:                  {args.max_steps}", flush=True)
     print(f"  max_seq_length:             {args.max_seq_length}", flush=True)
     print(f"  mlm_probability:            {args.mlm_probability}", flush=True)
+    print(f"  masking_strategy:           {args.masking_strategy}", flush=True)
+    if args.masking_strategy in {"span", "hetero_span"}:
+        print(f"  span_p_geom:                {args.span_p_geom}", flush=True)
+        print(f"  span_max_length:            {args.span_max_length}", flush=True)
+    if args.masking_strategy == "hetero_span":
+        print(f"  heteroatom_start_weight:    {args.heteroatom_start_weight}", flush=True)
     print(f"  train batch/device:         {args.per_device_train_batch_size}", flush=True)
     print(f"  gradient_accumulation:      {args.gradient_accumulation_steps}", flush=True)
     print(f"  effective batch size:       {effective_batch_size}", flush=True)
@@ -1018,6 +1212,13 @@ def main() -> None:
         vocab_size=vocab_size,
         mlm_probability=args.mlm_probability,
         special_token_ids=list(special_ids.values()),
+        masking_strategy=args.masking_strategy,
+        span_p_geom=args.span_p_geom,
+        span_max_length=args.span_max_length,
+        heteroatom_start_weight=args.heteroatom_start_weight,
+        ids_to_tokens=(
+            dict(tokenizer.ids_to_tokens) if args.masking_strategy == "hetero_span" else {}
+        ),
     )
 
     report_to = [] if args.report_to == "none" else [args.report_to]

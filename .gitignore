@@ -233,7 +233,8 @@ src/modernmolbert/eval/junk/
 .prompt.md
 .agents/
 /*.prompt.md
-repomix*.xml
+/*plan*.md
+*repomix*.xml
 CLAUDE.md
 
 # eval

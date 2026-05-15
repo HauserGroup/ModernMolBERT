@@ -294,6 +294,35 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             json.dump(self.vocab, f, ensure_ascii=False, indent=4)
         return (str(vocab_file),)
 
+    def add_tokens_to_vocabulary(self, tokens: list[str]) -> int:
+        """Add tokens to the tokenizer vocabulary if they are not already present.
+
+        This is intended for forcing coverage of rare valid molecular primitive
+        symbols, especially SELFIES bracket tokens, after APE merge training.
+        """
+
+        if not tokens:
+            return 0
+
+        next_id = max(self.vocab.values(), default=-1) + 1
+        added = 0
+
+        for token in tokens:
+            token = str(token).strip()
+            if not token:
+                continue
+            if token in self.vocab:
+                continue
+
+            self.vocab[token] = next_id
+            next_id += 1
+            added += 1
+
+        if added:
+            self.update_reverse_vocabulary()
+
+        return added
+
     def save_pretrained(self, save_directory: str | os.PathLike[str], *args, **kwargs):
         saved_files = super().save_pretrained(save_directory, *args, **kwargs)
         save_path = Path(save_directory)

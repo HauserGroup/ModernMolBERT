@@ -32,27 +32,26 @@ from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils 
 def fit_model(
     X: np.ndarray, y: np.ndarray, task: str, metric_name: str, model_head: str, memory_weight: int
 ):
+    y_arr = np.asarray(y)
+    is_multioutput = y_arr.ndim == 2 and y_arr.shape[1] > 1
+
     if task == "classification":
-        # no_outputs = y.shape[1]
-        no_outputs = y.shape[1] if len(y.shape) > 1 else 1
+        no_outputs = y_arr.shape[1] if is_multioutput else 1
         models = get_clf_models(no_outputs, X.dtype)
     elif task == "regression":
         models = get_reg_models(X.dtype)
     else:
         raise ValueError(f"Unknown task: {task}")
 
-    if len(y.shape) == 1:
-        y = y.reshape(-1, 1)
-
-    if y.shape[1] > 1:
+    if is_multioutput:
         log.info("Using multioutput AUROC scorer")
         scorer = make_scorer(multioutput_auroc_score, response_method="predict_proba")
+        y_model = np.nan_to_num(y_arr, nan=0)
     else:
         scorer = get_sklearn_scorer("roc_auc")
+        y_model = np.nan_to_num(y_arr, nan=0).ravel()
 
-    y = np.nan_to_num(y, nan=0)
-
-    log.info(f"Shapes: X={X.shape}, y={y.shape}")
+    log.info(f"Shapes: X={X.shape}, y={y_model.shape}")
 
     model = models[model_head]
 
@@ -68,7 +67,7 @@ def fit_model(
     )
 
     try:
-        grid_search.fit(X, y)
+        grid_search.fit(X, y_model)
     except ValueError as e:
         log.error(f"Error fitting model {model_head}: {e}")
         if "lbfgs" not in str(e):
@@ -91,7 +90,7 @@ def fit_model(
             verbose=VERBOSITY,
             refit=True,
         )
-        grid_search.fit(X, y)
+        grid_search.fit(X, y_model)
 
     return {
         "model": model_head,

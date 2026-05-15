@@ -2,7 +2,8 @@
 """Train an APE tokenizer for SELFIES and emit metadata."""
 
 import argparse
-from datetime import datetime, UTC
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -23,6 +24,7 @@ from modernmolbert.utils import (
 )
 
 DATASET_NAME = PUBCHEM10M_DATASET
+SELFIES_SYMBOL_RE = re.compile(r"\[[^\]]+\]")
 
 
 def parse_args() -> argparse.Namespace:
@@ -69,6 +71,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_vocab_size", type=int, default=5000)
     parser.add_argument("--min_freq_for_merge", type=int, default=2000)
     parser.add_argument(
+        "--extra_vocab_symbols_path",
+        type=Path,
+        default=None,
+        help=(
+            "Optional text file containing one extra token per line. "
+            "Use this to force rare valid SELFIES symbols into the vocabulary."
+        ),
+    )
+    parser.add_argument(
+        "--extra_vocab_selfies_path",
+        type=Path,
+        default=None,
+        help=(
+            "Optional text file containing SELFIES strings. All bracketed SELFIES "
+            "symbols observed in this file are forced into the vocabulary."
+        ),
+    )
+    parser.add_argument(
         "--save_checkpoint",
         action="store_true",
         help="Periodically save intermediate tokenizer checkpoints during APE merge training.",
@@ -99,6 +119,52 @@ def parse_args() -> argparse.Namespace:
         help="Version/commit descriptor for tokenizer implementation provenance.",
     )
     return parser.parse_args()
+
+
+def load_extra_vocab_symbols(
+    *,
+    symbols_path: Path | None,
+    selfies_path: Path | None,
+) -> list[str]:
+    """Load additional vocabulary symbols to force into the tokenizer.
+
+    symbols_path expects one token per line, e.g.:
+        [C@@H1]
+        [C@H1]
+        [/C]
+
+    selfies_path expects one SELFIES string per line. All bracketed SELFIES
+    primitive symbols are extracted.
+    """
+
+    symbols: set[str] = set()
+
+    if symbols_path is not None:
+        for line in symbols_path.read_text(encoding="utf-8").splitlines():
+            token = line.strip()
+            if token and not token.startswith("#"):
+                symbols.add(token)
+
+    if selfies_path is not None:
+        for line in selfies_path.read_text(encoding="utf-8").splitlines():
+            text = line.strip()
+            if not text or text.startswith("#"):
+                continue
+            symbols.update(SELFIES_SYMBOL_RE.findall(text))
+
+    return sorted(symbols)
+
+
+def validate_selfies_symbols(symbols: list[str]) -> None:
+    """Fail early if extra SELFIES symbols are malformed."""
+
+    malformed = [symbol for symbol in symbols if SELFIES_SYMBOL_RE.fullmatch(symbol) is None]
+    if malformed:
+        examples = ", ".join(malformed[:20])
+        raise ValueError(
+            "extra vocab symbols must be SELFIES bracket tokens like [C@@H1]. "
+            f"Malformed examples: {examples}"
+        )
 
 
 def main() -> None:
@@ -133,6 +199,21 @@ def main() -> None:
         checkpoint_interval=args.checkpoint_interval,
     )
 
+    extra_symbols = load_extra_vocab_symbols(
+        symbols_path=args.extra_vocab_symbols_path,
+        selfies_path=args.extra_vocab_selfies_path,
+    )
+    validate_selfies_symbols(extra_symbols)
+
+    added_extra_symbols = tokenizer.add_tokens_to_vocabulary(extra_symbols)
+
+    if extra_symbols:
+        print(
+            "Extra vocab coverage: "
+            f"requested={len(extra_symbols)}, added={added_extra_symbols}, "
+            f"already_present={len(extra_symbols) - added_extra_symbols}"
+        )
+
     # Phase 1: write the vocab to disk.
     tokenizer.save_vocabulary_file(output_vocab_path)
 
@@ -158,6 +239,18 @@ def main() -> None:
         "special_ids": special_ids,
         "tokenizer_path": str(output_vocab_path),
         "tokenizer_sha256": vocab_sha256,
+        "extra_vocab_symbols_path": (
+            str(args.extra_vocab_symbols_path)
+            if args.extra_vocab_symbols_path is not None
+            else None
+        ),
+        "extra_vocab_selfies_path": (
+            str(args.extra_vocab_selfies_path)
+            if args.extra_vocab_selfies_path is not None
+            else None
+        ),
+        "extra_vocab_symbols_requested": len(extra_symbols),
+        "extra_vocab_symbols_added": added_extra_symbols,
         "creation_command": "python -m modernmolbert.train_ape_tokenizer",
     }
     write_tokenizer_metadata(metadata_path, metadata)
@@ -170,6 +263,8 @@ def main() -> None:
     print(f"Dataset: {args.dataset_name} (column: {resolved_column})")
     print(f"Training size: {args.tokenizer_train_size}")
     print(f"Max vocab: {args.max_vocab_size}, Min freq: {args.min_freq_for_merge}")
+    print(f"Extra vocab symbols requested: {len(extra_symbols)}")
+    print(f"Extra vocab symbols added: {added_extra_symbols}")
 
 
 if __name__ == "__main__":

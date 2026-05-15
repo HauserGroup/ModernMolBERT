@@ -175,8 +175,8 @@ def compute_length_stats(
             continue
 
         for symbol in pre_tokenize_molecule(encoded_selfies, SELFIES_REPRESENTATION):
-            symbol_id = tokenizer.convert_tokens_to_ids([symbol])[0]
-            if int(symbol_id) == special_ids["unk_token"]:
+            symbol_id = tokenizer.convert_tokens_to_ids([symbol])[0]  # type: ignore
+            if symbol_id == special_ids["unk_token"]:
                 unknown_selfies_symbols[symbol] += 1
 
         full = encode_sequence(tokenizer, encoded_selfies, max_seq_length=None)["input_ids"]

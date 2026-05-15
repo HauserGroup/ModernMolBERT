@@ -22,14 +22,12 @@ RF_REG = {
 
 RIDGE__MULTIOUTPUT_CLF = {
     "clf__estimator__C": 1 / np.logspace(-2, 3, 10),
-    "clf__estimator__penalty": ["l2"],
     "clf__estimator__solver": ["lbfgs"],
     "clf__estimator__max_iter": [5000],
 }
 
 RIDGE_CLF = {
     "clf__C": 1 / np.logspace(-2, 3, 10),
-    "clf__penalty": ["l2"],
     "clf__solver": ["lbfgs"],
     "clf__max_iter": [5000],
 }
@@ -75,10 +73,10 @@ def tanimoto_count_distance(x: np.ndarray, y: np.ndarray) -> float:
 
 def get_clf_models(no_output: int, embeddings_dtype):
     if no_output == 1:
-        lr_clf = LogisticRegression(n_jobs=-1)
+        lr_clf = LogisticRegression()
         lr_params = RIDGE_CLF
     else:
-        lr_clf = MultiOutputClassifier(LogisticRegression(n_jobs=-1))
+        lr_clf = MultiOutputClassifier(LogisticRegression())
         lr_params = RIDGE__MULTIOUTPUT_CLF
 
     return {

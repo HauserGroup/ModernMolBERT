@@ -23,9 +23,7 @@ def find_existing_minimal_model() -> Path | None:
             path.exists()
             and (path / "config.json").exists()
             and (path / "tokenizer.json").exists()
-            and (
-                any(path.glob("*.safetensors")) or (path / "pytorch_model.bin").exists()
-            )
+            and (any(path.glob("*.safetensors")) or (path / "pytorch_model.bin").exists())
         ):
             return path
     return None
@@ -37,7 +35,6 @@ def existing_minimal_model() -> Path:
     model = find_existing_minimal_model()
     if model is None:
         pytest.skip(
-            "No existing minimal trained model found. "
-            "Run a debug/smoke training command first."
+            "No existing minimal trained model found. Run a debug/smoke training command first."
         )
     return model

@@ -8,8 +8,7 @@ from modernmolbert.eval.moleculenet import prepare_many
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Prepare DeepChem/MoleculeNet datasets as local sanitized "
-            "SMILES/SELFIES Parquet files."
+            "Prepare DeepChem/MoleculeNet datasets as local sanitized SMILES/SELFIES Parquet files."
         )
     )
 
@@ -18,10 +17,7 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=list(CORE_SPECS),
         choices=sorted(ALL_SPECS),
-        help=(
-            "Dataset names to prepare. Defaults to the core suite: "
-            + ", ".join(CORE_SPECS)
-        ),
+        help=("Dataset names to prepare. Defaults to the core suite: " + ", ".join(CORE_SPECS)),
     )
     parser.add_argument(
         "--output_root",

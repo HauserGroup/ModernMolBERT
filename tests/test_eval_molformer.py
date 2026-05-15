@@ -48,9 +48,7 @@ def test_molformer_registry_constructs_featurizer() -> None:
 @pytest.mark.molformer
 def test_molformer_embedding_smoke() -> None:
     if not _molformer_enabled():
-        pytest.skip(
-            "Set MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 to run MoLFormer smoke tests."
-        )
+        pytest.skip("Set MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 to run MoLFormer smoke tests.")
 
     featurizer = HuggingFaceSmilesFeaturizer(
         name="molformer_xl_both_10pct",

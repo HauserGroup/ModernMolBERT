@@ -91,9 +91,7 @@ def test_collator_random_replacements_never_use_special_ids():
 
     replaced_random = (labels != -100) & (input_ids != labels) & (input_ids != 4)
     if replaced_random.any():
-        assert torch.all(
-            ~torch.isin(input_ids[replaced_random], torch.tensor([0, 1, 2, 3, 4]))
-        )
+        assert torch.all(~torch.isin(input_ids[replaced_random], torch.tensor([0, 1, 2, 3, 4])))
 
 
 def test_collator_forces_at_least_one_mask_when_probability_nonzero():

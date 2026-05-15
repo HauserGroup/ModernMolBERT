@@ -622,7 +622,7 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
     assert "clf__n_neighbors" in result.hyperparams
 
 
-def test_regression_path_still_exposes_predict_proba_limitation() -> None:
+def test_regression_path_returns_1d_predictions() -> None:
     X = np.array([[i, i + 1] for i in range(20)], dtype=float)
     y = pd.DataFrame({"label": np.linspace(0.0, 1.0, 20)})
     dataset = EmbeddedDataset(
@@ -638,13 +638,16 @@ def test_regression_path_still_exposes_predict_proba_limitation() -> None:
         y=y,
     )
 
-    with pytest.raises(AttributeError, match="predict_proba"):
-        fit_and_eval_embedding(
-            dataset=dataset,
-            metric_name="mae",
-            model_head="ridge",
-            memory_weight=32,
-        )
+    result = fit_and_eval_embedding(
+        dataset=dataset,
+        metric_name="mae",
+        model_head="ridge",
+        memory_weight=32,
+    )
+
+    assert result.model == "ridge"
+    assert result.y_test_pred.ndim == 1
+    assert result.y_test_pred.shape == (5,)
 
 
 def test_run_scoring_requires_embedder_name() -> None:

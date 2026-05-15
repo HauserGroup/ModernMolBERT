@@ -61,15 +61,28 @@ def check_if_already_evaluated(
     metric_name: str,
     head_name: str,
 ) -> bool:
-    runs = count_result_rows(
-        output_csv,
-        dataset=dataset_name,
-        embedder=model_name,
-        cv_metric_name=metric_name,
-        model=head_name,
-    )
+    ctx = f"dataset={dataset_name!r} embedder={model_name!r} metric={metric_name!r} head={head_name!r}"
+    try:
+        runs = count_result_rows(
+            output_csv,
+            dataset=dataset_name,
+            embedder=model_name,
+            cv_metric_name=metric_name,
+            model=head_name,
+        )
+    except Exception as exc:
+        # Corrupt or unreadable CSV — treat as not yet evaluated so the run
+        # proceeds and overwrites the bad file.
+        log.warning(f"Could not read results CSV ({output_csv}): {exc}. Treating as not evaluated.")
+        return False
+
     if runs > 1:
-        raise ValueError("Multiple runs found for the same model, dataset and metric")
+        # Duplicate rows indicate a previously interrupted override. Remove
+        # extras and treat as evaluated so the caller can decide to skip/override.
+        log.warning(f"Found {runs} duplicate result rows for {ctx}. Deduplicating (keeping last).")
+        delete_previous_evaluations(output_csv, dataset_name, model_name, metric_name, head_name)
+        return True
+
     return runs == 1
 
 
@@ -107,9 +120,15 @@ def eval_procedure(
         output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
     ):
         if not override:
-            log.info("Model already evaluated, skipping")
+            log.info(
+                f"Already evaluated — skipping. "
+                f"dataset={dataset_info.name!r} embedder={model_name!r} head={model_head!r}"
+            )
             return
-        log.warning("Model already evaluated, overriding")
+        log.warning(
+            f"Already evaluated — overriding. "
+            f"dataset={dataset_info.name!r} embedder={model_name!r} head={model_head!r}"
+        )
         delete_previous_evaluations(
             output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
         )

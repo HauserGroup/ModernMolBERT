@@ -38,7 +38,7 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
-        args: [--skip, "*.bib,*.tex,*.ipynb", --ignore-words-list, "nd,ser,ba"]
+        args: [--skip, "*.bib,*.tex,*.ipynb", --ignore-words-list, "nd,ser,ba,fpr"]
         exclude: '\.(tsv|csv|json|txt)$'
 
   -   repo: https://github.com/asottile/pyupgrade

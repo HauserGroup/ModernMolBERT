@@ -387,37 +387,42 @@ def test_load_eval_dataset_from_config_table_splits(tmp_path: Path) -> None:
 
 
 def test_load_eval_dataset_from_registered_config(tmp_path):
+    saved = dict(DATASET_REGISTRY)
     DATASET_REGISTRY.clear()
+    try:
 
-    def load_toy(*, root):
-        train = pd.DataFrame({"smiles": ["CCO", "CCN"], "label": [0, 1]})
-        test = pd.DataFrame({"smiles": ["CCC"], "label": [1]})
+        def load_toy(*, root):
+            train = pd.DataFrame({"smiles": ["CCO", "CCN"], "label": [0, 1]})
+            test = pd.DataFrame({"smiles": ["CCC"], "label": [1]})
 
-        return make_eval_dataset_from_splits(
-            name="toy",
-            task_type="classification",
-            task_names="label",
-            train=train,
-            test=test,
+            return make_eval_dataset_from_splits(
+                name="toy",
+                task_type="classification",
+                task_names="label",
+                train=train,
+                test=test,
+            )
+
+        register_dataset(
+            DatasetSpec(
+                name="toy",
+                task_type="classification",
+                task_names=("label",),
+                loader=load_toy,
+                description="Toy registered dataset.",
+            )
         )
 
-    register_dataset(
-        DatasetSpec(
-            name="toy",
-            task_type="classification",
-            task_names=("label",),
-            loader=load_toy,
-            description="Toy registered dataset.",
+        dataset = load_eval_dataset_from_config(
+            {
+                "loader": "registered",
+                "name": "toy",
+                "root": str(tmp_path),
+            }
         )
-    )
 
-    dataset = load_eval_dataset_from_config(
-        {
-            "loader": "registered",
-            "name": "toy",
-            "root": str(tmp_path),
-        }
-    )
-
-    assert dataset.name == "toy"
-    assert dataset.task_names == ["label"]
+        assert dataset.name == "toy"
+        assert dataset.task_names == ["label"]
+    finally:
+        DATASET_REGISTRY.clear()
+        DATASET_REGISTRY.update(saved)

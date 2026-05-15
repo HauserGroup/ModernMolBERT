@@ -29,6 +29,17 @@ from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils 
 )
 
 
+def _grid_n_jobs(pipeline, outer_n_jobs: int) -> int:
+    # If any pipeline step already parallelizes internally (RF, KNN with n_jobs=-1),
+    # joblib serializes the inner parallelism when GridSearchCV also uses multiple
+    # workers — net result is single-threaded estimators with no fold-level speedup.
+    # Yield all cores to the estimator instead.
+    for _, step in pipeline.steps:
+        if getattr(step, "n_jobs", 1) not in (1, None):
+            return 1
+    return outer_n_jobs
+
+
 def fit_model(
     X: np.ndarray, y: np.ndarray, task: str, metric_name: str, model_head: str, memory_weight: int
 ):
@@ -54,14 +65,16 @@ def fit_model(
     log.info(f"Shapes: X={X.shape}, y={y_model.shape}")
 
     model = models[model_head]
+    outer_n_jobs = max(1, int(N_JOBS / memory_weight))
+    grid_n_jobs = _grid_n_jobs(model["model"], outer_n_jobs)
+    log.info(f"GridSearchCV n_jobs={grid_n_jobs} (outer={outer_n_jobs}, head={model_head})")
 
-    # for model_name, model in models.items():
     grid_search = GridSearchCV(
         model["model"],
         model["params"],
         cv=CV_SPLITS,
         scoring=scorer,
-        n_jobs=int(N_JOBS / memory_weight),
+        n_jobs=grid_n_jobs,
         verbose=VERBOSITY,
         refit=True,
     )
@@ -86,7 +99,7 @@ def fit_model(
             model["params"],
             cv=CV_SPLITS,
             scoring=scorer,
-            n_jobs=int(N_JOBS / memory_weight),
+            n_jobs=grid_n_jobs,
             verbose=VERBOSITY,
             refit=True,
         )
@@ -124,7 +137,10 @@ def fit_and_eval_embedding(
     print(
         f"Shapes: X_test={X_test.shape}, y_test={y_test.shape}, X_train={X_train.shape}, y_train={y_train.shape}"
     )
-    y_pred = best_model["model_obj"].predict_proba(X_test)
+    if dataset.task == "regression":
+        y_pred = best_model["model_obj"].predict(X_test)
+    else:
+        y_pred = best_model["model_obj"].predict_proba(X_test)
 
     return HeadResult(
         embedder=dataset.embedder,

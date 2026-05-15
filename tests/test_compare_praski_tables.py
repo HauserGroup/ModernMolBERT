@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -295,12 +297,10 @@ def test_metric_display_scale_classification_scaled_regression_not() -> None:
     assert abs(reg_metric - 0.50) < 1e-9, f"RMSE should not be scaled, got {reg_metric}"
 
 
-def test_load_praski_csv_raises_on_summary_table_schema(tmp_path: pytest.TempPathFactory) -> None:
+def test_load_praski_csv_raises_on_summary_table_schema(tmp_path: Path) -> None:
     """Helpful error when user passes a summary TSV instead of raw results."""
-    summary_tsv = tmp_path / "Praski_table_1.tsv"  # type: ignore[operator]
-    summary_tsv.write_text(  # type: ignore[union-attr]
-        "Model\tMean_rank\tMean_AUROC\nChemBERTa\t3.2\t0.71\n"
-    )
+    summary_tsv = tmp_path / "Praski_table_1.tsv"
+    summary_tsv.write_text("Model\tMean_rank\tMean_AUROC\nChemBERTa\t3.2\t0.71\n")
 
     from modernmolbert.eval.benchmarking_molecular_models.compare_praski_tables import (
         load_praski_csv,

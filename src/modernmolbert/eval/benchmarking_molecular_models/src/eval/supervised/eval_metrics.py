@@ -62,12 +62,28 @@ def evaluate_sklearn(y_pred: np.ndarray, y_test: np.ndarray, metric_name: str) -
 
 def log_predictions(data: HeadResult, pred_directory: str):
     print(f"Logging predictions for {data.dataset_name} dataset")
-    res_path = os.path.join(
-        os.getcwd(), pred_directory, data.dataset_name, data.embedder, f"{data.model}.npy"
+    base_path = os.path.join(
+        os.getcwd(), pred_directory, data.dataset_name, data.embedder, data.model
     )
-    print(f"Saving predictions to {res_path}")
-    os.makedirs(os.path.dirname(res_path), exist_ok=True)
-    np.save(res_path, data.y_test_pred)
+    os.makedirs(os.path.dirname(base_path), exist_ok=True)
+
+    # Legacy: raw predict_proba output (shape varies by task).
+    np.save(base_path + ".npy", data.y_test_pred)
+
+    # ROC-ready: y_true and y_score (positive-class probability) in one file.
+    # Mirrors the extraction logic in get_skfp_roc_auc.
+    y_pred = np.asarray(data.y_test_pred)
+    y_true = np.asarray(data.y_test_true)
+    if y_true.ndim == 1:
+        y_score = y_pred[:, 1] if y_pred.ndim == 2 else y_pred
+    elif y_pred.ndim == 3:
+        # MultiOutputClassifier: (n_class, n_samples, 2) → (n_samples, n_class)
+        y_score = y_pred[:, :, 1].T
+    else:
+        y_score = y_pred
+
+    np.savez(base_path + ".npz", y_true=y_true, y_score=y_score)
+    print(f"Saving predictions to {base_path}.npy / .npz")
 
 
 def evaluate_tdc_safe(

@@ -14,28 +14,6 @@ from modernmolbert.eval.registry import make_featurizer
 from modernmolbert.eval.runner import FrozenBenchmarkRunner
 
 
-def test_feature_batch_shape_check_passes() -> None:
-    batch = FeatureBatch(
-        X=np.ones((2, 4), dtype=np.float32),
-        valid_mask=np.array([True, False, True]),
-    )
-    batch.check(3)
-
-
-def test_feature_batch_shape_check_fails_on_bad_row_count() -> None:
-    batch = FeatureBatch(
-        X=np.ones((1, 4), dtype=np.float32),
-        valid_mask=np.array([True, False, True]),
-    )
-
-    try:
-        batch.check(3)
-    except ValueError as e:
-        assert "Number of rows" in str(e)
-    else:
-        raise AssertionError("Expected ValueError")
-
-
 def test_dummy_featurizer_valid_mask() -> None:
     featurizer = DummyFeaturizer(n_features=4)
     out = featurizer.featurize_smiles(["CCO", "", "N"])
@@ -323,39 +301,6 @@ def test_classification_metrics_one_class_returns_nans_for_rank_metrics() -> Non
     assert np.isnan(metrics["balanced_accuracy"])
     assert np.isnan(metrics["roc_auc"])
     assert np.isnan(metrics["average_precision"])
-
-
-def test_feature_batch_shape_check_fails_on_non_numeric_features() -> None:
-    batch = FeatureBatch(
-        X=np.array([["a"], ["b"]], dtype=object),
-        valid_mask=np.array([True, True]),
-    )
-
-    try:
-        batch.check(2)
-    except TypeError as e:
-        assert "numeric" in str(e)
-    else:
-        raise AssertionError("Expected TypeError")
-
-
-def test_feature_batch_check_accepts_valid_batch() -> None:
-    batch = FeatureBatch(
-        X=np.zeros((2, 8), dtype=np.float32),
-        valid_mask=np.array([True, False, True]),
-    )
-
-    batch.check(n_inputs=3)
-
-
-def test_feature_batch_check_rejects_bad_row_count() -> None:
-    batch = FeatureBatch(
-        X=np.zeros((1, 8), dtype=np.float32),
-        valid_mask=np.array([True, False, True]),
-    )
-
-    with pytest.raises(ValueError, match="Number of rows"):
-        batch.check(n_inputs=3)
 
 
 def test_feature_batch_check_rejects_non_numeric_features() -> None:

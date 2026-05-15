@@ -456,6 +456,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dabest"
+version = "0.2.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/fd/745615b0720f3203fa1f0cd6c3b8c970c84cf88f3997ecab2f570cf22a16/dabest-0.2.5.tar.gz", hash = "sha256:b16586deaf935dc38534b7e3251fd6b67bb6fa70b52591698a4e3b32e57471b3", size = 52573, upload-time = "2019-09-04T09:55:02.258Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/05/baaf3990f30347f9780977b6b102036b6cbe22a8027e13f331c13e585873/dabest-0.2.5-py2.py3-none-any.whl", hash = "sha256:cdd74691623dd4981f0de863ff894592f6d34848c22347914547b59a353211d0", size = 61877, upload-time = "2019-09-04T09:55:00.107Z" },
+]
+
+[[package]]
 name = "datasets"
 version = "4.8.5"
 source = { registry = "https://pypi.org/simple" }
@@ -1240,6 +1249,7 @@ dev = [
     { name = "ruff" },
 ]
 eval = [
+    { name = "dabest" },
     { name = "deepchem" },
     { name = "rdkit" },
     { name = "selfies" },
@@ -1295,6 +1305,7 @@ dev = [
     { name = "ruff", specifier = ">=0.15.12" },
 ]
 eval = [
+    { name = "dabest", specifier = ">=0.2.5" },
     { name = "deepchem", specifier = ">=2.8.0" },
     { name = "rdkit", specifier = ">=2026.3.1" },
     { name = "selfies", specifier = ">=2.2.0" },

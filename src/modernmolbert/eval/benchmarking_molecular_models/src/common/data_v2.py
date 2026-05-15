@@ -1,9 +1,12 @@
 import pandas as pd
-import numpy as np
 
+from collections import defaultdict
+from contextlib import contextmanager
 from importlib import import_module
 from os.path import join
+from random import Random
 from typing import Any, Literal
+import warnings
 
 from .types import Dataset
 
@@ -11,30 +14,72 @@ from .types import Dataset
 Splits = dict[str, list[int]]
 
 
-def ogb_solver(name: str, root: str, load_graphs: bool = False) -> tuple[pd.DataFrame, Splits]:
-    try:
-        from ogb.graphproppred import PygGraphPropPredDataset as GraphDataset
-    except ImportError:
-        from ogb.graphproppred import GraphPropPredDataset as GraphDataset
+TDC_METADATA_PATCHES: dict[str, dict[str, Any]] = {
+    "pampa_ncats": {"group": "ADME", "id": 6695858, "type": "tab"},
+    "approved_pampa_ncats": {"group": "ADME", "id": 6695857, "type": "tab"},
+    "herg_karim": {"group": "Tox", "id": 6822246, "type": "tab"},
+}
 
-    dataset: Any = GraphDataset(name=name, root=root)
+
+def patch_tdc_metadata(name: str) -> None:
+    patch = TDC_METADATA_PATCHES.get(name.lower())
+    if patch is None:
+        return
+
+    metadata = import_module("tdc.metadata")
+    canonical_name = name.lower()
+    group = patch["group"]
+
+    if canonical_name not in metadata.dataset_names[group]:
+        metadata.dataset_names[group].append(canonical_name)
+    if canonical_name not in metadata.dataset_list:
+        metadata.dataset_list.append(canonical_name)
+
+    metadata.name2id[canonical_name] = patch["id"]
+    metadata.name2type[canonical_name] = patch["type"]
+
+
+@contextmanager
+def torch_load_with_legacy_ogb_defaults():
+    import torch
+
+    original_torch_load = torch.load
+
+    def patched_torch_load(*args, **kwargs):
+        kwargs.setdefault("weights_only", False)
+        return original_torch_load(*args, **kwargs)
+
+    torch.load = patched_torch_load
+    try:
+        yield
+    finally:
+        torch.load = original_torch_load
+
+
+@contextmanager
+def suppress_outdated_pkg_resources_warning():
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"pkg_resources is deprecated as an API.*",
+            category=UserWarning,
+        )
+        yield
+
+
+def ogb_solver(name: str, root: str) -> tuple[pd.DataFrame, Splits]:
+    with suppress_outdated_pkg_resources_warning():
+        try:
+            from ogb.graphproppred import PygGraphPropPredDataset as GraphDataset
+        except ImportError:
+            from ogb.graphproppred import GraphPropPredDataset as GraphDataset
+
+        with torch_load_with_legacy_ogb_defaults():
+            dataset: Any = GraphDataset(name=name, root=root)
 
     smiles = pd.read_csv(f"{root}/{name.replace('-', '_')}/mapping/mol.csv.gz").drop(
         columns=["mol_id"]
     )
-    if load_graphs:
-        graph_list: list[dict[str, Any]] = []
-        for data in dataset:
-            graph_dict: dict[str, Any] = {
-                "edge_index": data.edge_index.numpy(),
-                "edge_feat": data.edge_attr.numpy(),
-                "node_feat": data.x.numpy(),
-                "num_nodes": data.num_nodes,
-                "x": data.x.numpy(),  # <- important, Torch tensor breaks joblib
-                "y": data.y.numpy(),
-            }
-            graph_list.append(graph_dict)
-        smiles["graph"] = pd.Series(graph_list, index=smiles.index, dtype="object")
 
     raw_splits = dataset.get_idx_split()
     splits: Splits = {
@@ -45,69 +90,131 @@ def ogb_solver(name: str, root: str, load_graphs: bool = False) -> tuple[pd.Data
     return smiles, splits
 
 
+def create_tdc_scaffold_split(
+    data: Any,
+    *,
+    seed: int = 42,
+    frac: list[float] | None = None,
+) -> dict[str, pd.DataFrame]:
+    """Create a TDC-compatible scaffold split without TDC's broken error handler."""
+
+    from rdkit import Chem, RDLogger
+    from rdkit.Chem.Scaffolds import MurckoScaffold
+
+    RDLogger.DisableLog("rdApp.*")  # type: ignore
+
+    if frac is None:
+        frac = [0.7, 0.1, 0.2]
+
+    entity = data.entity1_name
+    df = data.get_data(format="df")
+    random = Random(seed)
+
+    scaffolds: dict[str, set[int]] = defaultdict(set)
+    error_smiles = 0
+    for idx, smiles in enumerate(df[entity].values):
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+            scaffold = MurckoScaffold.MurckoScaffoldSmiles(
+                mol=mol,
+                includeChirality=False,
+            )
+        except Exception:
+            error_smiles += 1
+            continue
+        scaffolds[scaffold].add(idx)
+
+    split_total = len(df) - error_smiles
+    train_size = int(split_total * frac[0])
+    valid_size = int(split_total * frac[1])
+
+    train: list[int] = []
+    valid: list[int] = []
+    test: list[int] = []
+
+    big_index_sets = []
+    small_index_sets = []
+    for index_set in scaffolds.values():
+        if (
+            len(index_set) > valid_size / 2
+            or len(index_set) > (split_total - train_size - valid_size) / 2
+        ):
+            big_index_sets.append(index_set)
+        else:
+            small_index_sets.append(index_set)
+
+    random.shuffle(big_index_sets)
+    random.shuffle(small_index_sets)
+
+    for index_set in big_index_sets + small_index_sets:
+        if len(train) + len(index_set) <= train_size:
+            train += index_set
+        elif frac[2] == 0 or len(valid) + len(index_set) <= valid_size:
+            valid += index_set
+        else:
+            test += index_set
+
+    if error_smiles:
+        print(
+            f"Warning: TDC scaffold split omitted {error_smiles} SMILES for "
+            "which RDKit could not generate a scaffold.",
+            flush=True,
+        )
+
+    return {
+        "train": df.iloc[train].reset_index(drop=True),
+        "valid": df.iloc[valid].reset_index(drop=True),
+        "test": df.iloc[test].reset_index(drop=True),
+    }
+
+
 def load_tdc_module_dataset(
-    module, name: str, root: str, label: str | None = None, load_graphs: bool = False
+    module,
+    name: str,
+    root: str,
+    label: str | None = None,
 ) -> tuple[pd.DataFrame, Splits]:
     if label is not None:
         kwargs = {"label_name": label}
     else:
         kwargs = {}
+
+    patch_tdc_metadata(name)
     data = module(name=name, path=root, **kwargs)
-    splits = data.get_split(method="scaffold")
+
+    splits = create_tdc_scaffold_split(data)
+
     splits["train"]["split"] = "train"
     splits["valid"]["split"] = "train"
     splits["test"]["split"] = "test"
 
-    dataset = pd.concat([splits["train"], splits["valid"], splits["test"]]).reset_index(drop=True)
+    dataset = pd.concat(
+        [splits["train"], splits["valid"], splits["test"]],
+        ignore_index=True,
+    )
 
-    if load_graphs:
-        from ogb.utils import smiles2graph
-
-        MolConvert = import_module("tdc.chem_utils").MolConvert
-
-        converter = MolConvert(src="SMILES", dst="PyG")
-        dataset["graph"] = dataset["Drug"].map(
-            lambda smiles: {
-                **smiles2graph(smiles),
-                "x": converter(smiles).x,
-                "y": np.array([[0]]),
-            }
-        )
-
-    splits = {
+    index_splits: Splits = {
         "train": dataset[dataset["split"] == "train"].index.tolist(),
         "valid": [],
         "test": dataset[dataset["split"] == "test"].index.tolist(),
     }
 
-    return dataset.rename(columns={"Drug": "smiles"}).drop(
-        ["Drug_ID"], axis=1, errors="ignore"
-    ), splits
+    dataset = dataset.rename(columns={"Drug": "smiles"}).drop(
+        ["Drug_ID"],
+        axis=1,
+        errors="ignore",
+    )
+
+    return dataset, index_splits
 
 
-def tdc_admet_solver(
-    module, name: str, root: str, load_graphs: bool = False
-) -> tuple[pd.DataFrame, Splits]:
+def tdc_admet_solver(module, name: str, root: str) -> tuple[pd.DataFrame, Splits]:
     data = module(name=name, path=root)
     split = data.get_split()
 
     train, valid, test = split["train"], split["valid"], split["test"]
 
     dataset = pd.concat([train, valid, test]).reset_index(drop=True)
-
-    if load_graphs:
-        from ogb.utils import smiles2graph
-
-        MolConvert = import_module("tdc.chem_utils").MolConvert
-
-        converter = MolConvert(src="SMILES", dst="PyG")
-        dataset["graph"] = dataset["Drug"].map(
-            lambda smiles: {
-                **smiles2graph(smiles),
-                "x": converter(smiles).x,
-                "y": np.array([[0]]),
-            }
-        )
 
     admet_group = import_module("tdc.benchmark_group").admet_group
 
@@ -153,10 +260,53 @@ def get_tdc_solver(benchmark: str):
     }[benchmark]
 
 
-def build_dataset(name: str, task: str, raw_data: pd.DataFrame, splits: Splits) -> Dataset:
+def canonicalize_smiles(smiles: Any) -> str | None:
     from rdkit import Chem
 
-    raw_data["smiles"] = raw_data["smiles"].map(Chem.CanonSmiles)
+    try:
+        mol = Chem.MolFromSmiles(str(smiles))
+        if mol is None:
+            return None
+        return Chem.MolToSmiles(mol)
+    except Exception:
+        return None
+
+
+def canonicalize_dataset_smiles(
+    name: str,
+    raw_data: pd.DataFrame,
+    splits: Splits,
+) -> tuple[pd.DataFrame, Splits]:
+    from rdkit import RDLogger
+
+    RDLogger.DisableLog("rdApp.*")  # type: ignore
+
+    raw_data = raw_data.reset_index(drop=True)
+    canonical_smiles = raw_data["smiles"].map(canonicalize_smiles)
+    valid_mask = canonical_smiles.notna()
+
+    invalid_count = int((~valid_mask).sum())
+    if invalid_count:
+        print(
+            f"Warning: Dropped {invalid_count} molecules from {name!r} because RDKit "
+            "could not canonicalize their SMILES.",
+            flush=True,
+        )
+
+    filtered_data = raw_data.loc[valid_mask].copy()
+    filtered_data["smiles"] = canonical_smiles.loc[valid_mask].to_numpy()
+
+    old_to_new = {old_idx: new_idx for new_idx, old_idx in enumerate(filtered_data.index)}
+    remapped_splits: Splits = {
+        split_name: [old_to_new[idx] for idx in indices if idx in old_to_new]
+        for split_name, indices in splits.items()
+    }
+
+    return filtered_data.reset_index(drop=True), remapped_splits
+
+
+def build_dataset(name: str, task: str, raw_data: pd.DataFrame, splits: Splits) -> Dataset:
+    raw_data, splits = canonicalize_dataset_smiles(name, raw_data, splits)
     task_lower = task.lower()
     if task_lower not in {"classification", "regression"}:
         raise ValueError(f"Unknown task: {task}")

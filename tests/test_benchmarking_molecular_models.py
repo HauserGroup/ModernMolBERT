@@ -1,6 +1,9 @@
 from pathlib import Path
+from types import SimpleNamespace
 import subprocess
 import sys
+import types
+import warnings
 
 import joblib
 import numpy as np
@@ -86,6 +89,168 @@ def test_dataset_registry_is_single_yaml() -> None:
         "clf_ogbg-moltoxcast",
     ]
     assert load_dataset_config(config_dir, "clf_AMES").name == "AMES"
+
+
+def test_tdc_loader_keeps_scaffold_split_when_one_smiles_fails(capsys) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+        load_tdc_module_dataset,
+    )
+
+    instances = []
+
+    class FakeTdcDataset:
+        def __init__(self) -> None:
+            self.entity1_name = "Drug"
+
+        def get_data(self, format: str = "df"):
+            assert format == "df"
+            return pd.DataFrame(
+                {
+                    "Drug_ID": [1, 2, 3, 4],
+                    "Drug": ["c1ccccc1", "C1CCCCC1", "c1ccncc1", "not-a-smiles"],
+                    "Y": [1, 0, 1, 0],
+                }
+            )
+
+        def get_split(self, method: str = "random"):
+            raise AssertionError(f"unexpected TDC split call: {method}")
+
+    def fake_module(name: str, path: str, **kwargs):
+        assert name == "Bioavailability_Ma"
+        assert path == "data/raw"
+        assert kwargs == {"label_name": "Y"}
+        dataset = FakeTdcDataset()
+        instances.append(dataset)
+        return dataset
+
+    data, splits = load_tdc_module_dataset(
+        fake_module,
+        "Bioavailability_Ma",
+        "data/raw",
+        label="Y",
+    )
+
+    assert instances[0].entity1_name == "Drug"
+    output = capsys.readouterr().out
+    assert "omitted 1 SMILES" in output
+    assert "Falling back to random split" not in output
+    assert set(data["smiles"]) == {"c1ccccc1", "C1CCCCC1", "c1ccncc1"}
+    assert "Drug_ID" not in data.columns
+    assert sorted(splits["train"] + splits["valid"] + splits["test"]) == list(range(len(data)))
+
+
+def test_tdc_metadata_patch_adds_pampa_to_old_tdc_registry(monkeypatch) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.src.common import data_v2
+
+    metadata = SimpleNamespace(
+        dataset_names={"ADME": ["hia_hou"]},
+        dataset_list=["hia_hou"],
+        name2id={},
+        name2type={},
+    )
+
+    def fake_import_module(name: str):
+        assert name == "tdc.metadata"
+        return metadata
+
+    monkeypatch.setattr(data_v2, "import_module", fake_import_module)
+
+    data_v2.patch_tdc_metadata("PAMPA_NCATS")
+
+    assert "pampa_ncats" in metadata.dataset_names["ADME"]
+    assert "pampa_ncats" in metadata.dataset_list
+    assert metadata.name2id["pampa_ncats"] == 6695858
+    assert metadata.name2type["pampa_ncats"] == "tab"
+
+
+def test_tdc_metadata_patch_adds_herg_karim_to_old_tdc_registry(monkeypatch) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.src.common import data_v2
+
+    metadata = SimpleNamespace(
+        dataset_names={"Tox": ["herg"]},
+        dataset_list=["herg"],
+        name2id={},
+        name2type={},
+    )
+
+    def fake_import_module(name: str):
+        assert name == "tdc.metadata"
+        return metadata
+
+    monkeypatch.setattr(data_v2, "import_module", fake_import_module)
+
+    data_v2.patch_tdc_metadata("hERG_Karim")
+
+    assert "herg_karim" in metadata.dataset_names["Tox"]
+    assert "herg_karim" in metadata.dataset_list
+    assert metadata.name2id["herg_karim"] == 6822246
+    assert metadata.name2type["herg_karim"] == "tab"
+
+
+def test_build_dataset_drops_uncanonicalizable_smiles_and_remaps_splits(capsys) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+        build_dataset,
+    )
+
+    dataset = build_dataset(
+        name="ogbg-molhiv",
+        task="classification",
+        raw_data=pd.DataFrame(
+            {
+                "smiles": ["CC", "[AlH6]", "CO", "CN"],
+                "label": [0, 1, 0, 1],
+            }
+        ),
+        splits={"train": [0, 1], "valid": [2], "test": [3]},
+    )
+
+    output = capsys.readouterr().out
+    assert "Dropped 1 molecules" in output
+    assert dataset.data["smiles"].tolist() == ["CC", "CO", "CN"]
+    assert dataset.data["label"].tolist() == [0, 0, 1]
+    assert dataset.splits == {"train": [0], "valid": [1], "test": [2]}
+
+
+def test_ogb_torch_load_context_sets_legacy_weights_only_default(monkeypatch) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+        torch_load_with_legacy_ogb_defaults,
+    )
+
+    calls = []
+    torch_module = types.SimpleNamespace()
+
+    def fake_load(*args, **kwargs):
+        calls.append(kwargs.copy())
+        return "loaded"
+
+    torch_module.load = fake_load
+    monkeypatch.setitem(sys.modules, "torch", torch_module)
+
+    with torch_load_with_legacy_ogb_defaults():
+        assert torch_module.load("cached.pt") == "loaded"
+        assert torch_module.load("cached.pt", weights_only=True) == "loaded"
+
+    assert calls == [{"weights_only": False}, {"weights_only": True}]
+    assert torch_module.load is fake_load
+
+
+def test_ogb_outdated_pkg_resources_warning_is_suppressed() -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+        suppress_outdated_pkg_resources_warning,
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with suppress_outdated_pkg_resources_warning():
+            warnings.warn(
+                "pkg_resources is deprecated as an API. See setuptools docs.",
+                UserWarning,
+                stacklevel=1,
+            )
+            warnings.warn("some other warning", UserWarning, stacklevel=1)
+
+    assert len(caught) == 1
+    assert str(caught[0].message) == "some other warning"
 
 
 def test_stripped_benchmark_has_no_hydra_or_omegaconf_runtime_dependency() -> None:

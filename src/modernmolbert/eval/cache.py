@@ -71,11 +71,7 @@ def _public_featurizer_params(featurizer: RepresentationFeaturizer) -> dict[str,
     if is_dataclass(featurizer):
         params = asdict(featurizer)
     else:
-        params = {
-            key: value
-            for key, value in vars(featurizer).items()
-            if not key.startswith("_")
-        }
+        params = {key: value for key, value in vars(featurizer).items() if not key.startswith("_")}
 
     # Exclude heavy/runtime objects if present.
     for key in [
@@ -96,9 +92,7 @@ def featurizer_cache_identity(
 
     return {
         "name": featurizer.name,
-        "class": (
-            f"{featurizer.__class__.__module__}.{featurizer.__class__.__qualname__}"
-        ),
+        "class": (f"{featurizer.__class__.__module__}.{featurizer.__class__.__qualname__}"),
         "params": _public_featurizer_params(featurizer),
     }
 
@@ -227,8 +221,7 @@ def _validate_cache_metadata(
         observed = metadata.get(key)
         if observed != expected:
             raise ValueError(
-                f"Cache metadata mismatch for {key!r}: "
-                f"expected {expected!r}, observed {observed!r}"
+                f"Cache metadata mismatch for {key!r}: expected {expected!r}, observed {observed!r}"
             )
 
 
@@ -251,9 +244,7 @@ def get_or_compute_features(
     """
 
     if smiles_column not in frame.columns:
-        raise ValueError(
-            f"Split {split_name!r} is missing SMILES column {smiles_column!r}"
-        )
+        raise ValueError(f"Split {split_name!r} is missing SMILES column {smiles_column!r}")
 
     smiles_values = frame[smiles_column].tolist()
     molecule_hash = hash_molecule_values(smiles_values)

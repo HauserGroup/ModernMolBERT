@@ -126,9 +126,7 @@ def prepare_many(
     for dataset_name in dataset_names:
         if dataset_name not in ALL_SPECS:
             valid = ", ".join(sorted(ALL_SPECS))
-            raise ValueError(
-                f"Unknown dataset {dataset_name!r}. Valid choices: {valid}"
-            )
+            raise ValueError(f"Unknown dataset {dataset_name!r}. Valid choices: {valid}")
 
         prepare_dataset(
             spec=ALL_SPECS[dataset_name],
@@ -294,12 +292,9 @@ def prepare_dataset(
             "valid": frac_valid,
             "test": frac_test,
         },
-        "scaffold_stats": compute_scaffold_stats(split_frame)
-        if split == "scaffold"
-        else None,
+        "scaffold_stats": compute_scaffold_stats(split_frame) if split == "scaffold" else None,
         "split_scaffold_stats": {
-            split_name: compute_scaffold_stats(split_df)
-            for split_name, split_df in splits.items()
+            split_name: compute_scaffold_stats(split_df) for split_name, split_df in splits.items()
         }
         if split == "scaffold"
         else None,
@@ -374,9 +369,7 @@ def deepchem_dataset_to_frame(dataset: Any, tasks: Sequence[str]) -> pd.DataFram
         if y.shape[1] == 1 and len(tasks) == 0:
             tasks = ["label"]
         else:
-            raise ValueError(
-                f"Task count mismatch: len(tasks)={len(tasks)}, y.shape={y.shape}"
-            )
+            raise ValueError(f"Task count mismatch: len(tasks)={len(tasks)}, y.shape={y.shape}")
 
     rows: list[dict[str, Any]] = []
 
@@ -580,9 +573,7 @@ def split_sanitized_frame(
             frac_valid=frac_valid,
         )
 
-    raise ValueError(
-        f"Unsupported local split {split!r}. Use 'scaffold', 'random', or 'index'."
-    )
+    raise ValueError(f"Unsupported local split {split!r}. Use 'scaffold', 'random', or 'index'.")
 
 
 def random_split_frame(
@@ -811,9 +802,7 @@ def compute_duplicate_stats(frame: pd.DataFrame) -> dict[str, Any]:
     n_duplicate_rows = int(n_valid - n_unique)
 
     duplicated_values = valid[valid.duplicated(keep=False)]
-    duplicate_group_sizes = (
-        duplicated_values.value_counts().sort_values(ascending=False).tolist()
-    )
+    duplicate_group_sizes = duplicated_values.value_counts().sort_values(ascending=False).tolist()
 
     return {
         "n_valid_rows": n_valid,
@@ -836,8 +825,7 @@ def grouped_random_split_frame(
     rng = np.random.default_rng(seed)
 
     groups = [
-        indices.to_list()
-        for _, indices in frame.groupby(group_column, sort=False).groups.items()
+        indices.to_list() for _, indices in frame.groupby(group_column, sort=False).groups.items()
     ]
 
     rng.shuffle(groups)

@@ -297,9 +297,7 @@ def test_scaffold_split_raises_on_empty_valid_or_test() -> None:
         }
     )
 
-    with pytest.raises(
-        RuntimeError, match="Scaffold split produced an empty valid or test split"
-    ):
+    with pytest.raises(RuntimeError, match="Scaffold split produced an empty valid or test split"):
         split_sanitized_frame(
             frame,
             split="scaffold",

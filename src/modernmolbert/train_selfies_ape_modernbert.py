@@ -61,6 +61,9 @@ from modernmolbert.utils import (
 )
 
 DATASET_NAME = PUBCHEM10M_DATASET
+torch.set_float32_matmul_precision("high")
+torch.backends.cuda.matmul.allow_tf32 = True
+torch._dynamo.config.assume_static_by_default = False
 
 
 def parse_args() -> argparse.Namespace:

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Accelerate
+NUM_WORKERS=1
+
+
 # Local prepared ChEMBL36 SELFIES dataset.
 DATASET_NAME="data/pretrain/chembl36_selfies"
 SELFIES_COLUMN="selfies"
@@ -69,7 +73,10 @@ for mlm_probability in "${MLM_PROBS[@]}"; do
     echo "Output directory: ${output_dir}"
     echo "mlm_probability=${mlm_probability}, learning_rate=${learning_rate}"
 
-    uv run python -m modernmolbert.train_selfies_ape_modernbert \
+    uv run accelerate launch \
+      --dynamo_backend inductor \
+      --mixed_precision fp16 \
+      -m modernmolbert.train_selfies_ape_modernbert \
       --dataset_name "${DATASET_NAME}" \
       --selfies_column "${SELFIES_COLUMN}" \
       --train_split "${TRAIN_SPLIT}" \
@@ -98,8 +105,7 @@ for mlm_probability in "${MLM_PROBS[@]}"; do
       --save_total_limit "${SAVE_TOTAL_LIMIT}" \
       --num_workers "${NUM_WORKERS}" \
       --seed "${SEED}" \
-      --no-bf16 \
-      --fp16 \
+      --mixed_precision bf16 \
       --compute_masked_accuracy \
       --report_to tensorboard
 

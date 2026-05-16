@@ -46,7 +46,7 @@ LOGGING_STEPS=100
 SAVE_TOTAL_LIMIT=5
 
 NUM_WORKERS=4
-SEED=13
+SEED=42
 
 # Better default than the old BERT-style 0.15 for molecular MLM.
 MLM_PROBABILITY="${1:-0.35}"
@@ -102,7 +102,12 @@ echo "learning_rate=${LEARNING_RATE}"
 echo "effective_batch_size=$((PER_DEVICE_TRAIN_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
 echo "============================================================"
 
-uv run python -m modernmolbert.train_selfies_ape_modernbert \
+uv run accelerate launch \
+  --num_processes 1 \
+  --num_machines 1 \
+  --dynamo_backend inductor \
+  --mixed_precision fp16 \
+  -m modernmolbert.train_selfies_ape_modernbert \
   --dataset_name "${DATASET_NAME}" \
   --selfies_column "${SELFIES_COLUMN}" \
   --train_split "${TRAIN_SPLIT}" \

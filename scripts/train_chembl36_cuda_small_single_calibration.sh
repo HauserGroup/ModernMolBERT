@@ -11,6 +11,9 @@ set -euo pipefail
 #   scripts/train_chembl36_cuda_small_single.sh 0.35 1e-4
 #   CUDA_VISIBLE_DEVICES=1 scripts/train_chembl36_cuda_small_single.sh 0.35 3e-4 gpu1_small_mlm_0p35_lr_3e-4
 
+# Accelerate
+NUM_WORKERS=1
+
 # Local prepared ChEMBL36 SELFIES dataset.
 DATASET_NAME="data/pretrain/chembl36_selfies"
 SELFIES_COLUMN="selfies"
@@ -32,11 +35,11 @@ MAX_STEPS=500
 EVAL_SIZE=1024
 MAX_EVAL_BATCHES=128
 
-PER_DEVICE_TRAIN_BATCH_SIZE=8
-PER_DEVICE_EVAL_BATCH_SIZE=8
-GRADIENT_ACCUMULATION_STEPS=8
+PER_DEVICE_TRAIN_BATCH_SIZE=128
+PER_DEVICE_EVAL_BATCH_SIZE=128
+GRADIENT_ACCUMULATION_STEPS=1
 
-WARMUP_STEPS=1500
+WARMUP_STEPS=50
 WEIGHT_DECAY=0.01
 MAX_GRAD_NORM=1.0
 
@@ -102,7 +105,12 @@ echo "learning_rate=${LEARNING_RATE}"
 echo "effective_batch_size=$((PER_DEVICE_TRAIN_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
 echo "============================================================"
 
-uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert \
+uv run accelerate launch \
+  --num_processes 1 \
+  --num_machines 1 \
+  --dynamo_backend inductor \
+  --mixed_precision fp16 \
+  -m modernmolbert.train_selfies_ape_modernbert \
   --dataset_name "${DATASET_NAME}" \
   --selfies_column "${SELFIES_COLUMN}" \
   --train_split "${TRAIN_SPLIT}" \

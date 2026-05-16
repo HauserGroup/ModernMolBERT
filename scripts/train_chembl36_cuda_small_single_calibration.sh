@@ -40,7 +40,7 @@ WARMUP_STEPS=1500
 WEIGHT_DECAY=0.01
 MAX_GRAD_NORM=1.0
 
-SAVE_STEPS=500
+SAVE_STEPS=250
 EVAL_STEPS=250
 LOGGING_STEPS=100
 SAVE_TOTAL_LIMIT=5
@@ -83,10 +83,13 @@ if [[ ! -f "${TOKENIZER_METADATA_PATH}" ]]; then
   exit 1
 fi
 
-if [[ -d "${OUTPUT_DIR}" && -n "$(ls -A "${OUTPUT_DIR}")" ]]; then
-  echo "Output directory already exists and is not empty: ${OUTPUT_DIR}"
-  echo "Choose a different run_name or remove/archive the existing directory."
+if [[ -d "${OUTPUT_DIR}/final_model" ]]; then
+  echo "Run already completed: ${OUTPUT_DIR}/final_model exists."
+  echo "Choose a different run_name or remove the directory to re-run."
   exit 1
+elif [[ -d "${OUTPUT_DIR}" && -n "$(ls -A "${OUTPUT_DIR}")" ]]; then
+  echo "Incomplete run detected. Cleaning up: ${OUTPUT_DIR}"
+  rm -rf "${OUTPUT_DIR}"
 fi
 
 echo "============================================================"
@@ -99,7 +102,7 @@ echo "learning_rate=${LEARNING_RATE}"
 echo "effective_batch_size=$((PER_DEVICE_TRAIN_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
 echo "============================================================"
 
-uv run python -m modernmolbert.train_selfies_ape_modernbert \
+uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert \
   --dataset_name "${DATASET_NAME}" \
   --selfies_column "${SELFIES_COLUMN}" \
   --train_split "${TRAIN_SPLIT}" \

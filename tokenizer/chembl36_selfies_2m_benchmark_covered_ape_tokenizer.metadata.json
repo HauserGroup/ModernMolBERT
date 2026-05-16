@@ -21,7 +21,7 @@
     "unk_token": 3
   },
   "tokenizer_path": "tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json",
-  "tokenizer_sha256": "592b95c02fb1a3f09f4649d960766ec197094a926dd8a52ca2e14a66a2b41e11",
+  "tokenizer_sha256": "df0934b7e3f9c1f9de1e67554489386b994f42d9de801c62c11f60f70eb6fe7f",
   "tokenizer_train_size": 2000000,
   "vocab_size": 2439
 }

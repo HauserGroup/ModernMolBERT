@@ -443,6 +443,27 @@ def get_streaming_dataset(
                 )
             return raw.shuffle(seed=seed).to_iterable_dataset()
         raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
+
+    local_parquet = _resolve_dataset_name_as_local_path(dataset_name) if dataset_name else None
+    if local_parquet is not None:
+        files = _split_parquet_files(local_parquet, split)
+        if not files:
+            available = (
+                ", ".join(sorted(_available_local_parquet_splits(local_parquet))) or "<none>"
+            )
+            raise ValueError(
+                f"Local parquet dataset at {local_parquet} has no split '{split}'. "
+                f"Available splits: {available}"
+            )
+        print(f"[data] Loading local parquet split '{split}': {local_parquet}", flush=True)
+        hf_ds = load_dataset(
+            "parquet",
+            data_files={split: [str(f) for f in files]},
+            split=split,
+            streaming=True,
+        )
+        return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
+
     print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
     try:
         hf_ds = load_dataset(dataset_name, split=split, streaming=True)

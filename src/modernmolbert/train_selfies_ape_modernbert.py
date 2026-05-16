@@ -979,6 +979,14 @@ def build_modernbert_config(
         config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS["base"])
         for key, value in LOCAL_MODERNBERT_PRESETS[args.model_size].items():
             setattr(config, key, value)
+        # Regenerate layer_types to match the new num_hidden_layers and global_attn_every_n_layers.
+        # The base config carries a fixed 22-element list; overriding num_hidden_layers alone leaves
+        # them out of sync and triggers a save-time validation error.
+        every_n = getattr(config, "global_attn_every_n_layers", 3)
+        config.layer_types = [
+            "sliding_attention" if bool(i % every_n) else "full_attention"
+            for i in range(config.num_hidden_layers)
+        ]
     else:
         config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
     # Molecular tokenizer-specific fields.

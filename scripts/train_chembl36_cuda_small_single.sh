@@ -83,10 +83,13 @@ if [[ ! -f "${TOKENIZER_METADATA_PATH}" ]]; then
   exit 1
 fi
 
-if [[ -d "${OUTPUT_DIR}" && -n "$(ls -A "${OUTPUT_DIR}")" ]]; then
-  echo "Output directory already exists and is not empty: ${OUTPUT_DIR}"
-  echo "Choose a different run_name or remove/archive the existing directory."
+if [[ -d "${OUTPUT_DIR}/final_model" ]]; then
+  echo "Run already completed: ${OUTPUT_DIR}/final_model exists."
+  echo "Choose a different run_name or remove the directory to re-run."
   exit 1
+elif [[ -d "${OUTPUT_DIR}" && -n "$(ls -A "${OUTPUT_DIR}")" ]]; then
+  echo "Incomplete run detected. Cleaning up: ${OUTPUT_DIR}"
+  rm -rf "${OUTPUT_DIR}"
 fi
 
 echo "============================================================"

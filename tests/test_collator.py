@@ -158,3 +158,33 @@ def test_collator_random_replacement_candidates_require_content_tokens():
 
     with pytest.raises(ValueError, match="No eligible non-special token IDs"):
         collator.eligible_random_token_ids()
+
+
+def test_standard_masking_replacement_runs_without_special_tokens():
+    collator = MolecularMLMCollator(
+        pad_token_id=1,
+        mask_token_id=4,
+        vocab_size=20,
+        mlm_probability=0.30,
+        special_token_ids=[0, 1, 2, 3, 4],
+        masking_strategy="standard",
+    )
+
+    examples = [
+        {"input_ids": [0, 5, 6, 7, 8, 2]},
+        {"input_ids": [0, 9, 10, 11, 12, 2]},
+    ]
+
+    batch = collator(examples)
+
+    assert batch["input_ids"].shape == batch["labels"].shape
+    assert batch["attention_mask"].shape == batch["labels"].shape
+
+    # At least one token should be selected because the collator enforces that
+    # fallback when mlm_probability > 0.
+    assert (batch["labels"] != -100).any()
+
+    # Special tokens should not be prediction targets.
+    labels = batch["labels"]
+    for sid in [0, 1, 2, 3, 4]:
+        assert not (labels == sid).any()

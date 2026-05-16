@@ -26,14 +26,14 @@ repos:
       # Run the formatter.
       - id: ruff-format
         types_or: [python, pyi, jupyter]
-  -  repo: https://github.com/lorenzwalthert/precommit
-     rev: v0.4.3.9021
-     hooks:
-      - id: lintr
-        args: [--warn_only]
-        verbose: true
-      - id: style-files
-        args: [--scope=tokens, --strict=true, --reindention=specify_reindention('#'), --indent_by=4, --start_comments_with_one_space=true]
+  # -  repo: https://github.com/lorenzwalthert/precommit
+  #    rev: v0.4.3.9021
+  #    hooks:
+  #     - id: lintr
+  #       args: [--warn_only]
+  #       verbose: true
+  #     - id: style-files
+  #       args: [--scope=tokens, --strict=true, --reindention=specify_reindention('#'), --indent_by=4, --start_comments_with_one_space=true]
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:

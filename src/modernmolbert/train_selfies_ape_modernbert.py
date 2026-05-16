@@ -750,15 +750,14 @@ class MolecularMLMCollator:
         labels[~masked_indices] = -100
 
         # 80% of selected tokens become mask tokens.
-        replace_with_mask = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
+        replace_draw = torch.rand(labels.shape)
+        replace_with_mask = (replace_draw < 0.8) & masked_indices
         input_ids[replace_with_mask] = self.mask_token_id
 
         # 10% become random tokens.
-        replace_with_random = (
-            torch.bernoulli(torch.full(labels.shape, 0.5)).bool()
-            & masked_indices
-            & ~replace_with_mask
-        )
+        # Conditional probability is 0.5 among the remaining 20%, giving 10% overall.
+        random_draw = torch.rand(labels.shape)
+        replace_with_random = (random_draw < 0.5) & masked_indices & ~replace_with_mask
         if replace_with_random.any():
             eligible_random_ids = self.eligible_random_token_ids(device=input_ids.device)
             random_indices = torch.randint(
@@ -783,19 +782,15 @@ class MolecularMLMCollator:
         attention_mask: torch.Tensor,
         special_mask: torch.Tensor,
     ) -> torch.Tensor:
-        probability_matrix = torch.full(labels.shape, self.mlm_probability)
-        probability_matrix.masked_fill_(special_mask, 0.0)
-        probability_matrix.masked_fill_(attention_mask.eq(0), 0.0)
-        masked_indices = torch.bernoulli(probability_matrix).bool()
+        eligible = (~special_mask) & attention_mask.bool()
+        masked_indices = (torch.rand(labels.shape) < self.mlm_probability) & eligible
 
         if self.mlm_probability > 0.0 and not masked_indices.any():
-            eligible_positions = (~special_mask & attention_mask.bool()).nonzero(as_tuple=False)
+            eligible_positions = eligible.nonzero(as_tuple=False)
             if len(eligible_positions) > 0:
                 idx = int(torch.randint(len(eligible_positions), (1,)).item())
-                row_pos = eligible_positions[idx]
-                row = int(row_pos[0].item())
-                col = int(row_pos[1].item())
-                masked_indices[row, col] = True
+                row, col = eligible_positions[idx].tolist()
+                masked_indices[int(row), int(col)] = True
 
         return masked_indices
 

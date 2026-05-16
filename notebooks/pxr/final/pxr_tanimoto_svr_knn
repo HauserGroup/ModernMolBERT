@@ -23,12 +23,12 @@ from sklearn.svm import SVR
 
 RANDOM_STATE = 42
 N_FOLDS = 10
-FINGERPRINT_KIND = "torsion"  # "morgan", "rdkit", "atom_pair", "torsion"
-FP_SIZE = 2048
+FINGERPRINT_KIND = "morgan"  # "morgan", "rdkit", "atom_pair", "torsion"
+FP_SIZE = 1024  # Number of bits in the fingerprint. ECFP4 with radius=2 typically uses 1024 bits.
 
 # Only used for Morgan fingerprints.
 # radius=2 -> ECFP4, radius=3 -> ECFP6
-MORGAN_RADIUS = 4
+MORGAN_RADIUS = 2
 USE_CHIRALITY = False
 USE_HUBER_CALIBRATION = True
 BLEND_WEIGHTS = np.linspace(0.75, 0.95, 41)
@@ -553,5 +553,3 @@ summary = tmp.groupby("bin").apply(
 )
 
 summary
-
-# %%

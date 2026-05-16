@@ -9,7 +9,7 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --tokenizer_train_size 2000000 \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
+  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt &
 """
 
 import argparse

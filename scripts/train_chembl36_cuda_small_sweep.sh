@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Accelerate
-NUM_WORKERS=1
-
-
 # Local prepared ChEMBL36 SELFIES dataset.
 DATASET_NAME="data/pretrain/chembl36_selfies"
 SELFIES_COLUMN="selfies"
@@ -73,41 +69,45 @@ for mlm_probability in "${MLM_PROBS[@]}"; do
     echo "Output directory: ${output_dir}"
     echo "mlm_probability=${mlm_probability}, learning_rate=${learning_rate}"
 
-    uv run accelerate launch \
-      --dynamo_backend inductor \
-      --mixed_precision fp16 \
-      -m modernmolbert.train_selfies_ape_modernbert \
-      --dataset_name "${DATASET_NAME}" \
-      --selfies_column "${SELFIES_COLUMN}" \
-      --train_split "${TRAIN_SPLIT}" \
-      --use_validation_split \
-      --validation_split "${VALIDATION_SPLIT}" \
-      --output_dir "${output_dir}" \
-      --device_backend cuda \
-      --model_size "${MODEL_SIZE}" \
-      --tokenizer_vocab_path "${TOKENIZER_PATH}" \
-      --tokenizer_metadata_path "${TOKENIZER_METADATA_PATH}" \
-      --max_seq_length "${MAX_SEQ_LENGTH}" \
-      --max_steps "${MAX_STEPS}" \
-      --eval_size "${EVAL_SIZE}" \
-      --max_eval_batches "${MAX_EVAL_BATCHES}" \
-      --per_device_train_batch_size "${PER_DEVICE_TRAIN_BATCH_SIZE}" \
-      --per_device_eval_batch_size "${PER_DEVICE_EVAL_BATCH_SIZE}" \
-      --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS}" \
-      --mlm_probability "${mlm_probability}" \
-      --learning_rate "${learning_rate}" \
-      --weight_decay "${WEIGHT_DECAY}" \
-      --max_grad_norm "${MAX_GRAD_NORM}" \
-      --warmup_steps "${WARMUP_STEPS}" \
-      --logging_steps "${LOGGING_STEPS}" \
-      --eval_steps "${EVAL_STEPS}" \
-      --save_steps "${SAVE_STEPS}" \
-      --save_total_limit "${SAVE_TOTAL_LIMIT}" \
-      --num_workers "${NUM_WORKERS}" \
-      --seed "${SEED}" \
-      --mixed_precision bf16 \
-      --compute_masked_accuracy \
-      --report_to tensorboard
+uv run accelerate launch \
+  --num_processes 1 \
+  --num_machines 1 \
+  --dynamo_backend inductor \
+  --mixed_precision fp16 \
+  -m modernmolbert.train_selfies_ape_modernbert \
+  --dataset_name "${DATASET_NAME}" \
+  --selfies_column "${SELFIES_COLUMN}" \
+  --train_split "${TRAIN_SPLIT}" \
+  --use_validation_split \
+  --validation_split "${VALIDATION_SPLIT}" \
+  --output_dir "${OUTPUT_DIR}" \
+  --device_backend cuda \
+  --model_size "${MODEL_SIZE}" \
+  --tokenizer_vocab_path "${TOKENIZER_PATH}" \
+  --tokenizer_metadata_path "${TOKENIZER_METADATA_PATH}" \
+  --max_seq_length "${MAX_SEQ_LENGTH}" \
+  --max_steps "${MAX_STEPS}" \
+  --eval_size "${EVAL_SIZE}" \
+  --max_eval_batches "${MAX_EVAL_BATCHES}" \
+  --per_device_train_batch_size "${PER_DEVICE_TRAIN_BATCH_SIZE}" \
+  --per_device_eval_batch_size "${PER_DEVICE_EVAL_BATCH_SIZE}" \
+  --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS}" \
+  --mlm_probability "${MLM_PROBABILITY}" \
+  --masking_strategy "${MASKING_STRATEGY}" \
+  --learning_rate "${LEARNING_RATE}" \
+  --weight_decay "${WEIGHT_DECAY}" \
+  --max_grad_norm "${MAX_GRAD_NORM}" \
+  --warmup_steps "${WARMUP_STEPS}" \
+  --logging_steps "${LOGGING_STEPS}" \
+  --eval_steps "${EVAL_STEPS}" \
+  --save_steps "${SAVE_STEPS}" \
+  --save_total_limit "${SAVE_TOTAL_LIMIT}" \
+  --num_workers "${NUM_WORKERS}" \
+  --seed "${SEED}" \
+  --no-bf16 \
+  --fp16 \
+  --compute_masked_accuracy \
+  --report_to tensorboard
 
     echo "Finished run: ${run_name}"
     echo "Best/final artifacts under: ${output_dir}"

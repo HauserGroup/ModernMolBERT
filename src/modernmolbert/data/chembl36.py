@@ -28,6 +28,22 @@ class ChemBL36SelfiesPrepConfig:
     max_heavy_atoms: int = 100
     max_mw: float = 1000.0
     chunk_size: int = 100_000
+    train_shards: int = 8
+
+
+def _write_split(frame: pd.DataFrame, output_dir: Path, split: str, *, n_shards: int) -> None:
+    n = len(frame)
+    if n_shards <= 1:
+        frame.to_parquet(output_dir / f"{split}.parquet", index=False)
+        return
+    shard_dir = output_dir / split
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(n_shards):
+        chunk = frame.iloc[i * n // n_shards : (i + 1) * n // n_shards]
+        path = shard_dir / f"{split}-{i:05d}-of-{n_shards:05d}.parquet"
+        tmp = path.with_suffix(".tmp")
+        chunk.to_parquet(tmp, index=False)
+        tmp.rename(path)
 
 
 def prepare_chembl36_selfies(config: ChemBL36SelfiesPrepConfig) -> None:
@@ -71,8 +87,10 @@ def prepare_chembl36_selfies(config: ChemBL36SelfiesPrepConfig) -> None:
     if test is not None:
         splits["test"] = test
 
-    for split_name, split_frame in splits.items():
-        split_frame.to_parquet(config.output_dir / f"{split_name}.parquet", index=False)
+    _write_split(train, config.output_dir, "train", n_shards=config.train_shards)
+    _write_split(valid, config.output_dir, "valid", n_shards=1)
+    if test is not None:
+        _write_split(test, config.output_dir, "test", n_shards=1)
 
     write_example_tsv(splits=splits, output_path=config.output_dir / "example.tsv")
 
@@ -507,4 +525,50 @@ def collect_preparation_versions() -> dict[str, str | None]:
 def _jsonable_config(config: ChemBL36SelfiesPrepConfig) -> dict[str, Any]:
     out = asdict(config)
     out["output_dir"] = str(config.output_dir)
+    return out
+
+
+def shard_split(
+    source_dir: Path,
+    *,
+    split: str = "train",
+    n_shards: int = 8,
+) -> Path:
+    """Split a single-file parquet split into N shards for multi-worker dataloading.
+
+    Reads ``{source_dir}/{split}.parquet`` and writes shards into
+    ``{source_dir}/{split}/{split}-{i:05d}-of-{n:05d}.parquet``.
+    Existing shard files are skipped.
+
+    Returns the shard directory.
+    """
+    source_file = source_dir / f"{split}.parquet"
+    if not source_file.exists():
+        raise FileNotFoundError(f"Source parquet not found: {source_file}")
+    if n_shards < 2:
+        raise ValueError("n_shards must be >= 2")
+
+    out = source_dir / split
+    out.mkdir(parents=True, exist_ok=True)
+
+    existing = sorted(out.glob(f"{split}-?????-of-?????.parquet"))
+    if len(existing) == n_shards:
+        print(f"[shard] {n_shards} shards already exist in {out}, skipping.", flush=True)
+        return out
+
+    print(f"[shard] Reading {source_file} ...", flush=True)
+    df = pd.read_parquet(source_file)
+    total = len(df)
+    print(f"[shard] {total:,} rows → {n_shards} shards", flush=True)
+
+    for i in range(n_shards):
+        out_path = out / f"{split}-{i:05d}-of-{n_shards:05d}.parquet"
+        if out_path.exists():
+            continue
+        chunk = df.iloc[i * total // n_shards : (i + 1) * total // n_shards]
+        tmp = out_path.with_suffix(".tmp")
+        chunk.to_parquet(tmp, index=False)
+        tmp.rename(out_path)
+        print(f"[shard]   wrote {out_path.name} ({len(chunk):,} rows)", flush=True)
+
     return out

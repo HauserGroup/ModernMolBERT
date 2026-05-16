@@ -182,9 +182,11 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.4,
         help=(
-            "Success probability for the geometric distribution used to sample span lengths "
-            "(mean span length = 1/span_p_geom ≈ 2.5 APE tokens at default 0.4). "
-            "Only used when --masking_strategy is 'span' or 'hetero_span'."
+            "Success probability for the geometric distribution used to sample span lengths. "
+            "The unclamped mean span length is approximately 1/span_p_geom. "
+            "With the default p=0.4 and span_max_length=6, the realized mean is about "
+            "2.4 APE tokens after clamping. Only used when --masking_strategy is "
+            "'span' or 'hetero_span'."
         ),
     )
     parser.add_argument(

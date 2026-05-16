@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any, Literal, overload
 
 import pandas as pd
+from dotenv import load_dotenv
 from tqdm.auto import tqdm
+
+load_dotenv()
 
 
 @dataclass(frozen=True)
@@ -24,6 +27,7 @@ class ChemBL36SelfiesPrepConfig:
     min_heavy_atoms: int = 3
     max_heavy_atoms: int = 100
     max_mw: float = 1000.0
+    chunk_size: int = 100_000
 
 
 def prepare_chembl36_selfies(config: ChemBL36SelfiesPrepConfig) -> None:
@@ -170,42 +174,66 @@ def prepare_chembl36_frame(
 
     stats["rows_after_dedupe"] = int(len(frame))
 
-    rows: list[dict[str, Any]] = []
+    checkpoint_dir = config.output_dir / "_checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    n = len(frame)
+    chunk_size = config.chunk_size
+    chunk_paths: list[Path] = []
     conversion_valid_rows = 0
 
-    for _, row in tqdm(
-        frame.iterrows(),
-        total=len(frame),
-        desc="Preparing ChEMBL36 SELFIES",
-    ):
-        out = dict(row)
-        converted = canonicalize_and_selfies(row.get(config.smiles_column))
-        out.update(converted)
-        if converted["is_valid"]:
-            conversion_valid_rows += 1
+    with tqdm(total=n, desc="Preparing ChEMBL36 SELFIES") as pbar:
+        for chunk_idx, chunk_start in enumerate(range(0, n, chunk_size)):
+            chunk = frame.iloc[chunk_start : chunk_start + chunk_size]
+            checkpoint_path = checkpoint_dir / f"chunk_{chunk_idx:05d}.parquet"
+            chunk_paths.append(checkpoint_path)
 
-        if out["is_valid"] and not passes_basic_filters(out, config=config):
-            out["is_valid"] = False
-            out["sanitize_error"] = "failed_basic_filters"
+            if checkpoint_path.exists():
+                summary = pd.read_parquet(checkpoint_path, columns=["is_valid"])
+                conversion_valid_rows += int(summary["is_valid"].sum())
+                pbar.update(len(chunk))
+                continue
 
-        rows.append(out)
+            rows: list[dict[str, Any]] = []
+            for _, row in chunk.iterrows():
+                out = dict(row)
+                try:
+                    converted = canonicalize_and_selfies(row.get(config.smiles_column))
+                except BaseException:
+                    continue
+                out.update(converted)
+                if converted["is_valid"]:
+                    conversion_valid_rows += 1
+                if out["is_valid"] and not passes_basic_filters(out, config=config):
+                    out["is_valid"] = False
+                    out["sanitize_error"] = "failed_basic_filters"
+                rows.append(out)
 
-    prepared_with_invalid = pd.DataFrame(rows)
-    if prepared_with_invalid.empty:
-        prepared = prepared_with_invalid.copy()
-    else:
-        stats["rows_valid_after_conversion"] = int(conversion_valid_rows)
-        stats["sanitize_error_counts"] = {
-            str(error): int(count)
-            for error, count in prepared_with_invalid["sanitize_error"]
-            .fillna("valid")
-            .value_counts()
-            .sort_index()
-            .items()
-        }
-        prepared = prepared_with_invalid.loc[prepared_with_invalid["is_valid"]].reset_index(
-            drop=True
-        )
+            chunk_df = pd.DataFrame(rows)
+            tmp_path = checkpoint_path.with_suffix(".tmp")
+            chunk_df.to_parquet(tmp_path, index=False)
+            tmp_path.rename(checkpoint_path)
+            del rows, chunk_df
+            pbar.update(len(chunk))
+
+    # Collect valid rows and compute stats from checkpoints
+    error_counts: dict[str, int] = {}
+    valid_frames: list[pd.DataFrame] = []
+    for path in chunk_paths:
+        df = pd.read_parquet(path)
+        for err, cnt in df["sanitize_error"].fillna("valid").value_counts().items():
+            error_counts[str(err)] = error_counts.get(str(err), 0) + int(cnt)
+        valid_frames.append(df.loc[df["is_valid"]].copy())
+        del df
+
+    stats["rows_valid_after_conversion"] = int(conversion_valid_rows)
+    stats["sanitize_error_counts"] = dict(sorted(error_counts.items()))
+
+    if not valid_frames or all(f.empty for f in valid_frames):
+        raise ValueError("No valid ChEMBL36 rows remained after conversion and filtering")
+
+    prepared = pd.concat(valid_frames, ignore_index=True)
+    del valid_frames
 
     if prepared.empty:
         raise ValueError("No valid ChEMBL36 rows remained after conversion and filtering")
@@ -245,8 +273,8 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
         }
 
     try:
-        mol = Chem.MolFromSmiles(text)
-    except Exception as exc:
+        mol = Chem.MolFromSmiles(text, sanitize=False)
+    except BaseException as exc:
         return {
             "smiles_canonical_clean": None,
             "selfies": None,
@@ -262,13 +290,36 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
             "sanitize_error": "rdkit_parse_failed",
         }
 
+    # SANITIZE_KEKULIZE and SANITIZE_PROPERTIES trigger C-level segfaults in this
+    # RDKit build for exotic molecules (non-kekulizable aromatics, unusual valences).
+    # Use only the flags MolToSmiles needs: ring perception + aromaticity perception.
+    # Molecules that are chemically invalid get dropped by the SELFIES encoder.
+    _san_ops = Chem.SanitizeFlags.SANITIZE_SYMMRINGS | Chem.SanitizeFlags.SANITIZE_SETAROMATICITY
+    try:
+        san_result = Chem.SanitizeMol(mol, _san_ops, catchErrors=True)
+    except BaseException as exc:
+        return {
+            "smiles_canonical_clean": None,
+            "selfies": None,
+            "is_valid": False,
+            "sanitize_error": f"sanitize_exception:{type(exc).__name__}",
+        }
+
+    if san_result:
+        return {
+            "smiles_canonical_clean": None,
+            "selfies": None,
+            "is_valid": False,
+            "sanitize_error": f"sanitize_failed:{san_result.name}",
+        }
+
     try:
         canonical = Chem.MolToSmiles(
             mol,
             canonical=True,
             isomericSmiles=True,
         )
-    except Exception as exc:
+    except BaseException as exc:
         return {
             "smiles_canonical_clean": None,
             "selfies": None,
@@ -278,7 +329,7 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
 
     try:
         selfies = sf.encoder(canonical)
-    except Exception as exc:
+    except BaseException as exc:
         return {
             "smiles_canonical_clean": canonical,
             "selfies": None,

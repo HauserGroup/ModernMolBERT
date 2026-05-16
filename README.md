@@ -422,6 +422,25 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 
 Then load the saved directory with `AutoTokenizer.from_pretrained(..., trust_remote_code=True)`.
 
+
+# Masking Stategy
+Masking strategy controls which molecular tokens are hidden during MLM pretraining.
+
+standard:
+  Independently samples individual APE tokens for prediction.
+
+span:
+  Samples short contiguous spans of APE tokens until the masking budget is reached.
+  This asks the model to reconstruct local molecular fragments.
+
+hetero_span:
+  Same as span masking, but span starts are biased toward tokens containing
+  heteroatoms such as N, O, S, P, halogens, Se, or Si. This focuses more MLM
+  signal on functional-group-rich regions.
+
+After positions are selected, all strategies use the BERT corruption rule:
+80% replaced with <mask>, 10% replaced with a random token, and 10% left unchanged.
+
 ## Evaluation workflow
 
 ModernMolBERT is evaluated as a frozen molecular featuriser. All featurisers share the same benchmark machinery:

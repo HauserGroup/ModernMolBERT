@@ -16,11 +16,12 @@ DATASET_NAME="data/pretrain/chembl36_selfies"
 SELFIES_COLUMN="selfies"
 TRAIN_SPLIT="train"
 VALIDATION_SPLIT="valid"
+MASKING_STRATEGY="standard"
 
 # Expected tokenizer artifacts for ChEMBL36.
 # These names assume the tokenizer was trained on up to 2M ChEMBL36 SELFIES.
-TOKENIZER_PATH="tokenizer/chembl36_selfies_2m_ape_tokenizer.json"
-TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_ape_tokenizer.metadata.json"
+TOKENIZER_PATH="tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json"
+TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.metadata.json"
 
 # Small ModernBERT-style molecular model.
 MODEL_SIZE="small"
@@ -117,6 +118,7 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --per_device_eval_batch_size "${PER_DEVICE_EVAL_BATCH_SIZE}" \
   --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS}" \
   --mlm_probability "${MLM_PROBABILITY}" \
+  --masking_strategy "${MASKING_STRATEGY}" \
   --learning_rate "${LEARNING_RATE}" \
   --weight_decay "${WEIGHT_DECAY}" \
   --max_grad_norm "${MAX_GRAD_NORM}" \

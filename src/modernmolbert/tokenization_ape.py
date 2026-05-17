@@ -7,6 +7,7 @@ and loaded by ``AutoTokenizer.from_pretrained(..., trust_remote_code=True)``.
 import json
 import os
 import re
+from collections.abc import Mapping
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Literal
@@ -25,6 +26,19 @@ SMILES_RE = re.compile(
     r"\%\d{2}|\d|"
     r"\(|\)|\.|=|#|-|\+|\\|/|:|~|@|\?|\*|\$)"
 )
+
+
+def _coerce_vocab(vocab: Mapping[str, Any]) -> dict[str, int]:
+    if not isinstance(vocab, Mapping):
+        raise ValueError("Vocabulary must be a JSON object mapping token strings to integer IDs.")
+    out = {str(token): int(idx) for token, idx in vocab.items()}
+    if len(set(out.values())) != len(out):
+        raise ValueError("Vocabulary token IDs must be unique.")
+    return out
+
+
+def _token_text(token: Any) -> str:
+    return str(getattr(token, "content", token))
 
 
 def _normalize_representation(representation: str) -> Representation:
@@ -112,7 +126,14 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             raise ValueError("Loaded vocabulary is None.")
 
         self.vocab_file = str(vocab_file) if vocab_file is not None else None
-        self.vocab = {str(token): int(idx) for token, idx in vocab.items()}
+        self.vocab = _coerce_vocab(vocab)
+        self._require_special_tokens(
+            bos_token=bos_token,
+            eos_token=eos_token,
+            unk_token=unk_token,
+            pad_token=pad_token,
+            mask_token=mask_token,
+        )
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
         self.representation = _normalize_representation(representation)
         self.vocabulary_frequency: dict[str, int] = {}
@@ -169,6 +190,23 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
 
     def update_reverse_vocabulary(self) -> None:
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
+
+    def _require_special_tokens(
+        self,
+        *,
+        bos_token: str,
+        eos_token: str,
+        unk_token: str,
+        pad_token: str,
+        mask_token: str,
+    ) -> None:
+        missing = [
+            token_text
+            for token in [bos_token, eos_token, unk_token, pad_token, mask_token]
+            if (token_text := _token_text(token)) not in self.vocab
+        ]
+        if missing:
+            raise ValueError(f"Vocabulary is missing required special tokens: {missing}")
 
     def pre_tokenize(self, molecule: str, representation: str | None = None) -> list[str]:
         return pre_tokenize_molecule(molecule, representation or self.representation)
@@ -380,7 +418,14 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             self.representation = _normalize_representation(representation)
         with open(file_path, encoding="utf-8") as f:
             vocab = json.load(f)
-        self.vocab = {str(token): int(idx) for token, idx in vocab.items()}
+        self.vocab = _coerce_vocab(vocab)
+        self._require_special_tokens(
+            bos_token=str(self.bos_token),
+            eos_token=str(self.eos_token),
+            unk_token=str(self.unk_token),
+            pad_token=str(self.pad_token),
+            mask_token=str(self.mask_token),
+        )
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
 
     def train(
@@ -409,6 +454,9 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             f"Pretokenization complete, found {len(vocabulary_frequency)} tokens",
             end="\r",
         )
+
+        if not tokenized_corpus:
+            raise ValueError("Cannot train APE tokenizer on an empty corpus.")
 
         pre_tokens_counts = len(vocabulary_frequency)
         merged_counter = len(vocabulary_frequency) + 1

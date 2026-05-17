@@ -4,7 +4,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from modernmolbert.eval.featurizers.base import FeatureBatch
-from modernmolbert.rdkit_safety import looks_like_smiles
+from modernmolbert.common.rdkit_safety import looks_like_smiles
 
 
 @dataclass(frozen=True)

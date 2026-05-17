@@ -1,6 +1,6 @@
 import pytest
 
-from modernmolbert.rdkit_safety import looks_like_smiles
+from modernmolbert.common.rdkit_safety import looks_like_smiles
 
 
 @pytest.mark.parametrize(

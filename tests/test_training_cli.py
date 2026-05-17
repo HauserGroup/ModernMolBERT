@@ -3,10 +3,14 @@ import sys
 
 import pytest
 import torch
+from datasets import Dataset
 
 from modernmolbert.train_ape_tokenizer import parse_args as parse_ape_args
 from modernmolbert.train_selfies_ape_modernbert import (
+    make_eval_dataset,
+    make_train_iterable_dataset,
     parse_args as parse_train_args,
+    sequence_bucket,
     validate_args,
 )
 
@@ -62,3 +66,42 @@ def test_validate_args_rejects_unsupported_cuda_bf16(monkeypatch):
 
     with pytest.raises(ValueError, match="Use --no-bf16"):
         validate_args(args, backend="cuda")
+
+
+def test_pretokenized_rows_use_stable_hash_split(monkeypatch):
+    rows = [
+        {"input_ids": [0, 5, 2]},
+        {"input_ids": [0, 6, 2]},
+    ]
+    validation_bucket = sequence_bucket("0,5,2", 100)
+    args = argparse.Namespace(
+        dataset_name="pretok",
+        train_split="train",
+        validation_split=None,
+        use_validation_split=False,
+        selfies_column="SELFIES",
+        data_dir=None,
+        data_files=None,
+        seed=13,
+        shuffle_buffer_size=100,
+        max_seq_length=8,
+        eval_size=4,
+        max_eval_batches=0,
+        per_device_eval_batch_size=2,
+        val_split_mod=100,
+        val_split_bucket=validation_bucket,
+    )
+
+    def _fake_stream(*args, **kwargs):
+        return Dataset.from_list(rows).to_iterable_dataset()
+
+    monkeypatch.setattr(
+        "modernmolbert.train_selfies_ape_modernbert.get_streaming_dataset",
+        _fake_stream,
+    )
+
+    train_rows = list(make_train_iterable_dataset(args, tokenizer=None))  # type: ignore[arg-type]
+    eval_dataset = make_eval_dataset(args, tokenizer=None)  # type: ignore[arg-type]
+
+    assert [row["input_ids"] for row in train_rows] == [[0, 6, 2]]
+    assert eval_dataset["input_ids"] == [[0, 5, 2]]

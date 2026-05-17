@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from modernmolbert.rdkit_safety import looks_like_smiles
+from modernmolbert.common.rdkit_safety import looks_like_smiles
 
 
 TaskType = Literal["classification", "regression"]

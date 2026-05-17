@@ -17,6 +17,25 @@ def test_ape_train_terminates_on_tiny_corpus():
     assert len(tokenizer.vocabulary) > len(tokenizer.special_tokens)
 
 
+def test_ape_train_rejects_empty_corpus() -> None:
+    tokenizer = APEPreTrainedTokenizer()
+
+    with pytest.raises(ValueError, match="empty corpus"):
+        tokenizer.train(corpus=[], max_vocab_size=32, min_freq_for_merge=2)
+
+
+def test_load_vocabulary_rejects_duplicate_ids(tmp_path) -> None:
+    vocab_path = tmp_path / "bad_vocab.json"
+    vocab_path.write_text(
+        '{"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<mask>": 3}',
+        encoding="utf-8",
+    )
+    tokenizer = APEPreTrainedTokenizer()
+
+    with pytest.raises(ValueError, match="unique"):
+        tokenizer.load_vocabulary_file(vocab_path)
+
+
 def test_ape_train_does_not_merge_across_molecule_boundaries():
     tokenizer = APEPreTrainedTokenizer()
     # Each sample has exactly one token; any pair merge would require crossing

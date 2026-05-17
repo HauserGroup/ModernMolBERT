@@ -8,7 +8,7 @@ from random import Random
 from typing import Any, Literal
 import warnings
 
-from modernmolbert.rdkit_safety import looks_like_smiles
+from modernmolbert.common.rdkit_safety import looks_like_smiles
 
 from .types import Dataset
 

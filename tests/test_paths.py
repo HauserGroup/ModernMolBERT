@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from modernmolbert.paths import find_project_root, project_path
+from modernmolbert.common.paths import find_project_root, project_path
 
 
 def test_find_project_root_from_repo_subdirectory(tmp_path: Path):

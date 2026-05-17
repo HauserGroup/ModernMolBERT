@@ -476,6 +476,27 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
     return rows
 
 
+def _pretokenized_example(row: dict[str, Any], max_seq_length: int | None) -> dict[str, list[int]]:
+    ids = [int(token_id) for token_id in row["input_ids"]]
+    if max_seq_length is not None and len(ids) > max_seq_length:
+        ids = ids[: max_seq_length - 1] + [ids[-1]]
+    return {"input_ids": ids, "attention_mask": [1] * len(ids)}
+
+
+def _split_key(row: dict[str, Any], selfies_column: str) -> str | None:
+    seq = normalize_sequence(row, selfies_column)
+    if seq is not None:
+        return seq
+    if "input_ids" in row:
+        return ",".join(str(int(token_id)) for token_id in row["input_ids"])
+    return None
+
+
+def _is_validation_row(row: dict[str, Any], args: argparse.Namespace) -> bool:
+    key = _split_key(row, args.selfies_column)
+    return key is not None and sequence_bucket(key, args.val_split_mod) == args.val_split_bucket
+
+
 def load_and_validate_tokenizer(
     args: argparse.Namespace,
 ) -> tuple[
@@ -592,23 +613,18 @@ def make_train_iterable_dataset(
     )
 
     def keep_train(row: dict[str, Any]) -> bool:
-        seq = normalize_sequence(row, args.selfies_column)
-        if seq is None:
-            return False
         if args.use_validation_split:
-            return True
-        return sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket
+            return normalize_sequence(row, args.selfies_column) is not None or "input_ids" in row
+        return not _is_validation_row(row, args)
 
     ds = ds.filter(keep_train)
 
     def preprocess(row: dict[str, Any]) -> dict[str, Any]:
         if "input_ids" in row:
-            ids = list(map(int, row["input_ids"]))
-            if args.max_seq_length is not None and len(ids) > args.max_seq_length:
-                ids = ids[: args.max_seq_length - 1] + [ids[-1]]
-            return {"input_ids": ids, "attention_mask": [1] * len(ids)}
+            return _pretokenized_example(row, args.max_seq_length)
         seq = normalize_sequence(row, args.selfies_column)
-        assert seq is not None
+        if seq is None:
+            raise ValueError(f"Training row is missing {args.selfies_column!r} and input_ids.")
         return encode_sequence(tokenizer, seq, args.max_seq_length)
 
     return ds.map(preprocess)
@@ -657,18 +673,11 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenize
         pretokenized = "input_ids" in row
         if seq is None and not pretokenized:
             continue
-        if (
-            not args.use_validation_split
-            and seq is not None
-            and sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket
-        ):
+        if not args.use_validation_split and not _is_validation_row(row, args):
             continue
 
         if pretokenized:
-            ids = list(map(int, row["input_ids"]))
-            if args.max_seq_length is not None and len(ids) > args.max_seq_length:
-                ids = ids[: args.max_seq_length - 1] + [ids[-1]]
-            rows.append({"input_ids": ids, "attention_mask": [1] * len(ids)})
+            rows.append(_pretokenized_example(row, args.max_seq_length))
         else:
             if seq is None:
                 continue

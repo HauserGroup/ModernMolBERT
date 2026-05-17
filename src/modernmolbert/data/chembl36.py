@@ -9,7 +9,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
 
-from modernmolbert.rdkit_safety import looks_like_smiles
+from modernmolbert.common.rdkit_safety import looks_like_smiles
 
 load_dotenv()
 

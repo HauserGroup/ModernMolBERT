@@ -28,6 +28,22 @@ SMILES_RE = re.compile(
 )
 
 
+def _base_piece_count(token: str, representation: str) -> int:
+    """Count primitive molecular pieces in a vocab token."""
+    pieces = pre_tokenize_molecule(token, representation)
+    return max(1, len(pieces))
+
+
+def _max_vocab_piece_span(vocab: dict[str, int], representation: str) -> int:
+    """Maximum number of primitive pieces covered by any non-special vocab token."""
+    max_span = 1
+    for token in vocab:
+        if token.startswith("<") and token.endswith(">"):
+            continue
+        max_span = max(max_span, _base_piece_count(token, representation))
+    return max_span
+
+
 def _coerce_vocab(vocab: Mapping[str, Any]) -> dict[str, int]:
     if not isinstance(vocab, Mapping):
         raise ValueError("Vocabulary must be a JSON object mapping token strings to integer IDs.")
@@ -70,23 +86,32 @@ def ape_tokenize(
     vocab: dict[str, int],
     representation: str,
     unk_token: str = "<unk>",
+    max_piece_span: int | None = None,
 ) -> list[str]:
     pieces = pre_tokenize_molecule(text, representation)
     if not pieces:
         return [unk_token]
 
+    if max_piece_span is None:
+        max_piece_span = _max_vocab_piece_span(vocab, representation)
+
+    n = len(pieces)
     tokens: list[str] = []
     i = 0
-    while i < len(pieces):
-        for j in range(len(pieces), i, -1):
-            possible_match = "".join(pieces[i:j])
-            if possible_match in vocab:
-                tokens.append(possible_match)
+
+    while i < n:
+        upper = min(n, i + max_piece_span)
+
+        for j in range(upper, i, -1):
+            candidate = "".join(pieces[i:j])
+            if candidate in vocab:
+                tokens.append(candidate)
                 i = j
                 break
         else:
             tokens.append(unk_token)
             i += 1
+
     return tokens
 
 
@@ -99,14 +124,14 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
     def __init__(
         self,
         vocab_file: str | os.PathLike[str] | None = None,
-        vocab: dict[str, int] | None = None,
+        vocab: dict[str, Any] | None = None,
         representation: str = "SELFIES",
         bos_token: str = "<s>",
         eos_token: str = "</s>",
         unk_token: str = "<unk>",
         pad_token: str = "<pad>",
         mask_token: str = "<mask>",
-        model_max_length: int = 256,
+        model_max_length: int = 128,
         **kwargs,
     ) -> None:
         if vocab is None:
@@ -138,6 +163,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         self.representation = _normalize_representation(representation)
         self.vocabulary_frequency: dict[str, int] = {}
         self.pair_counts: dict[tuple[str, str] | str, int] = {}
+        self._max_piece_span = _max_vocab_piece_span(self.vocab, self.representation)
 
         super().__init__(
             bos_token=bos_token,
@@ -161,8 +187,9 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
 
     @vocabulary.setter
     def vocabulary(self, value: dict[str, int]) -> None:
-        self.vocab = {str(token): int(idx) for token, idx in value.items()}
+        self.vocab = _coerce_vocab(value)
         self.update_reverse_vocabulary()
+        self._refresh_tokenization_cache()
 
     @property
     def special_tokens(self) -> dict[str, int]:
@@ -183,13 +210,18 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
     def special_tokens(self, value: dict[str, int]) -> None:
         for token, token_id in value.items():
             self.vocab.setdefault(str(token), int(token_id))
+        self.vocab = _coerce_vocab(self.vocab)
         self.update_reverse_vocabulary()
+        self._refresh_tokenization_cache()
 
     def get_vocab(self) -> dict[str, int]:
         return dict(self.vocab)
 
     def update_reverse_vocabulary(self) -> None:
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
+
+    def _refresh_tokenization_cache(self) -> None:
+        self._max_piece_span = _max_vocab_piece_span(self.vocab, self.representation)
 
     def _require_special_tokens(
         self,
@@ -212,12 +244,35 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         return pre_tokenize_molecule(molecule, representation or self.representation)
 
     def _tokenize(self, text: str, **kwargs) -> list[str]:
+
         return ape_tokenize(
             text,
             vocab=self.vocab,
             representation=self.representation,
             unk_token=str(self.unk_token),
+            max_piece_span=self._max_piece_span,
         )
+
+    def encode_molecule(
+        self,
+        text: str,
+        add_special_tokens: bool = True,
+        max_length: int | None = None,
+        truncation: bool = True,
+    ) -> list[int]:
+        """Fast molecular encode path avoiding generic Hugging Face tokenizer overhead."""
+
+        tokens = self._tokenize(text)
+
+        ids = [self._convert_token_to_id(token) for token in tokens]
+
+        if add_special_tokens:
+            ids = self.build_inputs_with_special_tokens(ids)
+
+        if max_length is not None and truncation:
+            ids = ids[:max_length]
+
+        return ids
 
     def _convert_token_to_id(self, token: str) -> int:
         return self.vocab.get(token, self.vocab[str(self.unk_token)])
@@ -358,6 +413,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
 
         if added:
             self.update_reverse_vocabulary()
+            self._refresh_tokenization_cache()
 
         return added
 
@@ -427,6 +483,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             mask_token=str(self.mask_token),
         )
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
+        self._refresh_tokenization_cache()
 
     def train(
         self,
@@ -562,7 +619,12 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             str(self.mask_token): 4,
             **{word: idx for idx, word in enumerate(vocabulary_frequency.keys(), start=5)},
         }
+
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
+        self._refresh_tokenization_cache()
+
+        checkpoint_dir = Path(checkpoint_path)
+
         print("\nTraining complete.")
 
     def train_from_iterator(self, iterator, *args, **kwargs) -> None:

@@ -71,6 +71,9 @@ class MolecularMLMCollator(DataCollatorMixin):
         eligible = [token_id for token_id in range(self.vocab_size) if token_id not in special_ids]
         self._eligible_replacement_ids = torch.tensor(eligible, dtype=torch.long)
 
+        if self.return_tensors != "pt":
+            raise ValueError("MolecularMLMCollator only supports return_tensors='pt'")
+
         if self.masking_strategy in {"span", "hetero_span"}:
             if not (0.0 < self.span_p_geom < 1.0):
                 raise ValueError("span_p_geom must be in (0, 1)")
@@ -88,6 +91,13 @@ class MolecularMLMCollator(DataCollatorMixin):
             self._token_start_weights = self._build_token_start_weights()
         else:
             self._token_start_weights = None
+
+    def __call__(self, features: list[dict[str, Any]], return_tensors: str | None = None):
+
+        if return_tensors is not None and return_tensors != "pt":
+            raise ValueError("MolecularMLMCollator only supports return_tensors='pt'")
+
+        return self.torch_call(features)
 
     def torch_call(self, features: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
         ids = [
@@ -117,16 +127,16 @@ class MolecularMLMCollator(DataCollatorMixin):
         labels[~masked_indices] = -100
 
         # 80% of selected tokens become mask tokens.
-        replace_draw = torch.rand(labels.shape)
+        replace_draw = torch.rand(labels.shape, device=labels.device)
         replace_with_mask = (replace_draw < 0.8) & masked_indices
         input_ids[replace_with_mask] = self.mask_token_id
 
         # 10% become random tokens.
         # Conditional probability is 0.5 among the remaining 20%, giving 10% overall.
-        random_draw = torch.rand(labels.shape)
+        random_draw = torch.rand(labels.shape, device=labels.device)
         replace_with_random = (random_draw < 0.5) & masked_indices & ~replace_with_mask
         if replace_with_random.any():
-            eligible_random_ids = self.eligible_random_token_ids(device=input_ids.device)
+            eligible_random_ids = self._eligible_random_token_ids(device=input_ids.device)
             random_indices = torch.randint(
                 low=0,
                 high=len(eligible_random_ids),
@@ -150,8 +160,12 @@ class MolecularMLMCollator(DataCollatorMixin):
         special_mask: torch.Tensor,
     ) -> torch.Tensor:
         eligible = (~special_mask) & attention_mask.bool()
-        masked_indices = (torch.rand(labels.shape) < self.mlm_probability) & eligible
+        masked_indices = (
+            torch.rand(labels.shape, device=labels.device) < self.mlm_probability
+        ) & eligible
 
+        # Ensure the batch has at least one MLM target. This mostly matters for
+        # very small batches or very short sequences.
         if self.mlm_probability > 0.0 and not masked_indices.any():
             eligible_positions = eligible.nonzero(as_tuple=False)
             if len(eligible_positions) > 0:
@@ -184,7 +198,7 @@ class MolecularMLMCollator(DataCollatorMixin):
             masked_indices[i] = row_mask
         return masked_indices
 
-    def eligible_random_token_ids(
+    def _eligible_random_token_ids(
         self,
         device: torch.device | None = None,
     ) -> torch.Tensor:
@@ -278,10 +292,10 @@ class MolecularMLMCollator(DataCollatorMixin):
             span_len = int(span_lengths[draw_idx].item())
             end = min(start + span_len, seq_len)
 
-            for pos in range(start, end):
-                if not attention_mask_row[pos].item() or special_mask_row[pos].item():
-                    end = pos
-                    break
+            invalid = (~attention_mask_row[start:end]) | special_mask_row[start:end]
+            first_invalid = invalid.nonzero(as_tuple=False)
+            if len(first_invalid) > 0:
+                end = start + int(first_invalid[0].item())
 
             if end <= start:
                 pos_weights[start_local] = 0.0

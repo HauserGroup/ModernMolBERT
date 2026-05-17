@@ -33,8 +33,8 @@ TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tok
 # ─── Fixed training hyperparameters ───────────────────────────────────────────
 # BUG FIX: MODEL_SIZE was "base" — the working, calibrated config is "small".
 MODEL_SIZE="small"
-MAX_SEQ_LENGTH=256
-MAX_STEPS=10000
+MAX_SEQ_LENGTH=128
+MAX_STEPS=30000
 EVAL_SIZE=4096
 MAX_EVAL_BATCHES=256
 

@@ -62,7 +62,6 @@ from modernmolbert.utils import (
 
 DATASET_NAME = PUBCHEM10M_DATASET
 torch.set_float32_matmul_precision("high")
-torch.backends.cuda.matmul.allow_tf32 = True
 torch._dynamo.config.assume_static_by_default = False
 
 
@@ -603,6 +602,11 @@ def make_train_iterable_dataset(
     ds = ds.filter(keep_train)
 
     def preprocess(row: dict[str, Any]) -> dict[str, Any]:
+        if "input_ids" in row:
+            ids = list(map(int, row["input_ids"]))
+            if args.max_seq_length is not None and len(ids) > args.max_seq_length:
+                ids = ids[: args.max_seq_length - 1] + [ids[-1]]
+            return {"input_ids": ids, "attention_mask": [1] * len(ids)}
         seq = normalize_sequence(row, args.selfies_column)
         assert seq is not None
         return encode_sequence(tokenizer, seq, args.max_seq_length)
@@ -650,15 +654,25 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenize
 
     for row in ds:
         seq = normalize_sequence(row, args.selfies_column)
-        if seq is None:
+        pretokenized = "input_ids" in row
+        if seq is None and not pretokenized:
             continue
         if (
             not args.use_validation_split
+            and seq is not None
             and sequence_bucket(seq, args.val_split_mod) != args.val_split_bucket
         ):
             continue
 
-        rows.append(encode_sequence(tokenizer, seq, args.max_seq_length))
+        if pretokenized:
+            ids = list(map(int, row["input_ids"]))
+            if args.max_seq_length is not None and len(ids) > args.max_seq_length:
+                ids = ids[: args.max_seq_length - 1] + [ids[-1]]
+            rows.append({"input_ids": ids, "attention_mask": [1] * len(ids)})
+        else:
+            if seq is None:
+                continue
+            rows.append(encode_sequence(tokenizer, seq, args.max_seq_length))
         pbar.update(1)
         if len(rows) >= n_eval:
             break
@@ -955,7 +969,7 @@ LOCAL_MODERNBERT_PRESETS = {
         "hidden_size": 512,
         "num_hidden_layers": 8,
         "num_attention_heads": 8,
-        "intermediate_size": 768,
+        "intermediate_size": 2048,
         "global_attn_every_n_layers": 3,
         "local_attention": 128,
     },
@@ -964,7 +978,7 @@ LOCAL_MODERNBERT_PRESETS = {
         "hidden_size": 512,
         "num_hidden_layers": 10,
         "num_attention_heads": 8,
-        "intermediate_size": 768,
+        "intermediate_size": 2048,
         "global_attn_every_n_layers": 3,
         "local_attention": 128,
     },
@@ -992,6 +1006,14 @@ def build_modernbert_config(
         ]
     else:
         config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
+
+    try:
+        import flash_attn  # type: ignore # noqa
+
+        config._attn_implementation = "flash_attention_2"
+    except ImportError:
+        pass
+
     # Molecular tokenizer-specific fields.
     config.vocab_size = vocab_size
     config.pad_token_id = special_ids["pad_token"]

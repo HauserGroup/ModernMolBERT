@@ -21,7 +21,7 @@
 set -euo pipefail
 
 # ─── Dataset ──────────────────────────────────────────────────────────────────
-DATASET_NAME="data/pretrain/chembl36_selfies"
+DATASET_NAME="data/pretrain/chembl36_selfies_tokenized"
 SELFIES_COLUMN="selfies"
 TRAIN_SPLIT="train"
 VALIDATION_SPLIT="valid"
@@ -34,21 +34,21 @@ TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tok
 # BUG FIX: MODEL_SIZE was "base" — the working, calibrated config is "small".
 MODEL_SIZE="small"
 MAX_SEQ_LENGTH=256
-MAX_STEPS=30000
+MAX_STEPS=10000
 EVAL_SIZE=4096
 MAX_EVAL_BATCHES=256
 
 # BUG FIX: was PER_DEVICE_TRAIN_BATCH_SIZE=8 / GRADIENT_ACCUMULATION_STEPS=8.
 # Confirmed stable at batch=64/accum=1 (effective batch 64, 14% GPU util on A100).
-PER_DEVICE_TRAIN_BATCH_SIZE=64
-PER_DEVICE_EVAL_BATCH_SIZE=64
+PER_DEVICE_TRAIN_BATCH_SIZE=256
+PER_DEVICE_EVAL_BATCH_SIZE=256
 GRADIENT_ACCUMULATION_STEPS=1
 
 WARMUP_STEPS=1500          # 5% of MAX_STEPS — correct for AdamW
 WEIGHT_DECAY=0.01
 MAX_GRAD_NORM=1.0
-SAVE_STEPS=2000
-EVAL_STEPS=2000
+SAVE_STEPS=5000
+EVAL_STEPS=5000
 LOGGING_STEPS=100
 
 # BUG FIX: SAVE_TOTAL_LIMIT was 5; with 27 runs that is 135 checkpoint dirs.
@@ -154,8 +154,8 @@ for run_spec in "${PENDING[@]}"; do
   uv run accelerate launch \
     --num_processes 1 \
     --num_machines 1 \
-    --dynamo_backend inductor \
-    --mixed_precision fp16 \
+    --dynamo_backend no \
+    --mixed_precision bf16 \
     -m modernmolbert.train_selfies_ape_modernbert \
     --dataset_name        "${DATASET_NAME}" \
     --selfies_column      "${SELFIES_COLUMN}" \
@@ -186,12 +186,10 @@ for run_spec in "${PENDING[@]}"; do
     --save_total_limit    "${SAVE_TOTAL_LIMIT}" \
     --num_workers         "${NUM_WORKERS}" \
     --seed                "${SEED}" \
-    --run_name            "${run_name}" \
-    --no-bf16 \
-    --fp16 \
+    --bf16 \
     --compute_masked_accuracy \
     --report_to tensorboard \
-    >> "${log_file}" 2>&1
+    2>&1 | tee "${log_file}"
 
   echo "  Done: ${run_name}"
 done

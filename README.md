@@ -423,7 +423,7 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 Then load the saved directory with `AutoTokenizer.from_pretrained(..., trust_remote_code=True)`.
 
 
-# Masking Stategy
+# Masking Strategy
 Masking strategy controls which molecular tokens are hidden during MLM pretraining.
 
 standard:
@@ -669,6 +669,19 @@ uv run python -m modernmolbert.eval.cli.run_benchmark_suite
 ```
 
 Avoid comparing results from older direct embedding/sklearn paths.
+
+## With CUDA
+
+```bash
+install-cuda:
+	uv sync
+	uv pip install flash-attn --no-build-isolation
+
+install:
+	uv sync
+
+
+```
 
 ## Development principles
 

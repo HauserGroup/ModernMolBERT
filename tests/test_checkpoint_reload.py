@@ -75,17 +75,16 @@ def test_end_to_end_save_and_reload_with_tokenizer_artifacts(tmp_path: Path):
     copy_tokenizer_artifacts(vocab_path, metadata_path, output_dir, final_model_dir)
 
     for expected in [
-        "tokenizer.json",
         "vocab.json",
-        "tokenizer_config.json",
-        "special_tokens_map.json",
-        "tokenization_ape.py",
+        "tokenizer_metadata.json",
         "ape_tokenizer/vocab.json",
         "ape_tokenizer/tokenizer_config.json",
         "ape_tokenizer/special_tokens_map.json",
         "ape_tokenizer/tokenization_ape.py",
     ]:
         assert (final_model_dir / expected).exists()
+    assert not (final_model_dir / "tokenizer.json").exists()
+    assert not (final_model_dir / "tokenizer_config.json").exists()
 
     reloaded_model = AutoModelForMaskedLM.from_pretrained(str(final_model_dir))
     reloaded_tokenizer = AutoTokenizer.from_pretrained(

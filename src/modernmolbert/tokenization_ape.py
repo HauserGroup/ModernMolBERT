@@ -106,7 +106,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         unk_token: str = "<unk>",
         pad_token: str = "<pad>",
         mask_token: str = "<mask>",
-        model_max_length: int = 512,
+        model_max_length: int = 256,
         **kwargs,
     ) -> None:
         if vocab is None:
@@ -381,9 +381,9 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                 tokenizer_config = json.load(f)
         else:
             tokenizer_config = {}
+        tokenizer_config.pop("tokenizer_class", None)
         tokenizer_config.update(
             {
-                "tokenizer_class": self.__class__.__name__,
                 "representation": self.representation,
                 "model_max_length": self.model_max_length,
                 "auto_map": {

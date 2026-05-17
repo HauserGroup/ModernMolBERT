@@ -209,10 +209,9 @@ def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
 
     Supported inputs:
     - directory containing ape_tokenizer/ AutoTokenizer artifacts
-    - directory containing tokenizer.json
     - directory containing vocab.json
-    - direct path to tokenizer.json
     - direct path to vocab.json
+    - legacy direct path to an APE vocabulary JSON with any filename
     """
 
     path = Path(path)
@@ -233,13 +232,7 @@ def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
                 raise TypeError(f"Expected APEPreTrainedTokenizer, got {type(loaded)!r}")
             return loaded
 
-        tokenizer_json = path / "tokenizer.json"
         vocab_json = path / "vocab.json"
-
-        if tokenizer_json.exists():
-            tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
-            tokenizer.load_vocabulary_file(tokenizer_json)
-            return tokenizer
 
         if vocab_json.exists():
             tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
@@ -247,7 +240,7 @@ def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
             return tokenizer
 
         raise FileNotFoundError(
-            f"No tokenizer vocabulary found in {path}. Expected tokenizer.json or vocab.json."
+            f"No tokenizer vocabulary found in {path}. Expected ape_tokenizer/ or vocab.json."
         )
 
     raise FileNotFoundError(f"Tokenizer path does not exist: {path}")

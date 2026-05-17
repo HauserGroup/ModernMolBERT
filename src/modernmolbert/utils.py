@@ -329,20 +329,18 @@ def copy_tokenizer_artifacts(
     output_dir.mkdir(parents=True, exist_ok=True)
     final_model_dir.mkdir(parents=True, exist_ok=True)
 
-    # Keep stable artifact names regardless of original file names.
-    shutil.copy2(vocab_path, output_dir / "tokenizer.json")
-    shutil.copy2(metadata_path, output_dir / "tokenizer_metadata.json")
-    shutil.copy2(vocab_path, final_model_dir / "tokenizer.json")
-    shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")
-
     metadata = load_tokenizer_metadata(metadata_path)
     representation = str(metadata.get("representation", SELFIES_REPRESENTATION))
     tokenizer = APEPreTrainedTokenizer(representation=representation)
     tokenizer.load_vocabulary_file(vocab_path, representation=representation)
-    tokenizer.save_pretrained(str(output_dir))
-    tokenizer.save_pretrained(str(final_model_dir))
+
+    tokenizer.save_vocabulary(str(output_dir))
+    tokenizer.save_vocabulary(str(final_model_dir))
     tokenizer.save_pretrained(str(output_dir / "ape_tokenizer"))
     tokenizer.save_pretrained(str(final_model_dir / "ape_tokenizer"))
+
+    shutil.copy2(metadata_path, output_dir / "tokenizer_metadata.json")
+    shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")
 
 
 def assert_metadata_representation(metadata: dict[str, Any], expected_representation: str) -> None:

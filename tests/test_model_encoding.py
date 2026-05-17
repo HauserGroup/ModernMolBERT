@@ -37,7 +37,7 @@ def test_existing_minimal_model_encoder_output(existing_minimal_model: Path) -> 
         tok = AutoTokenizer.from_pretrained(tokenizer_dir, trust_remote_code=True)
     else:
         tok = APEPreTrainedTokenizer()
-        tok.load_vocabulary_file(existing_minimal_model / "tokenizer.json")
+        tok.load_vocabulary_file(existing_minimal_model / "vocab.json")
 
     if verbose:
         print(f"\n[encoder-test] model_dir={existing_minimal_model}")

@@ -136,7 +136,7 @@ from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 import torch
 
 model_dir = {str(final_model)!r}
-tokenizer_path = {str(final_model / "tokenizer.json")!r}
+tokenizer_path = {str(final_model / "vocab.json")!r}
 
 model = AutoModelForMaskedLM.from_pretrained(model_dir)
 model.eval()
@@ -275,7 +275,7 @@ def test_mps_base_smoke_training(tmp_path: Path) -> None:
     assert final_model.exists()
     assert (final_model / "config.json").exists()
     assert any(final_model.glob("*.safetensors")) or (final_model / "pytorch_model.bin").exists()
-    assert (final_model / "tokenizer.json").exists()
+    assert (final_model / "vocab.json").exists()
 
     reload_code = f"""
 from transformers import AutoModelForMaskedLM, AutoTokenizer

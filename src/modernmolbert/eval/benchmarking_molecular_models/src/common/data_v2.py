@@ -70,11 +70,14 @@ def suppress_outdated_pkg_resources_warning():
 
 
 def ogb_solver(name: str, root: str) -> tuple[pd.DataFrame, Splits]:
+    """
+    Solve an OGB dataset. We don't really do graphs
+    """
     with suppress_outdated_pkg_resources_warning():
         try:
-            from ogb.graphproppred import PygGraphPropPredDataset as GraphDataset
+            from ogb.graphproppred import PygGraphPropPredDataset as GraphDataset  # type: ignore[import]
         except ImportError:
-            from ogb.graphproppred import GraphPropPredDataset as GraphDataset
+            from ogb.graphproppred import GraphPropPredDataset as GraphDataset  # type: ignore[import]
 
         with torch_load_with_legacy_ogb_defaults():
             dataset: Any = GraphDataset(name=name, root=root)

@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from modernmolbert.train_selfies_ape_modernbert import MolecularMLMCollator
+from modernmolbert.collator import MolecularMLMCollator
 
 
 # ---------------------------------------------------------------------------

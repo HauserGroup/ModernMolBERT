@@ -22,7 +22,7 @@ def find_existing_minimal_model() -> Path | None:
         if (
             path.exists()
             and (path / "config.json").exists()
-            and (path / "tokenizer.json").exists()
+            and ((path / "ape_tokenizer").exists() or (path / "vocab.json").exists())
             and (any(path.glob("*.safetensors")) or (path / "pytorch_model.bin").exists())
         ):
             return path

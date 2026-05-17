@@ -60,6 +60,7 @@ src/modernmolbert/
   train_ape_tokenizer.py               # tokenizer training CLI
   validate_tokenizer.py                # tokenizer validation CLI
   train_selfies_ape_modernbert.py      # MLM pretraining CLI
+  collator.py                          # MolecularMLMCollator (standard / span / hetero_span)
   paths.py                             # repository-relative path helpers
   utils.py                             # shared dataset/tokenizer helpers
 
@@ -415,23 +416,47 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 Then load the saved directory with `AutoTokenizer.from_pretrained(..., trust_remote_code=True)`.
 
 
-# Masking Strategy
-Masking strategy controls which molecular tokens are hidden during MLM pretraining.
+## Collator
 
-standard:
-  Independently samples individual APE tokens for prediction.
+`MolecularMLMCollator` is a `DataCollatorMixin` subclass used as the MLM data collator
+during pretraining. Pass it directly to `Trainer` or any PyTorch `DataLoader`.
 
-span:
-  Samples short contiguous spans of APE tokens until the masking budget is reached.
-  This asks the model to reconstruct local molecular fragments.
+```python
+from modernmolbert.collator import MolecularMLMCollator
 
-hetero_span:
-  Same as span masking, but span starts are biased toward tokens containing
-  heteroatoms such as N, O, S, P, halogens, Se, or Si. This focuses more MLM
-  signal on functional-group-rich regions.
+collator = MolecularMLMCollator(
+    pad_token_id=tokenizer.pad_token_id,
+    mask_token_id=tokenizer.mask_token_id,
+    vocab_size=len(tokenizer),
+    mlm_probability=0.15,
+    special_token_ids=[tokenizer.bos_token_id, tokenizer.eos_token_id,
+                       tokenizer.pad_token_id, tokenizer.unk_token_id,
+                       tokenizer.mask_token_id],
+    masking_strategy="hetero_span",          # "standard" | "span" | "hetero_span"
+    ids_to_tokens=tokenizer.ids_to_tokens,   # required for hetero_span weight table
+)
 
-After positions are selected, all strategies use the BERT corruption rule:
-80% replaced with <mask>, 10% replaced with a random token, and 10% left unchanged.
+# Direct use
+batch = collator([{"input_ids": [0, 5, 6, 7, 8, 2]},
+                  {"input_ids": [0, 9, 10, 2]}])
+# -> {"input_ids": Tensor, "attention_mask": Tensor, "labels": Tensor}
+
+# Or pass to Trainer
+trainer = Trainer(..., data_collator=collator)
+```
+
+Three masking strategies are available:
+
+| Strategy | Description |
+|---|---|
+| `standard` | Independent Bernoulli per eligible token (original BERT) |
+| `span` | Contiguous spans sampled from Geometric(`span_p_geom`), clamped to `span_max_length` |
+| `hetero_span` | Span masking with start positions weighted toward heteroatom-containing tokens |
+
+All strategies apply the BERT corruption rule after position selection: 80% `<mask>`,
+10% random token, 10% unchanged. Special tokens and padding are never masked.
+
+See [docs/masking_strategies.md](docs/masking_strategies.md) for design rationale.
 
 ## Evaluation workflow
 

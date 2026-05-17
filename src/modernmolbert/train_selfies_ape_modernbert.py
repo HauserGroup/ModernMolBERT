@@ -412,10 +412,10 @@ def preview_dataset_and_tokenizer(
     log(f"Use validation split: {args.use_validation_split}")
     if args.data_files is not None:
         log(f"Dataset mode: parquet data_files={args.data_files}")
+    elif local is not None:
+        log(f"Dataset mode: local dataset at {local}")
     else:
-        log(
-            f"Dataset mode: {'local (from disk): ' + str(local) if local else 'streaming (HF Hub)'}"
-        )
+        log("No clue where the data is coming from")
     log(f"Representation: {SELFIES_REPRESENTATION}")
 
     for i, seq in enumerate(examples, start=1):

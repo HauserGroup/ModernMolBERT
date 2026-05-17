@@ -1,15 +1,69 @@
 #!/usr/bin/env python3
 """Train an APE tokenizer for SELFIES and emit metadata.
 
+# Conservative
 uv run python -m modernmolbert.train_ape_tokenizer \
-  --output_vocab_path tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json \
-  --dataset_name data/pretrain/chembl36_selfies \
+  --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max4.json \
+  --dataset_name data/pretrain/chembl36_selfies_tokenized \
   --selfies_column selfies \
-  --data_files data/pretrain/chembl36_selfies/train.parquet \
-  --tokenizer_train_size 2000000 \
+  --representation SELFIES \
+  --tokenizer_train_size 500000 \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt &
+  --max_merge_pieces 4 \
+  --seed 42
+
+# Moderate
+  uv run python -m modernmolbert.train_ape_tokenizer \
+  --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max8.json \
+  --dataset_name data/pretrain/chembl36_selfies_tokenized \
+  --selfies_column selfies \
+  --representation SELFIES \
+  --tokenizer_train_size 500000 \
+  --max_vocab_size 5000 \
+  --min_freq_for_merge 2000 \
+  --max_merge_pieces 8 \
+  --seed 42
+
+# Validate
+uv run python -m modernmolbert.validate_tokenizer \
+  --dataset_name data/pretrain/chembl36_selfies_tokenized \
+  --selfies_column selfies \
+  --split train \
+  --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max8.json \
+  --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max8.metadata.json \
+  --n 10000 \
+  --max_seq_length 256
+
+# Ideally
+mean_len: 25–60
+p95_len: <150
+unk_rate: 0
+truncation_rate@256: ~0
+
+# Or
+
+unk_rate = 0
+mostly_unknown_rate = 0
+truncation_rate@256 ≈ 0
+mean_len not absurdly low
+p95 comfortably below 256
+
+max8: mean_len ≈ 20–50, p95 < 150
+max4: mean_len ≈ 35–80, p95 < 200
+
+mean_len still around 10–15 for max8
+  → still too compressed
+
+mean_len above 100 with high p95 for max4
+  → maybe too fragmented/slow
+
+unk_rate > 0
+  → coverage problem
+
+large difference between ChEMBL validation and benchmark molecules
+  → add missing symbols or broaden tokenizer corpus
+
 """
 
 import argparse
@@ -120,6 +174,15 @@ def parse_args() -> argparse.Namespace:
             "already have a symbol list."
         ),
     )
+    parser.add_argument(
+        "--max_merge_pieces",
+        type=int,
+        default=8,
+        help=(
+            "Maximum number of primitive SELFIES/SMILES pieces allowed in one learned "
+            "APE merge token. Use 0 or negative to disable."
+        ),
+    )
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument(
@@ -204,14 +267,22 @@ def main() -> None:
 
     validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
 
+    max_merge_pieces = args.max_merge_pieces
+    if max_merge_pieces is not None and max_merge_pieces <= 0:
+        max_merge_pieces = None
+
     tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
     tokenizer.train(
-        corpus,
-        max_vocab_size=args.max_vocab_size,
-        min_freq_for_merge=args.min_freq_for_merge,
-        save_checkpoint=args.save_checkpoint,
-        checkpoint_path=args.checkpoint_path,
-        checkpoint_interval=args.checkpoint_interval,
+        tokenizer.train(
+            corpus,
+            representation=args.representation,
+            max_vocab_size=args.max_vocab_size,
+            min_freq_for_merge=args.min_freq_for_merge,
+            max_merge_pieces=max_merge_pieces,
+            save_checkpoint=args.save_checkpoint,
+            checkpoint_path=args.checkpoint_path,
+            checkpoint_interval=args.checkpoint_interval,
+        )
     )
 
     extra_symbols = load_extra_vocab_symbols(
@@ -254,6 +325,7 @@ def main() -> None:
         "special_ids": special_ids,
         "tokenizer_path": str(output_vocab_path),
         "tokenizer_sha256": vocab_sha256,
+        "max_merge_pieces": max_merge_pieces,
         "extra_vocab_symbols_path": (
             str(args.extra_vocab_symbols_path)
             if args.extra_vocab_symbols_path is not None

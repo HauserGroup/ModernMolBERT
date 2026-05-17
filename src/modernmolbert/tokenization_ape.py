@@ -131,7 +131,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         unk_token: str = "<unk>",
         pad_token: str = "<pad>",
         mask_token: str = "<mask>",
-        model_max_length: int = 128,
+        model_max_length: int = 256,
         **kwargs,
     ) -> None:
         if vocab is None:
@@ -492,6 +492,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         representation: str | None = None,
         max_vocab_size: int = 5000,
         min_freq_for_merge: int = 2000,
+        max_merge_pieces: int | None = 8,
         save_checkpoint: bool = False,
         checkpoint_path: str = "checkpoint",
         checkpoint_interval: int = 500,
@@ -519,12 +520,27 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         merged_counter = len(vocabulary_frequency) + 1
         checkpoint_increment = checkpoint_interval
         batch = checkpoint_interval + pre_tokens_counts
+        piece_count_cache: dict[str, int] = {}
+
+        def merged_piece_count(token: str) -> int:
+            count = piece_count_cache.get(token)
+            if count is None:
+                count = _base_piece_count(token, self.representation)
+                piece_count_cache[token] = count
+            return count
 
         def get_most_common_pair(tokenized):
             pair_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
             for tokens in tokenized:
                 for i in range(len(tokens) - 1):
-                    pair_counts[(tokens[i], tokens[i + 1])] += 1
+                    pair = (tokens[i], tokens[i + 1])
+
+                    if max_merge_pieces is not None:
+                        merged_candidate = "".join(pair)
+                        if merged_piece_count(merged_candidate) > max_merge_pieces:
+                            continue
+
+                    pair_counts[pair] += 1
 
             merged_pair_counts: dict[tuple[str, str] | str, int] = {
                 pair: count for pair, count in pair_counts.items()
@@ -554,6 +570,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                     },
                 }
                 self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
+                self._refresh_tokenization_cache()
                 checkpoint_dir = Path(checkpoint_path)
                 checkpoint_dir.mkdir(parents=True, exist_ok=True)
                 self.save_vocabulary_file(checkpoint_dir / f"checkpoint_{batch}.json")
@@ -624,8 +641,6 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         self._refresh_tokenization_cache()
 
         checkpoint_dir = Path(checkpoint_path)
-
-        print("\nTraining complete.")
 
     def train_from_iterator(self, iterator, *args, **kwargs) -> None:
         raise NotImplementedError("train_from_iterator is not implemented for APE")

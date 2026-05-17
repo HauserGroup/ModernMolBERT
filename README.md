@@ -300,12 +300,8 @@ Each training run writes:
 output_dir/
   run_args.json
   run_metadata.json
-  tokenizer.json
   tokenizer_metadata.json
   vocab.json
-  tokenizer_config.json
-  special_tokens_map.json
-  tokenization_ape.py
   ape_tokenizer/
     vocab.json
     tokenizer_config.json
@@ -316,12 +312,8 @@ output_dir/
   final_model/
     config.json
     model.safetensors
-    tokenizer.json
     tokenizer_metadata.json
     vocab.json
-    tokenizer_config.json
-    special_tokens_map.json
-    tokenization_ape.py
     ape_tokenizer/
       vocab.json
       tokenizer_config.json

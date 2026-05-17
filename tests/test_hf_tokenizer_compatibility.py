@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import torch
@@ -70,6 +71,10 @@ def test_auto_tokenizer_loads_custom_ape_tokenizer_for_selfies_and_smiles(tmp_pa
         tokenizer, text = _tokenizer_for_representation(representation)
         tokenizer_dir = tmp_path / representation.lower()
         tokenizer.save_pretrained(str(tokenizer_dir))
+
+        tokenizer_config = json.loads((tokenizer_dir / "tokenizer_config.json").read_text())
+        assert "tokenizer_class" not in tokenizer_config
+        assert tokenizer_config["auto_map"]["AutoTokenizer"][0].endswith("APEPreTrainedTokenizer")
 
         loaded = AutoTokenizer.from_pretrained(
             tokenizer_dir,

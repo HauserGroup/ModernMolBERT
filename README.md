@@ -716,3 +716,19 @@ install:
 ## Citation
 
 If you use this work, please cite the accompanying paper. See [`CITATION.cff`](CITATION.cff) or use the “Cite this repository” button on GitHub.
+
+## References
+
+**Span and hetero-span masking** take inspiration from:
+
+> Peng, T., Li, Y., Li, X., Bian, J., Xie, Z., Sui, N., Mumtaz, S., Xu, Y., Kong, L., & Xiong, H. (2025).
+> Pre-trained molecular language models with random functional group masking.
+> *npj Artificial Intelligence*, 1, 28.
+> https://doi.org/10.1038/s44387-025-00029-3
+
+**APE tokenizer** is based on:
+
+> Leon, M., Perezhohin, Y., Peres, F. et al. (2024).
+> Comparing SMILES and SELFIES tokenization for enhanced chemical language modeling.
+> *Scientific Reports*, 14, 25016.
+> https://doi.org/10.1038/s41598-024-76440-8

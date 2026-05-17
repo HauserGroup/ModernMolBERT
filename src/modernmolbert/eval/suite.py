@@ -264,6 +264,7 @@ def run_benchmark_suite(
     output_dir: str | Path,
     cache_dir: str | Path | None = None,
     write_single_run_outputs: bool = False,
+    write_predictions: bool = False,
 ) -> pd.DataFrame:
     """Run a full benchmark suite and write aggregate outputs."""
 
@@ -327,6 +328,15 @@ def run_benchmark_suite(
                         featurizer=featurizer,
                         output_dir=single_output_dir,
                         eval_split=suite.eval_split,
+                        write_predictions=write_predictions,
+                        prediction_dir=output_dir / "predictions",
+                        run_context={
+                            "downstream_name": downstream_cfg.name,
+                            "downstream_model": downstream_config.model_type,
+                            "seed": seed,
+                            "dataset_index": dataset_index,
+                            "featurizer_index": featurizer_index,
+                        },
                     )
 
                     all_rows.extend(
@@ -385,6 +395,8 @@ def run_benchmark_suite(
         "batch_size": suite.batch_size,
         "use_cache": suite.use_cache,
         "cache_dir": str(resolved_cache_dir),
+        "write_predictions": write_predictions,
+        "predictions_dir": str(output_dir / "predictions") if write_predictions else None,
         "n_result_rows": int(len(results)),
         "n_skipped_rows": int(len(skipped)),
         "runs": run_records,

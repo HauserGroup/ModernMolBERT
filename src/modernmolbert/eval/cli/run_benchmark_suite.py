@@ -45,6 +45,14 @@ def parse_args() -> argparse.Namespace:
             "Useful for debugging, but can create many files."
         ),
     )
+    parser.add_argument(
+        "--write_predictions",
+        action="store_true",
+        help=(
+            "Also write per-task prediction arrays and sidecar metadata under "
+            "<output_dir>/predictions/."
+        ),
+    )
 
     return parser.parse_args()
 
@@ -90,12 +98,15 @@ def main() -> None:
             output_dir=args.output_dir,
             cache_dir=args.cache_dir,
             write_single_run_outputs=args.write_single_run_outputs,
+            write_predictions=args.write_predictions,
         )
 
         print("Done.", flush=True)
         print(f"Result rows: {len(results)}", flush=True)
         print(f"Results CSV: {args.output_dir / 'results.csv'}", flush=True)
         print(f"Manifest: {args.output_dir / 'manifest.json'}", flush=True)
+        if args.write_predictions:
+            print(f"Predictions: {args.output_dir / 'predictions'}", flush=True)
 
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr, flush=True)

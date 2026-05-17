@@ -43,6 +43,23 @@ class TaskSkip:
 
 
 @dataclass(frozen=True)
+class TaskPredictionArtifact:
+    dataset: str
+    task: str
+    task_type: str
+    split: str
+    featurizer: str
+    y_true: np.ndarray
+    y_pred: np.ndarray
+    y_score: np.ndarray | None
+    eval_original_index: np.ndarray
+    metrics: dict[str, float]
+    downstream_metadata: dict[str, Any] = field(default_factory=dict)
+    n_eval_total: int = 0
+    n_eval: int = 0
+
+
+@dataclass(frozen=True)
 class AlignedTaskData:
     X_train: np.ndarray
     y_train: np.ndarray
@@ -154,6 +171,36 @@ def evaluate_single_task(
 ) -> tuple[TaskResult | None, TaskSkip | None]:
     """Fit/evaluate one task or return a structured skip."""
 
+    task_result, task_skip, _ = evaluate_single_task_with_predictions(
+        dataset_name=dataset_name,
+        task=task,
+        task_type=task_type,
+        eval_split=eval_split,
+        featurizer_name=featurizer_name,
+        train_frame=train_frame,
+        eval_frame=eval_frame,
+        train_features=train_features,
+        eval_features=eval_features,
+        downstream_config=downstream_config,
+    )
+    return task_result, task_skip
+
+
+def evaluate_single_task_with_predictions(
+    *,
+    dataset_name: str,
+    task: str,
+    task_type: str,
+    eval_split: str,
+    featurizer_name: str,
+    train_frame: pd.DataFrame,
+    eval_frame: pd.DataFrame,
+    train_features: FeatureBatch,
+    eval_features: FeatureBatch,
+    downstream_config: FrozenDownstreamConfig,
+) -> tuple[TaskResult | None, TaskSkip | None, TaskPredictionArtifact | None]:
+    """Fit/evaluate one task and keep optional prediction arrays out-of-band."""
+
     aligned = align_task_data(
         task=task,
         train_frame=train_frame,
@@ -163,21 +210,29 @@ def evaluate_single_task(
     )
 
     if len(aligned.y_train) == 0:
-        return None, make_task_skip(
-            dataset_name=dataset_name,
-            task=task,
-            eval_split=eval_split,
-            reason="no_train_rows_after_label_and_feature_filtering",
-            aligned=aligned,
+        return (
+            None,
+            make_task_skip(
+                dataset_name=dataset_name,
+                task=task,
+                eval_split=eval_split,
+                reason="no_train_rows_after_label_and_feature_filtering",
+                aligned=aligned,
+            ),
+            None,
         )
 
     if len(aligned.y_eval) == 0:
-        return None, make_task_skip(
-            dataset_name=dataset_name,
-            task=task,
-            eval_split=eval_split,
-            reason="no_eval_rows_after_label_and_feature_filtering",
-            aligned=aligned,
+        return (
+            None,
+            make_task_skip(
+                dataset_name=dataset_name,
+                task=task,
+                eval_split=eval_split,
+                reason="no_eval_rows_after_label_and_feature_filtering",
+                aligned=aligned,
+            ),
+            None,
         )
 
     if task_type == "classification":
@@ -185,12 +240,16 @@ def evaluate_single_task(
         y_eval = aligned.y_eval.astype(int)
 
         if len(np.unique(y_train)) < 2:
-            return None, make_task_skip(
-                dataset_name=dataset_name,
-                task=task,
-                eval_split=eval_split,
-                reason="classification_train_has_single_class",
-                aligned=aligned,
+            return (
+                None,
+                make_task_skip(
+                    dataset_name=dataset_name,
+                    task=task,
+                    eval_split=eval_split,
+                    reason="classification_train_has_single_class",
+                    aligned=aligned,
+                ),
+                None,
             )
 
     elif task_type == "regression":
@@ -215,7 +274,7 @@ def evaluate_single_task(
         y_score=pred.y_score,
     )
 
-    return TaskResult(
+    result = TaskResult(
         dataset=dataset_name,
         task=task,
         task_type=task_type,
@@ -233,4 +292,22 @@ def evaluate_single_task(
             "train": train_features.metadata,
             "eval": eval_features.metadata,
         },
-    ), None
+    )
+
+    prediction_artifact = TaskPredictionArtifact(
+        dataset=dataset_name,
+        task=task,
+        task_type=task_type,
+        split=eval_split,
+        featurizer=featurizer_name,
+        y_true=np.asarray(y_eval),
+        y_pred=np.asarray(pred.y_pred),
+        y_score=None if pred.y_score is None else np.asarray(pred.y_score),
+        eval_original_index=np.flatnonzero(aligned.eval_keep_original).astype(np.int64),
+        metrics=metrics,
+        downstream_metadata=pred.metadata,
+        n_eval_total=int(len(eval_frame)),
+        n_eval=int(len(y_eval)),
+    )
+
+    return result, None, prediction_artifact

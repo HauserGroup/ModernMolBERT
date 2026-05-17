@@ -6,7 +6,13 @@ import pytest
 
 from modernmolbert.eval.downstream import FrozenDownstreamConfig
 from modernmolbert.eval.featurizers.base import FeatureBatch
-from modernmolbert.eval.task_eval import TaskResult, TaskSkip, align_task_data, evaluate_single_task
+from modernmolbert.eval.task_eval import (
+    TaskResult,
+    TaskSkip,
+    align_task_data,
+    evaluate_single_task,
+    evaluate_single_task_with_predictions,
+)
 
 
 def test_align_task_data_filters_missing_labels_and_invalid_features() -> None:
@@ -137,6 +143,144 @@ def test_evaluate_single_task_classification_success() -> None:
     assert result.task == "label"
     assert "accuracy" in result.metrics
     assert result.downstream_metadata["downstream_model"] == "logistic_regression"
+
+
+def test_evaluate_single_task_classification_prediction_artifact() -> None:
+    train = pd.DataFrame(
+        {
+            "smiles": ["a", "b", "c", "d"],
+            "label": [0.0, 0.0, 1.0, 1.0],
+        }
+    )
+    eval_frame = pd.DataFrame(
+        {
+            "smiles": ["e", "f", "g"],
+            "label": [0.0, np.nan, 1.0],
+        }
+    )
+
+    train_features = FeatureBatch(
+        X=np.array(
+            [
+                [0.0, 0.0],
+                [0.1, 0.0],
+                [1.0, 1.0],
+                [1.1, 1.0],
+            ],
+            dtype=np.float32,
+        ),
+        valid_mask=np.array([True, True, True, True]),
+    )
+    eval_features = FeatureBatch(
+        X=np.array([[0.05, 0.0], [1.05, 1.0]], dtype=np.float32),
+        valid_mask=np.array([True, False, True]),
+    )
+
+    result, skip, predictions = evaluate_single_task_with_predictions(
+        dataset_name="toy",
+        task="label",
+        task_type="classification",
+        eval_split="test",
+        featurizer_name="dummy",
+        train_frame=train,
+        eval_frame=eval_frame,
+        train_features=train_features,
+        eval_features=eval_features,
+        downstream_config=FrozenDownstreamConfig(),
+    )
+
+    assert result is not None
+    assert skip is None
+    assert predictions is not None
+    assert predictions.y_true.tolist() == [0, 1]
+    assert predictions.y_pred.shape == (2,)
+    assert predictions.y_score is not None
+    assert predictions.y_score.shape == (2,)
+    assert predictions.eval_original_index.tolist() == [0, 2]
+
+
+def test_evaluate_single_task_regression_prediction_artifact_has_no_required_score() -> None:
+    train = pd.DataFrame(
+        {
+            "smiles": ["a", "b", "c", "d"],
+            "value": [0.0, 0.2, 1.0, 1.2],
+        }
+    )
+    eval_frame = pd.DataFrame(
+        {
+            "smiles": ["e", "f"],
+            "value": [0.1, 1.1],
+        }
+    )
+    train_features = FeatureBatch(
+        X=np.array([[0.0], [0.2], [1.0], [1.2]], dtype=np.float32),
+        valid_mask=np.array([True, True, True, True]),
+    )
+    eval_features = FeatureBatch(
+        X=np.array([[0.1], [1.1]], dtype=np.float32),
+        valid_mask=np.array([True, True]),
+    )
+
+    result, skip, predictions = evaluate_single_task_with_predictions(
+        dataset_name="toy_reg",
+        task="value",
+        task_type="regression",
+        eval_split="test",
+        featurizer_name="dummy",
+        train_frame=train,
+        eval_frame=eval_frame,
+        train_features=train_features,
+        eval_features=eval_features,
+        downstream_config=FrozenDownstreamConfig(),
+    )
+
+    assert result is not None
+    assert skip is None
+    assert predictions is not None
+    assert predictions.y_true.tolist() == [0.1, 1.1]
+    assert predictions.y_pred.shape == (2,)
+    assert predictions.y_score is None
+    assert predictions.eval_original_index.tolist() == [0, 1]
+
+
+def test_evaluate_single_task_skip_has_no_prediction_artifact() -> None:
+    train = pd.DataFrame(
+        {
+            "smiles": ["a", "b", "c"],
+            "label": [1.0, 1.0, 1.0],
+        }
+    )
+    eval_frame = pd.DataFrame(
+        {
+            "smiles": ["d", "e"],
+            "label": [0.0, 1.0],
+        }
+    )
+    features_train = FeatureBatch(
+        X=np.ones((3, 2), dtype=np.float32),
+        valid_mask=np.array([True, True, True]),
+    )
+    features_eval = FeatureBatch(
+        X=np.ones((2, 2), dtype=np.float32),
+        valid_mask=np.array([True, True]),
+    )
+
+    result, skip, predictions = evaluate_single_task_with_predictions(
+        dataset_name="toy",
+        task="label",
+        task_type="classification",
+        eval_split="test",
+        featurizer_name="dummy",
+        train_frame=train,
+        eval_frame=eval_frame,
+        train_features=features_train,
+        eval_features=features_eval,
+        downstream_config=FrozenDownstreamConfig(),
+    )
+
+    assert result is None
+    assert skip is not None
+    assert predictions is None
 
 
 # ---------------------------------------------------------------------------

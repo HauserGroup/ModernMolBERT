@@ -19,6 +19,8 @@ table1_like.csv | Compact model summary: mean rank and mean metric after best-he
 dataset_winners.csv | Best embedder/head per dataset.
 pairwise_vs_ours.csv | Win/loss table comparing our embedder to every other embedder on shared datasets.
 
+To add model-family annotations, join on a model_lookup.csv via the Model/competitor column.
+
 """
 
 import argparse
@@ -26,11 +28,6 @@ import re
 from pathlib import Path
 
 import pandas as pd
-
-from modernmolbert.eval.benchmarking_molecular_models.model_annotations import (
-    annotate_model_table,
-    summarize_model_categories,
-)
 
 
 REQUIRED_COLUMNS = {
@@ -369,25 +366,14 @@ def write_outputs(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    table6 = annotate_model_table(
-        make_table6_like(df),
-        model_col="Model",
-    )
-
-    table1 = annotate_model_table(
-        make_table1_like(df, collapse_names=collapse_names),
-        model_col="Model",
-    )
-
-    model_categories = summarize_model_categories(df)
+    table6 = make_table6_like(df)
+    table1 = make_table1_like(df, collapse_names=collapse_names)
 
     table6.to_csv(output_dir / "table6_like.csv", index=False)
     table1.to_csv(output_dir / "table1_like.csv", index=False)
-    model_categories.to_csv(output_dir / "model_categories.csv", index=False)
 
     if our_embedder is not None:
         pairwise = make_pairwise_vs_ours(df, ours=our_embedder)
-        pairwise = annotate_model_table(pairwise, model_col="competitor")
         pairwise.to_csv(output_dir / "pairwise_vs_ours.csv", index=False)
 
     if write_debug_tables:

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -26,7 +28,7 @@ def test_canonicalize_and_selfies_invalid() -> None:
     assert out["sanitize_error"] is not None
 
 
-def test_prepare_chembl36_frame_filters_and_adds_selfies() -> None:
+def test_prepare_chembl36_frame_filters_and_adds_selfies(tmp_path: Path) -> None:
     frame = pd.DataFrame(
         {
             "chembl_id": ["CHEMBL1", "CHEMBL2", "CHEMBL3", "CHEMBL4"],
@@ -43,7 +45,7 @@ def test_prepare_chembl36_frame_filters_and_adds_selfies() -> None:
         }
     )
 
-    config = ChemBL36SelfiesPrepConfig()
+    config = ChemBL36SelfiesPrepConfig(output_dir=tmp_path / "chembl36")
     out, stats = prepare_chembl36_frame(frame, config=config, return_stats=True)
 
     assert len(out) == 2
@@ -56,7 +58,7 @@ def test_prepare_chembl36_frame_filters_and_adds_selfies() -> None:
     assert stats["sanitize_error_counts"]["failed_basic_filters"] == 1
 
 
-def test_prepare_chembl36_frame_dedupes_clean_split_keys() -> None:
+def test_prepare_chembl36_frame_dedupes_clean_split_keys(tmp_path: Path) -> None:
     frame = pd.DataFrame(
         {
             "chembl_id": ["CHEMBL1", "CHEMBL1_DUP"],
@@ -68,7 +70,10 @@ def test_prepare_chembl36_frame_dedupes_clean_split_keys() -> None:
         }
     )
 
-    out = prepare_chembl36_frame(frame, config=ChemBL36SelfiesPrepConfig())
+    out = prepare_chembl36_frame(
+        frame,
+        config=ChemBL36SelfiesPrepConfig(output_dir=tmp_path / "chembl36"),
+    )
 
     assert len(out) == 1
     assert out.loc[0, "split_key"] == "same"

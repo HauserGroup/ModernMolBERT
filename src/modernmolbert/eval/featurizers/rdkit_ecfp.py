@@ -4,6 +4,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from modernmolbert.eval.featurizers.base import FeatureBatch
+from modernmolbert.rdkit_safety import looks_like_smiles
 
 
 @dataclass(frozen=True)
@@ -50,7 +51,7 @@ class ECFP4Featurizer:
                 continue
 
             text = str(smi).strip()
-            if not text:
+            if not looks_like_smiles(text):
                 continue
 
             mol = Chem.MolFromSmiles(text)

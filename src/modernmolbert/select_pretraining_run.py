@@ -70,7 +70,7 @@ def best_eval_from_log_history(
 
         try:
             value = float(value)
-        except TypeError:
+        except (TypeError, ValueError):
             continue
 
         step = event.get("step")

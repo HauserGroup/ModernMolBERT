@@ -9,6 +9,8 @@ import pandas as pd
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
 
+from modernmolbert.rdkit_safety import looks_like_smiles
+
 load_dotenv()
 
 
@@ -288,6 +290,13 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
             "selfies": None,
             "is_valid": False,
             "sanitize_error": "empty_smiles",
+        }
+    if not looks_like_smiles(text):
+        return {
+            "smiles_canonical_clean": None,
+            "selfies": None,
+            "is_valid": False,
+            "sanitize_error": "rdkit_parse_failed",
         }
 
     try:

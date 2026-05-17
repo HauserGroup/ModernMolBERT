@@ -8,6 +8,8 @@ from random import Random
 from typing import Any, Literal
 import warnings
 
+from modernmolbert.rdkit_safety import looks_like_smiles
+
 from .types import Dataset
 
 # Tuple of train, val, test indices
@@ -113,8 +115,16 @@ def create_tdc_scaffold_split(
     scaffolds: dict[str, set[int]] = defaultdict(set)
     error_smiles = 0
     for idx, smiles in enumerate(df[entity].values):
+        text = str(smiles).strip()
+        if not looks_like_smiles(text):
+            error_smiles += 1
+            continue
+
         try:
-            mol = Chem.MolFromSmiles(smiles)
+            mol = Chem.MolFromSmiles(text)
+            if mol is None:
+                error_smiles += 1
+                continue
             scaffold = MurckoScaffold.MurckoScaffoldSmiles(
                 mol=mol,
                 includeChirality=False,
@@ -147,12 +157,13 @@ def create_tdc_scaffold_split(
     random.shuffle(small_index_sets)
 
     for index_set in big_index_sets + small_index_sets:
-        if len(train) + len(index_set) <= train_size:
-            train += index_set
-        elif frac[2] == 0 or len(valid) + len(index_set) <= valid_size:
-            valid += index_set
+        ordered_index_set = sorted(index_set)
+        if len(train) + len(ordered_index_set) <= train_size:
+            train += ordered_index_set
+        elif frac[2] == 0 or len(valid) + len(ordered_index_set) <= valid_size:
+            valid += ordered_index_set
         else:
-            test += index_set
+            test += ordered_index_set
 
     if error_smiles:
         print(
@@ -263,8 +274,12 @@ def get_tdc_solver(benchmark: str):
 def canonicalize_smiles(smiles: Any) -> str | None:
     from rdkit import Chem
 
+    text = str(smiles).strip()
+    if not looks_like_smiles(text):
+        return None
+
     try:
-        mol = Chem.MolFromSmiles(str(smiles))
+        mol = Chem.MolFromSmiles(text)
         if mol is None:
             return None
         return Chem.MolToSmiles(mol)

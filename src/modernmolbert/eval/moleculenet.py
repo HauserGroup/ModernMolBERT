@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from modernmolbert.rdkit_safety import looks_like_smiles
+
 
 TaskType = Literal["classification", "regression"]
 
@@ -486,6 +488,8 @@ def canonicalize_and_selfies(smiles: str) -> tuple[str | None, str | None, str |
     text = smiles.strip()
     if not text:
         return None, None, "empty_smiles"
+    if not looks_like_smiles(text):
+        return None, None, "rdkit_parse_failed"
 
     try:
         mol = Chem.MolFromSmiles(text)
@@ -648,10 +652,15 @@ def scaffold_split_frame(
     scaffold_to_indices: dict[str, list[int]] = {}
 
     for idx, smiles in enumerate(frame["smiles_canonical"].tolist()):
-        mol = Chem.MolFromSmiles(str(smiles))
-        if mol is None:
+        text = str(smiles).strip()
+        if not looks_like_smiles(text):
             scaffold = f"invalid_{idx}"
         else:
+            mol = Chem.MolFromSmiles(text)
+            if mol is None:
+                scaffold = f"invalid_{idx}"
+                scaffold_to_indices.setdefault(scaffold, []).append(idx)
+                continue
             scaffold = MurckoScaffold.MurckoScaffoldSmiles(
                 mol=mol,
                 includeChirality=False,
@@ -760,14 +769,18 @@ def compute_scaffold_stats(frame: pd.DataFrame) -> dict[str, Any]:
     scaffold_counts: dict[str, int] = {}
 
     for smiles in frame["smiles_canonical"].dropna().tolist():
-        mol = Chem.MolFromSmiles(str(smiles))
-        if mol is None:
+        text = str(smiles).strip()
+        if not looks_like_smiles(text):
             scaffold = "__invalid__"
         else:
-            scaffold = MurckoScaffold.MurckoScaffoldSmiles(
-                mol=mol,
-                includeChirality=False,
-            )
+            mol = Chem.MolFromSmiles(text)
+            if mol is None:
+                scaffold = "__invalid__"
+            else:
+                scaffold = MurckoScaffold.MurckoScaffoldSmiles(
+                    mol=mol,
+                    includeChirality=False,
+                )
         scaffold_counts[scaffold] = scaffold_counts.get(scaffold, 0) + 1
 
     sizes = np.asarray(list(scaffold_counts.values()), dtype=int)

@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
@@ -160,6 +162,53 @@ def test_from_pretrained_restores_reverse_vocabulary(tmp_path):
     bos_id = loaded.vocabulary[loaded.bos_token]
     assert loaded.convert_ids_to_tokens([bos_id]) == [loaded.bos_token]
     assert loaded.representation == "SMILES"
+
+
+def _write_vocab(path, extra_tokens):
+    path.write_text(
+        json.dumps(
+            {
+                "<s>": 0,
+                "<pad>": 1,
+                "</s>": 2,
+                "<unk>": 3,
+                "<mask>": 4,
+                **extra_tokens,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_init_selects_representation_specific_vocab_file(tmp_path):
+    selfies_vocab = tmp_path / "selfies_vocab.json"
+    smiles_vocab = tmp_path / "smiles_vocab.json"
+    _write_vocab(selfies_vocab, {"[C]": 5, "[C][C]": 6})
+    _write_vocab(smiles_vocab, {"C": 5, "CC": 6, "CCO": 7})
+
+    tokenizer = APEPreTrainedTokenizer(
+        selfies_vocab_file=selfies_vocab,
+        smiles_vocab_file=smiles_vocab,
+        representation="SMILES",
+    )
+
+    assert tokenizer.vocab_file == str(smiles_vocab)
+    assert "CCO" in tokenizer.vocabulary
+    assert "[C][C]" not in tokenizer.vocabulary
+    assert tokenizer.encode("CCO", add_special_tokens=False) == [7]
+
+
+def test_from_pretrained_selects_representation_specific_vocab_file(tmp_path):
+    _write_vocab(tmp_path / "selfies_vocab.json", {"[C]": 5, "[C][C]": 6})
+    _write_vocab(tmp_path / "smiles_vocab.json", {"C": 5, "CC": 6, "CCO": 7})
+
+    tokenizer = APEPreTrainedTokenizer.from_pretrained(
+        str(tmp_path),
+        representation="SELFIES",
+    )
+
+    assert tokenizer.vocab_file == str(tmp_path / "selfies_vocab.json")
+    assert tokenizer.encode("[C][C]", add_special_tokens=False) == [6]
 
 
 def test_get_special_tokens_mask_returns_input_length_masks():

@@ -127,6 +127,38 @@ tokenizer/selfies_ape_tokenizer.metadata.json
 
 The metadata records the tokenizer representation, vocabulary hash, special token IDs, and training provenance. The model training script validates the metadata and SHA256 hash before model construction.
 
+### Hugging Face tokenizer vocab files
+
+`APEPreTrainedTokenizer` is a slow Hugging Face tokenizer and can be loaded with
+`AutoTokenizer.from_pretrained(..., trust_remote_code=True)`. A tokenizer repo
+may use either the legacy single-vocab layout or representation-specific vocab
+files:
+
+```text
+vocab.json          # fallback / legacy active vocabulary
+selfies_vocab.json  # optional SELFIES vocabulary
+smiles_vocab.json   # optional SMILES vocabulary
+```
+
+At load time, `representation` selects the active vocabulary. If
+`representation="SELFIES"` and `selfies_vocab.json` exists, that file is used.
+If `representation="SMILES"` and `smiles_vocab.json` exists, that file is used.
+Otherwise the tokenizer falls back to `vocab.json`.
+
+```python
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained(
+    "path-or-hf-repo",
+    trust_remote_code=True,
+    representation="SMILES",
+)
+```
+
+The tokenizer still keeps one active vocabulary in memory. The multiple file
+parameters are for choosing the vocabulary at construction/load time, not for
+switching representations on an already-instantiated tokenizer.
+
 ## Training workflow
 
 ### 0. Prepare the pretrain dataset

@@ -17,7 +17,11 @@ from transformers import PreTrainedTokenizer
 
 Representation = Literal["SELFIES", "SMILES"]
 
-VOCAB_FILES_NAMES = {"vocab_file": "vocab.json"}
+VOCAB_FILES_NAMES = {
+    "vocab_file": "vocab.json",
+    "selfies_vocab_file": "selfies_vocab.json",
+    "smiles_vocab_file": "smiles_vocab.json",
+}
 SELFIES_RE = re.compile(r"\[[^\]]+\]")
 SMILES_RE = re.compile(
     r"(\[[^\]]+\]|Br?|Cl?|Si?|Se?|Li?|Na?|Mg?|Al?|Ca?|Fe?|Zn?|"
@@ -62,6 +66,20 @@ def _normalize_representation(representation: str) -> Representation:
     if normalized not in {"SELFIES", "SMILES"}:
         raise ValueError(f"representation must be 'SELFIES' or 'SMILES', got {representation!r}")
     return normalized  # type: ignore[return-value]
+
+
+def _select_vocab_file(
+    *,
+    representation: Representation,
+    vocab_file: str | os.PathLike[str] | None,
+    selfies_vocab_file: str | os.PathLike[str] | None,
+    smiles_vocab_file: str | os.PathLike[str] | None,
+) -> str | os.PathLike[str] | None:
+    if representation == "SELFIES" and selfies_vocab_file is not None:
+        return selfies_vocab_file
+    if representation == "SMILES" and smiles_vocab_file is not None:
+        return smiles_vocab_file
+    return vocab_file
 
 
 def pre_tokenize_molecule(molecule: str, representation: str) -> list[str]:
@@ -127,6 +145,8 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
     def __init__(
         self,
         vocab_file: str | os.PathLike[str] | None = None,
+        selfies_vocab_file: str | os.PathLike[str] | None = None,
+        smiles_vocab_file: str | os.PathLike[str] | None = None,
         vocab: dict[str, Any] | None = None,
         representation: str = "SELFIES",
         bos_token: str = "<s>",
@@ -137,8 +157,16 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         model_max_length: int = 256,
         **kwargs,
     ) -> None:
+        self.representation = _normalize_representation(representation)
+        active_vocab_file = _select_vocab_file(
+            representation=self.representation,
+            vocab_file=vocab_file,
+            selfies_vocab_file=selfies_vocab_file,
+            smiles_vocab_file=smiles_vocab_file,
+        )
+
         if vocab is None:
-            if vocab_file is None:
+            if active_vocab_file is None:
                 vocab = {
                     bos_token: 0,
                     pad_token: 1,
@@ -147,13 +175,17 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                     mask_token: 4,
                 }
             else:
-                with open(vocab_file, encoding="utf-8") as f:
+                with open(active_vocab_file, encoding="utf-8") as f:
                     vocab = json.load(f)
 
         if vocab is None:
             raise ValueError("Loaded vocabulary is None.")
 
-        self.vocab_file = str(vocab_file) if vocab_file is not None else None
+        self.vocab_file = str(active_vocab_file) if active_vocab_file is not None else None
+        self.selfies_vocab_file = (
+            str(selfies_vocab_file) if selfies_vocab_file is not None else None
+        )
+        self.smiles_vocab_file = str(smiles_vocab_file) if smiles_vocab_file is not None else None
         self.vocab = _coerce_vocab(vocab)
         self._require_special_tokens(
             bos_token=bos_token,
@@ -163,7 +195,6 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             mask_token=mask_token,
         )
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
-        self.representation = _normalize_representation(representation)
         self.vocabulary_frequency: dict[str, int] = {}
         self.pair_counts: dict[tuple[str, str], int] = {}
         self._max_piece_span = _max_vocab_piece_span(self.vocab, self.representation)

@@ -64,6 +64,39 @@ The scoring heads are `rf`, `ridge`, and `knn`. Their grids are defined in
 `src/eval/supervised/models.py`; changing them changes benchmark results and
 the `library_hash`.
 
+## Skipping datasets
+
+Pass `--skip_datasets NAME [NAME ...]` to `score.py` to exclude specific datasets by name.
+Names match the `name` field in `config/datasets.yaml` (e.g. `ogbg-molmuv`, `CYP1A2_Veith`).
+`download.py` and `embed_modernmolbert.py` use `--datasets` for explicit inclusion; omit them or pass `all` for all datasets.
+
+## ChEMBL36 sweep — best run (lr=1e-4)
+
+Full pipeline from scratch for `mask_standard__mlm_0p15__lr_1e-4`:
+
+```sh
+# 1. Clean old data
+rm -rf data/prepared data/embedded data/benchmark_results.csv
+
+# 2. Download / prepare all datasets
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py \
+  --datasets all
+
+# 3. Embed with best model
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernmolbert.py \
+  --datasets all \
+  --model-dir runs/chembl36_small_mask_mlm_lr_sweep/mask_standard__mlm_0p15__lr_1e-4/final_model \
+  --embedder modernmolbert_chembl36_lr1e4 \
+  --batch-size 32 --device auto --max-seq-length 256 --pooling mean
+
+# 4. Score (skip the five largest / slowest datasets)
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
+  --embedder modernmolbert_chembl36_lr1e4 \
+  --output-csv outputs/eval/praski_chembl36_lr1e4/results.csv \
+  --checkpoint-dir outputs/eval/praski_chembl36_lr1e4/checkpoints \
+  --skip_datasets ogbg-molmuv ogbg-molhiv CYP2C19_Veith CYP2D6_Veith CYP1A2_Veith
+```
+
 ## ModernMolBERT Praski Run
 
 Smoke-test the trained `runs/pubchem10m_mps_base_pilot_256/final_model`

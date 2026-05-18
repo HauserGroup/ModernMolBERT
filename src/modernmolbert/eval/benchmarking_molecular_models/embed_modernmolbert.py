@@ -98,8 +98,22 @@ def make_featurizer(args: argparse.Namespace):
     )
 
 
+def _warn_if_not_best_model(model_dir: Path) -> None:
+    resolved = str(model_dir.resolve())
+    if "best" not in resolved.lower():
+        import warnings
+
+        warnings.warn(
+            f"model-dir does not contain 'best' in its path: {model_dir}\n"
+            "Pass runs/best_<name> to use the designated best checkpoint.",
+            UserWarning,
+            stacklevel=3,
+        )
+
+
 def main() -> None:
     args = parse_args()
+    _warn_if_not_best_model(args.model_dir)
     root = Path(__file__).resolve().parent
     config_dir = root / args.config_dir
     embed_config = EmbeddingConfig(**load_embedding_config(config_dir))

@@ -71,6 +71,13 @@ def parse_args() -> argparse.Namespace:
         default=AVAILABLE_HEADS,
         help="Scoring heads to run.",
     )
+    parser.add_argument(
+        "--skip_datasets",
+        nargs="+",
+        default=None,
+        metavar="NAME",
+        help="Skip one or more datasets by name.",
+    )
     parser.add_argument("--config-dir", default="config")
     parser.add_argument("--output-csv", type=Path, default=Path("data/benchmark_results.csv"))
     parser.add_argument(
@@ -116,6 +123,10 @@ def main():
 
     dataset_selections = args.datasets or cfg.get("datasets", ["all"])
     dataset_names = expand_dataset_selection(config_dir, dataset_selections)
+    skip_set: frozenset[str] = frozenset(args.skip_datasets) if args.skip_datasets else frozenset()
+    if skip_set:
+        print(f"Skipping datasets: {sorted(skip_set)}", flush=True)
+        dataset_names = [n for n in dataset_names if n not in skip_set]
     cache = cfg.get("cache", True) if args.cache is None else args.cache
     safe = cfg.get("safe", False) if args.safe is None else args.safe
     cfg["cache"] = cache

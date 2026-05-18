@@ -3,23 +3,31 @@
 Requires: dabest (not a hard dependency — imported lazily).
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
+from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
+    PRASKI_COLUMNS,
+    read_results_csv,
+    to_praski_schema,
+)
+
 if TYPE_CHECKING:
-    import dabest  # type: ignore[import]
+    import dabest  # type: ignore[import] # noqa
     import matplotlib.figure
 
 
-def _load_data(data: pd.DataFrame | str | Path) -> pd.DataFrame:
+def _load_praski_data(data: pd.DataFrame | str | Path) -> pd.DataFrame:
     if isinstance(data, pd.DataFrame):
-        return data.copy()
+        return to_praski_schema(data)
     path = Path(data)
     if not path.exists():
         raise FileNotFoundError(path)
-    return pd.read_csv(path)
+    return read_results_csv(path)
 
 
 def _require_columns(df: pd.DataFrame, cols: list[str]) -> None:
@@ -48,50 +56,89 @@ def _drop_incomplete_pairs(
     return df[df[pair_col].isin(complete)]
 
 
-def dabest_model_comparison(
+def _filter_values(
+    df: pd.DataFrame,
+    *,
+    column: str,
+    values: list[str] | None,
+    label: str,
+) -> pd.DataFrame:
+    if values is None:
+        return df
+    _require_columns(df, [column])
+    out = df[df[column].isin(values)].copy()
+    if out.empty:
+        raise ValueError(f"No rows after filtering {label} to {values}")
+    return out
+
+
+def _drop_duplicate_pair_groups(
+    df: pd.DataFrame,
+    *,
+    pair_id_col: str,
+    group_col: str,
+) -> pd.DataFrame:
+    duplicate_mask = df.duplicated(subset=[pair_id_col, group_col], keep=False)
+    if not duplicate_mask.any():
+        return df
+
+    import warnings
+
+    warnings.warn(
+        "Duplicate rows found for one or more paired observations; keeping the last row by id.",
+        stacklevel=3,
+    )
+    return df.sort_values("id").drop_duplicates(subset=[pair_id_col, group_col], keep="last")
+
+
+def dabest_paired_comparison(
     data: pd.DataFrame | str | Path,
     *,
-    control_model: str,
-    comparison_models: list[str],
+    control: str,
+    comparisons: list[str],
+    group_col: str,
+    pair_on: list[str],
     metric_col: str = "test_metric",
     metric_name_col: str = "test_metric_name",
     metric_name: str | None = None,
-    group_col: str = "model",
-    pair_on: list[str] | None = None,
     embedders: list[str] | None = None,
-    embedder_col: str = "embedder",
+    models: list[str] | None = None,
+    datasets: list[str] | None = None,
+    tasks: list[str] | None = None,
     output_path: str | Path | None = None,
     **plot_kwargs,
-) -> tuple[dabest.Dabest, matplotlib.figure.Figure]:
-    """DABEST shared-control paired plot comparing downstream models.
+) -> tuple[Any, matplotlib.figure.Figure]:
+    """DABEST shared-control paired plot from Praski-schema benchmark results.
 
-    Each (dataset, embedder) combination is one paired observation. The plot
-    shows mean difference ± confidence interval relative to the control model.
+    ``data`` may be a path to the benchmark CSV or a DataFrame. Inputs are
+    normalized through the Praski schema before filtering and pairing.
 
     Parameters
     ----------
     data:
-        DataFrame or path to CSV in arxiv-preprint format
-        (columns: dataset, embedder, model, test_metric, ...).
-    control_model:
+        DataFrame or path to CSV with columns compatible with ``PRASKI_COLUMNS``.
+    control:
         The baseline model name (first in the DABEST idx tuple).
-    comparison_models:
-        One or more model names to compare against the control.
+    comparisons:
+        One or more group names to compare against the control.
+    group_col:
+        Column that identifies the group being compared, usually ``model`` or ``embedder``.
+    pair_on:
+        Columns whose combination identifies a paired observation.
     metric_col:
         Column holding the numeric metric value.
     metric_name_col:
         Column holding the metric name string (used for filtering).
     metric_name:
         If given, filter rows where ``metric_name_col == metric_name``.
-    group_col:
-        Column that identifies the model/group being compared (default "model").
-    pair_on:
-        Columns whose combination identifies a paired observation.
-        Defaults to ["dataset", embedder_col].
     embedders:
-        If given, restrict to these embedder values before pairing.
-    embedder_col:
-        Column holding embedder names (default "embedder").
+        If given, restrict to these embedder values.
+    models:
+        If given, restrict to these supervised head values.
+    datasets:
+        If given, restrict to these dataset values.
+    tasks:
+        If given, restrict to these task values.
     output_path:
         If given, save the figure to this path.
     **plot_kwargs:
@@ -108,13 +155,11 @@ def dabest_model_comparison(
             "dabest is required for this function. Install it with: pip install dabest"
         ) from exc
 
-    if pair_on is None:
-        pair_on = ["dataset", embedder_col]
-
-    df = _load_data(data)
+    df = _load_praski_data(data)
+    _require_columns(df, PRASKI_COLUMNS)
     _require_columns(df, [group_col, metric_col, *pair_on])
 
-    all_models = [control_model, *comparison_models]
+    all_groups = [control, *comparisons]
 
     if metric_name is not None:
         _require_columns(df, [metric_name_col])
@@ -122,19 +167,25 @@ def dabest_model_comparison(
         if df.empty:
             raise ValueError(f"No rows with {metric_name_col}={metric_name!r}")
 
-    if embedders is not None:
-        df = df[df[embedder_col].isin(embedders)]
-        if df.empty:
-            raise ValueError(f"No rows after filtering embedders to {embedders}")
+    df = _filter_values(df, column="embedder", values=embedders, label="embedders")
+    df = _filter_values(df, column="model", values=models, label="models")
+    df = _filter_values(df, column="dataset", values=datasets, label="datasets")
+    df = _filter_values(df, column="task", values=tasks, label="tasks")
 
-    df = df[df[group_col].isin(all_models)].copy()
+    df = df[df[group_col].isin(all_groups)].copy()
     if df.empty:
-        raise ValueError(f"No rows matching models {all_models}")
+        raise ValueError(f"No rows matching groups {all_groups} in column {group_col!r}")
+
+    df[metric_col] = pd.to_numeric(df[metric_col], errors="coerce")
+    df = df.dropna(subset=[group_col, metric_col, *pair_on])
+    if df.empty:
+        raise ValueError("No rows with complete pairing columns and numeric metric values.")
 
     pair_id_col = "__pair_id__"
     df[pair_id_col] = df[pair_on].astype(str).agg("__".join, axis=1)
+    df = _drop_duplicate_pair_groups(df, pair_id_col=pair_id_col, group_col=group_col)
 
-    df = _drop_incomplete_pairs(df, pair_id_col, group_col, all_models)
+    df = _drop_incomplete_pairs(df, pair_id_col, group_col, all_groups)
     if df.empty:
         raise ValueError("No complete pairs remaining after filtering.")
 
@@ -142,8 +193,8 @@ def dabest_model_comparison(
         data=df,
         x=group_col,
         y=metric_col,
-        idx=tuple(all_models),
-        paired="baseline",
+        idx=tuple(all_groups),
+        paired=True,
         id_col=pair_id_col,
     )
 
@@ -155,3 +206,66 @@ def dabest_model_comparison(
         fig.savefig(output_path, dpi=150, bbox_inches="tight")
 
     return analysis, fig
+
+
+def dabest_model_comparison(
+    data: pd.DataFrame | str | Path,
+    *,
+    control_model: str,
+    comparison_models: list[str],
+    metric_col: str = "test_metric",
+    metric_name_col: str = "test_metric_name",
+    metric_name: str | None = None,
+    pair_on: list[str] | None = None,
+    embedders: list[str] | None = None,
+    output_path: str | Path | None = None,
+    **plot_kwargs,
+) -> tuple[Any, matplotlib.figure.Figure]:
+    """Compare supervised heads using paired (dataset, embedder) observations."""
+    return dabest_paired_comparison(
+        data,
+        control=control_model,
+        comparisons=comparison_models,
+        group_col="model",
+        pair_on=pair_on or ["dataset", "embedder"],
+        metric_col=metric_col,
+        metric_name_col=metric_name_col,
+        metric_name=metric_name,
+        embedders=embedders,
+        output_path=output_path,
+        **plot_kwargs,
+    )
+
+
+def dabest_embedder_comparison(
+    data: pd.DataFrame | str | Path,
+    *,
+    control_embedder: str,
+    comparison_embedders: list[str],
+    metric_col: str = "test_metric",
+    metric_name_col: str = "test_metric_name",
+    metric_name: str | None = None,
+    pair_on: list[str] | None = None,
+    models: list[str] | None = None,
+    datasets: list[str] | None = None,
+    tasks: list[str] | None = None,
+    output_path: str | Path | None = None,
+    **plot_kwargs,
+) -> tuple[Any, matplotlib.figure.Figure]:
+    """Compare embedders using paired (dataset, model/head) observations."""
+    return dabest_paired_comparison(
+        data,
+        control=control_embedder,
+        comparisons=comparison_embedders,
+        group_col="embedder",
+        pair_on=pair_on or ["dataset", "model"],
+        metric_col=metric_col,
+        metric_name_col=metric_name_col,
+        metric_name=metric_name,
+        embedders=[control_embedder, *comparison_embedders],
+        models=models,
+        datasets=datasets,
+        tasks=tasks,
+        output_path=output_path,
+        **plot_kwargs,
+    )

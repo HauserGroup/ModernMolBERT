@@ -53,6 +53,34 @@ def test_ape_train_does_not_merge_across_molecule_boundaries():
     assert "[O][C]" not in tokenizer.vocabulary
 
 
+def test_ape_train_preserves_first_seen_pair_tie_order():
+    tokenizer = APEPreTrainedTokenizer()
+    corpus = ["[C][O][C][O]", "[O][C][N]", "[C][O][N]"] * 3
+
+    tokenizer.train(
+        corpus=corpus,
+        max_vocab_size=20,
+        min_freq_for_merge=2,
+        save_checkpoint=False,
+    )
+
+    learned_tokens = [
+        token
+        for token in tokenizer.vocabulary
+        if not (token.startswith("<") and token.endswith(">"))
+    ]
+    assert learned_tokens == [
+        "[C]",
+        "[O]",
+        "[N]",
+        "[C][O]",
+        "[C][O][C][O]",
+        "[O][C]",
+        "[O][C][N]",
+        "[C][O][N]",
+    ]
+
+
 def test_smiles_pre_tokenize_preserves_chemical_tokens():
     tokenizer = APEPreTrainedTokenizer(representation="SMILES")
 

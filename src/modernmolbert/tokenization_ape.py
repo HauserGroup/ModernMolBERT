@@ -501,11 +501,14 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         text_padding = " " * 80
 
         print(f"Pretokenizing {self.representation}", end="\r")
-        tokenized_corpus = [
-            tokens for sentence in corpus if (tokens := self.pre_tokenize(str(sentence)))
-        ]
+        tokenized_corpus = []
         vocabulary_frequency: defaultdict[str, int] = defaultdict(int)
-        for tokens in tokenized_corpus:
+
+        for sentence in corpus:
+            tokens = self.pre_tokenize(str(sentence))
+            if not tokens:
+                continue
+            tokenized_corpus.append(tokens)
             for token in tokens:
                 vocabulary_frequency[token] += 1
         print(
@@ -595,7 +598,8 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                 print("\rNo valid merge pair found", text_padding)
                 break
 
-            merged_word = "".join(most_common_pair)
+            left_token, right_token = most_common_pair
+            merged_word = left_token + right_token
             if merged_word not in vocabulary_frequency:
                 print(
                     f"New merge found: {merged_word} {merged_counter}/{max_vocab_size} "
@@ -607,21 +611,20 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             new_tokenized_corpus = []
             for tokens in tokenized_corpus:
                 new_tokens = []
-                skip_next = False
-                for i in range(len(tokens)):
-                    if skip_next:
-                        skip_next = False
-                        continue
-
+                append_token = new_tokens.append
+                i = 0
+                token_count = len(tokens)
+                while i < token_count:
                     if (
-                        i < len(tokens) - 1
-                        and tokens[i] == most_common_pair[0]
-                        and tokens[i + 1] == most_common_pair[1]
+                        i < token_count - 1
+                        and tokens[i] == left_token
+                        and tokens[i + 1] == right_token
                     ):
-                        new_tokens.append(merged_word)
-                        skip_next = True
+                        append_token(merged_word)
+                        i += 2
                     else:
-                        new_tokens.append(tokens[i])
+                        append_token(tokens[i])
+                        i += 1
 
                 new_tokenized_corpus.append(new_tokens)
 

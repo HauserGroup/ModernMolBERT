@@ -8,7 +8,7 @@ REPO_ID = "HauserGroup/ApeTokenizer-SELFIES"
 TMP = Path("./tmp-hf-tokenizer")
 
 # 1. Load your trained tokenizer from the custom json file
-tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+tokenizer = APEPreTrainedTokenizer(representation="SELFIES", model_max_length=256)
 tokenizer.load_vocabulary_file("tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json")
 
 # 2. save_pretrained writes vocab.json, tokenizer_config.json,

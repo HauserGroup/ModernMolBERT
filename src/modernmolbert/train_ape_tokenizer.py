@@ -135,23 +135,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer_train_size", type=int, default=2_000_000)
     parser.add_argument("--max_vocab_size", type=int, default=5000)
     parser.add_argument("--min_freq_for_merge", type=int, default=2000)
-    parser.add_argument(
-        "--save_checkpoint",
-        action="store_true",
-        help="Periodically save intermediate tokenizer checkpoints during APE merge training.",
-    )
-    parser.add_argument(
-        "--checkpoint_path",
-        type=str,
-        default="tokenizer/checkpoints",
-        help="Directory where intermediate checkpoints are saved when --save_checkpoint is set.",
-    )
-    parser.add_argument(
-        "--checkpoint_interval",
-        type=int,
-        default=500,
-        help="Checkpoint interval in learned vocabulary entries.",
-    )
+    # Temporarily disabled: current implementation only writes vocab snapshots
+    # and does not support true resumeable tokenizer training checkpoints.
+    # parser.add_argument(
+    #     "--save_checkpoint",
+    #     action="store_true",
+    #     help="Periodically save intermediate tokenizer checkpoints during APE merge training.",
+    # )
+    # parser.add_argument(
+    #     "--checkpoint_path",
+    #     type=str,
+    #     default="tokenizer/checkpoints",
+    #     help="Directory where intermediate checkpoints are saved when --save_checkpoint is set.",
+    # )
+    # parser.add_argument(
+    #     "--checkpoint_interval",
+    #     type=int,
+    #     default=500,
+    #     help="Checkpoint interval in learned vocabulary entries.",
+    # )
     parser.add_argument(
         "--extra_vocab_symbols_path",
         type=Path,
@@ -273,16 +275,15 @@ def main() -> None:
 
     tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
     tokenizer.train(
-        tokenizer.train(
-            corpus,
-            representation=args.representation,
-            max_vocab_size=args.max_vocab_size,
-            min_freq_for_merge=args.min_freq_for_merge,
-            max_merge_pieces=max_merge_pieces,
-            save_checkpoint=args.save_checkpoint,
-            checkpoint_path=args.checkpoint_path,
-            checkpoint_interval=args.checkpoint_interval,
-        )
+        corpus,
+        representation=args.representation,
+        max_vocab_size=args.max_vocab_size,
+        min_freq_for_merge=args.min_freq_for_merge,
+        max_merge_pieces=max_merge_pieces,
+        # Temporarily disabled until tokenizer checkpointing can support true resume.
+        # save_checkpoint=args.save_checkpoint,
+        # checkpoint_path=args.checkpoint_path,
+        # checkpoint_interval=args.checkpoint_interval,
     )
 
     extra_symbols = load_extra_vocab_symbols(

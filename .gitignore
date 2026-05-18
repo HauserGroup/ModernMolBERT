@@ -252,6 +252,7 @@ src/modernmolbert/eval/benchmarking_molecular_models/results/arxiv_preprint_2025
 # TEMP main.pdf for now
 paper/main.pdf
 paper/papers/*
+paper/notes/
 
 ## Core latex/pdflatex auxiliary files:
 *.aux

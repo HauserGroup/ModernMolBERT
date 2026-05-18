@@ -91,6 +91,38 @@ def _drop_duplicate_pair_groups(
     return df.sort_values("id").drop_duplicates(subset=[pair_id_col, group_col], keep="last")
 
 
+def _dabest_paired_arg(dabest_module, groups: list[str]) -> bool | str:
+    version = getattr(dabest_module, "__version__", None)
+    if isinstance(version, str) and version.startswith("0."):
+        if len(groups) != 2:
+            raise ValueError(
+                f"dabest {version} only supports paired plots with one comparison. "
+                "Pass a single comparison or install a newer dabest release."
+            )
+        return True
+    return "baseline"
+
+
+def _dabest_load_compat(dabest_module, **kwargs):
+    """Call dabest.load with a narrow compatibility patch for dabest 0.2.x."""
+    version = getattr(dabest_module, "__version__", None)
+    if not (isinstance(version, str) and version.startswith("0.")):
+        return dabest_module.load(**kwargs)
+
+    original_unique = pd.unique
+
+    def unique_compat(values):
+        if isinstance(values, list):
+            return original_unique(pd.Series(values, dtype="object"))
+        return original_unique(values)
+
+    pd.unique = unique_compat
+    try:
+        return dabest_module.load(**kwargs)
+    finally:
+        pd.unique = original_unique
+
+
 def dabest_paired_comparison(
     data: pd.DataFrame | str | Path,
     *,
@@ -182,19 +214,22 @@ def dabest_paired_comparison(
         raise ValueError("No rows with complete pairing columns and numeric metric values.")
 
     pair_id_col = "__pair_id__"
-    df[pair_id_col] = df[pair_on].astype(str).agg("__".join, axis=1)
+    pair_labels = df[pair_on].astype(str).agg("__".join, axis=1)
+    df[pair_id_col] = pd.factorize(pair_labels, sort=False)[0]
     df = _drop_duplicate_pair_groups(df, pair_id_col=pair_id_col, group_col=group_col)
 
     df = _drop_incomplete_pairs(df, pair_id_col, group_col, all_groups)
     if df.empty:
         raise ValueError("No complete pairs remaining after filtering.")
 
-    analysis = _dabest.load(
-        data=df,
+    dabest_df = df.loc[:, [group_col, metric_col, pair_id_col]].copy()
+    analysis = _dabest_load_compat(
+        _dabest,
+        data=dabest_df,
         x=group_col,
         y=metric_col,
         idx=tuple(all_groups),
-        paired=True,
+        paired=_dabest_paired_arg(_dabest, all_groups),
         id_col=pair_id_col,
     )
 

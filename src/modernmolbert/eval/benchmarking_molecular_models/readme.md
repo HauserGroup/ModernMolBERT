@@ -149,6 +149,23 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
 Per-dataset checkpoint CSVs are written as `<checkpoint-dir>/<dataset>.csv`.
 The aggregate CSV remains the canonical result table.
 
+## Exporting Prediction Artifacts
+
+`score.py` writes the canonical aggregate CSV during scoring. The prediction
+artifacts under `data/predictions` are primarily for plot-level diagnostics, but
+`.npz` artifacts can also be converted back into a Praski-schema CSV:
+
+```sh
+uv run python -m modernmolbert.eval.benchmarking_molecular_models.prediction_export \
+  --predictions-dir data/predictions \
+  --output-csv data/prediction_results.csv
+```
+
+This recomputes held-out `test_metric` from `y_true` and `y_score`. Prediction
+artifacts do not contain selected hyperparameters or cross-validation scores, so
+`hyperparams` and `cv_metric` are blank in this recovered table. Legacy `.npy`
+prediction files are ignored because they do not include ground-truth labels.
+
 ## Output Schema
 
 CSV results use exactly this column order:

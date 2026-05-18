@@ -1,9 +1,11 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import torch
 from transformers import AutoModelForMaskedLM, AutoTokenizer, ModernBertConfig
 
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+from modernmolbert.train_selfies_ape_modernbert import write_run_metadata
 from modernmolbert.utils import (
     copy_tokenizer_artifacts,
     file_sha256,
@@ -76,18 +78,23 @@ def test_end_to_end_save_and_reload_with_tokenizer_artifacts(tmp_path: Path):
 
     for expected in [
         "vocab.json",
+        "selfies_vocab.json",
         "tokenizer_metadata.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "tokenization_ape.py",
         "ape_tokenizer/vocab.json",
+        "ape_tokenizer/selfies_vocab.json",
         "ape_tokenizer/tokenizer_config.json",
         "ape_tokenizer/special_tokens_map.json",
         "ape_tokenizer/tokenization_ape.py",
     ]:
         assert (final_model_dir / expected).exists()
     assert not (final_model_dir / "tokenizer.json").exists()
-    assert not (final_model_dir / "tokenizer_config.json").exists()
 
     reloaded_model = AutoModelForMaskedLM.from_pretrained(str(final_model_dir))
-    reloaded_tokenizer = AutoTokenizer.from_pretrained(
+    reloaded_tokenizer = APEPreTrainedTokenizer.from_pretrained(str(final_model_dir))
+    reloaded_subdir_tokenizer = AutoTokenizer.from_pretrained(
         str(final_model_dir / "ape_tokenizer"),
         trust_remote_code=True,
     )
@@ -103,3 +110,64 @@ def test_end_to_end_save_and_reload_with_tokenizer_artifacts(tmp_path: Path):
 
     auto_batch = reloaded_tokenizer("[C][C][O]", add_special_tokens=True, return_tensors="pt")
     assert auto_batch["input_ids"].shape == eval_batch["input_ids"].shape
+    subdir_batch = reloaded_subdir_tokenizer("[C][C][O]", add_special_tokens=True)
+    assert subdir_batch["input_ids"] == auto_batch["input_ids"].squeeze(0).tolist()
+
+
+def test_write_run_metadata_writes_hub_model_card(tmp_path: Path):
+    metadata_path = tmp_path / "selfies_ape_tokenizer.metadata.json"
+    write_tokenizer_metadata(
+        metadata_path,
+        {
+            "representation": "SELFIES",
+            "tokenizer_sha256": "abc123",
+            "tokenizer_path": "tokenizer/selfies_ape_tokenizer.json",
+        },
+    )
+    output_dir = tmp_path / "run"
+    args = SimpleNamespace(
+        output_dir=str(output_dir),
+        dataset_name="data/pretrain/chembl36_selfies",
+        selfies_column="selfies",
+        train_split="train",
+        validation_split=None,
+        use_validation_split=False,
+        max_seq_length=256,
+        mlm_probability=0.3,
+        masking_strategy="span",
+        model_size="small",
+    )
+
+    write_run_metadata(
+        args=args,
+        backend="cpu",
+        vocab_size=8,
+        special_ids={
+            "pad_token": 1,
+            "bos_token": 0,
+            "eos_token": 2,
+            "unk_token": 3,
+            "mask_token": 4,
+        },
+        n_params=1234,
+        tokenizer_stats={"unk_rate": 0.0},
+        tokenizer_vocab_path=tmp_path / "selfies_ape_tokenizer.json",
+        tokenizer_metadata_path=metadata_path,
+        final_eval_metrics={"eval_loss": 1.5},
+        trainer_state={
+            "best_model_checkpoint": "checkpoint-10",
+            "best_metric": 1.5,
+            "best_global_step": 10,
+        },
+    )
+
+    model_card = output_dir / "final_model" / "README.md"
+    assert model_card.exists()
+    text = model_card.read_text(encoding="utf-8")
+    assert text.startswith("---\n")
+    assert "library_name: transformers" in text
+    assert "pipeline_tag: fill-mask" in text
+    assert "SELFIES strings only" in text
+    assert "AutoTokenizer.from_pretrained" in text
+    assert 'subfolder="ape_tokenizer"' in text
+    assert "trust_remote_code=True" in text

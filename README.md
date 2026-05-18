@@ -159,6 +159,41 @@ The tokenizer still keeps one active vocabulary in memory. The multiple file
 parameters are for choosing the vocabulary at construction/load time, not for
 switching representations on an already-instantiated tokenizer.
 
+### Uploading trained checkpoints to Hugging Face
+
+`train_selfies_ape_modernbert.py` writes a Hub-ready `final_model/` directory
+containing model weights, model config, tokenizer files, custom tokenizer code,
+and a model card. Upload that folder as a model repository after validating it
+locally:
+
+```python
+from huggingface_hub import HfApi
+
+api = HfApi()
+api.create_repo("HauserGroup/<repo-name>", repo_type="model", private=True, exist_ok=True)
+api.upload_folder(
+    folder_path="runs/.../final_model",
+    repo_id="HauserGroup/<repo-name>",
+    repo_type="model",
+    commit_message="Upload ModernMolBERT checkpoint",
+)
+```
+
+Uploaded checkpoints load the model from the repository root. With current
+Transformers versions, load the custom tokenizer from the `ape_tokenizer/`
+subfolder because root ModernBERT configs disable remote tokenizer code:
+
+```python
+from transformers import AutoModelForMaskedLM, AutoTokenizer
+
+model = AutoModelForMaskedLM.from_pretrained("HauserGroup/<repo-name>")
+tokenizer = AutoTokenizer.from_pretrained(
+    "HauserGroup/<repo-name>",
+    subfolder="ape_tokenizer",
+    trust_remote_code=True,
+)
+```
+
 ## Training workflow
 
 ### 0. Prepare the pretrain dataset

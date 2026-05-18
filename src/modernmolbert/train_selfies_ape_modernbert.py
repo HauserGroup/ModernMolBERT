@@ -852,6 +852,10 @@ def write_run_metadata(
     trainer_state: dict[str, Any] | None = None,
 ) -> None:
     output_dir = Path(args.output_dir)
+    final_model_dir = output_dir / "final_model"
+    final_model_dir.mkdir(parents=True, exist_ok=True)
+    tokenizer_metadata = load_tokenizer_metadata(tokenizer_metadata_path)
+    tokenizer_sha256 = str(tokenizer_metadata.get("tokenizer_sha256", "unknown"))
 
     metadata = {
         "dataset_name": args.dataset_name,
@@ -884,20 +888,33 @@ def write_run_metadata(
     if trainer_state:
         best_checkpoint_text = f"""
 
-    ## Best checkpoint
+## Best checkpoint
 
-    - Best checkpoint: `{trainer_state.get("best_model_checkpoint")}`
+- Best checkpoint: `{trainer_state.get("best_model_checkpoint")}`
 
-    - Best metric: `{trainer_state.get("best_metric")}`
+- Best metric: `{trainer_state.get("best_metric")}`
 
-    - Best global step: `{trainer_state.get("best_global_step")}`
+- Best global step: `{trainer_state.get("best_global_step")}`
 
-    """
+"""
 
     with (output_dir / "ape_tokenizer_metadata.json").open("w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
-    readme = f"""# APE ModernBERT Molecular MLM Checkpoint
+    final_eval_metrics_text = json.dumps(final_eval_metrics or {}, indent=2, sort_keys=True)
+    model_card = f"""---
+license: mit
+library_name: transformers
+pipeline_tag: fill-mask
+tags:
+- chemistry
+- molecules
+- selfies
+- modernbert
+- masked-language-modeling
+---
+
+# ModernMolBERT SELFIES Masked Language Model
 
 This checkpoint was trained from scratch with ModernBERT for SELFIES masked language modeling.
 
@@ -905,22 +922,29 @@ This checkpoint was trained from scratch with ModernBERT for SELFIES masked lang
 
 `{SELFIES_REPRESENTATION}`
 
-This checkpoint expects SELFIES strings. Convert SMILES before tokenization.
+This checkpoint expects SELFIES strings only. Convert SMILES before tokenization.
 
 ## Tokenizer
 
-This model uses `APEPreTrainedTokenizer`, loadable through `AutoTokenizer`
-from the `ape_tokenizer/` subdirectory.
+This model uses `APEPreTrainedTokenizer`. The tokenizer files are present at the
+repository root and in `ape_tokenizer/`. With current Transformers versions,
+`AutoTokenizer` must load the custom tokenizer from `ape_tokenizer/` because
+remote tokenizer code is disabled for root ModernBERT configs.
 
 Keep these files with the checkpoint:
 
 - `vocab.json`
+- `selfies_vocab.json`
 - `tokenizer_metadata.json`
-- `ape_tokenizer/`
+- `tokenizer_config.json`
+- `special_tokens_map.json`
+- `tokenization_ape.py`
 
 ## Dataset
 
 `{args.dataset_name}`
+
+SELFIES column: `{args.selfies_column}`
 
 ## Model
 
@@ -928,24 +952,40 @@ Keep these files with the checkpoint:
 - Vocabulary size: {vocab_size}
 - Max sequence length: {args.max_seq_length}
 - MLM probability: {args.mlm_probability}
+- Masking strategy: `{args.masking_strategy}`
+- Model size preset: `{args.model_size}`
+- Tokenizer source path: `{tokenizer_vocab_path}`
+- Tokenizer SHA256: `{tokenizer_sha256}`
 
 {best_checkpoint_text}
-## Loading sketch
+## Final evaluation metrics
+
+```json
+{final_eval_metrics_text}
+```
+
+## Loading
 
 ```python
 from transformers import AutoModelForMaskedLM
 from transformers import AutoTokenizer
 
-model = AutoModelForMaskedLM.from_pretrained("final_model")
+model = AutoModelForMaskedLM.from_pretrained("HauserGroup/<repo-name>")
 
 tokenizer = AutoTokenizer.from_pretrained(
-    "final_model/ape_tokenizer",
+    "HauserGroup/<repo-name>",
+    subfolder="ape_tokenizer",
     trust_remote_code=True,
 )
 ```
+
+For local validation before upload, replace `"HauserGroup/<repo-name>"` with the
+path to this `final_model` directory.
 """
     with (output_dir / "README.checkpoint.md").open("w", encoding="utf-8") as f:
-        f.write(readme)
+        f.write(model_card)
+    with (final_model_dir / "README.md").open("w", encoding="utf-8") as f:
+        f.write(model_card)
 
 
 def main() -> None:
@@ -1204,6 +1244,8 @@ def main() -> None:
 
     print("Done.")
     print(f"Final model: {final_dir}")
+    print(f"Hub-ready folder: {final_dir}")
+    print("Load tokenizer from final_model/ape_tokenizer with trust_remote_code=True")
     print(f"Tokenizer vocabulary: {final_dir / 'vocab.json'}")
 
 

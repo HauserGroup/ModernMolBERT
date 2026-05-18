@@ -337,7 +337,16 @@ def copy_tokenizer_artifacts(
     tokenizer.save_vocabulary(str(output_dir))
     tokenizer.save_vocabulary(str(final_model_dir))
     tokenizer.save_pretrained(str(output_dir / "ape_tokenizer"))
+    tokenizer.save_pretrained(str(final_model_dir))
     tokenizer.save_pretrained(str(final_model_dir / "ape_tokenizer"))
+
+    alias_name = (
+        "selfies_vocab.json" if representation.upper() == "SELFIES" else "smiles_vocab.json"
+    )
+    for tokenizer_dir in [final_model_dir, final_model_dir / "ape_tokenizer"]:
+        active_vocab = tokenizer_dir / "vocab.json"
+        if active_vocab.exists():
+            shutil.copy2(active_vocab, tokenizer_dir / alias_name)
 
     shutil.copy2(metadata_path, output_dir / "tokenizer_metadata.json")
     shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")

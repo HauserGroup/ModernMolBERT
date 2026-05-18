@@ -3,6 +3,9 @@ datasets:
     name: AMES
     metric: roc_auc
     task: classification
+    n_samples: 7278
+    n_tasks: 1
+    pct_positive: 54.6
     source:
       name: TDC
       benchmark: admet
@@ -11,6 +14,9 @@ datasets:
     name: Bioavailability_Ma
     metric: roc_auc
     task: classification
+    n_samples: 640
+    n_tasks: 1
+    pct_positive: 76.88
     source:
       name: TDC
       benchmark: admet
@@ -20,6 +26,9 @@ datasets:
     metric: roc_auc
     ranking_metric: roc_auc
     task: classification
+    n_samples: 12579
+    n_tasks: 1
+    pct_positive: 46.34
     source:
       name: TDC
       group: ADME
@@ -27,6 +36,9 @@ datasets:
     name: CYP2C19_Veith
     metric: roc_auc
     task: classification
+    n_samples: 12665
+    n_tasks: 1
+    pct_positive: 45.95
     source:
       name: TDC
       group: ADME
@@ -34,6 +46,9 @@ datasets:
     name: CYP2C9_Substrate_CarbonMangels
     metric: roc_auc
     task: classification
+    n_samples: 669
+    n_tasks: 1
+    pct_positive: 21.08
     source:
       name: TDC
       benchmark: admet
@@ -42,6 +57,9 @@ datasets:
     name: CYP2C9_Veith
     metric: roc_auc
     task: classification
+    n_samples: 12092
+    n_tasks: 1
+    pct_positive: 33.45
     source:
       name: TDC
       benchmark: admet
@@ -50,6 +68,9 @@ datasets:
     name: CYP2D6_Substrate_CarbonMangels
     metric: roc_auc
     task: classification
+    n_samples: 667
+    n_tasks: 1
+    pct_positive: 28.64
     source:
       name: TDC
       benchmark: admet
@@ -58,6 +79,9 @@ datasets:
     name: CYP2D6_Veith
     metric: roc_auc
     task: classification
+    n_samples: 13130
+    n_tasks: 1
+    pct_positive: 19.15
     source:
       name: TDC
       benchmark: admet
@@ -66,6 +90,9 @@ datasets:
     name: CYP3A4_Substrate_CarbonMangels
     metric: roc_auc
     task: classification
+    n_samples: 670
+    n_tasks: 1
+    pct_positive: 52.99
     source:
       name: TDC
       benchmark: admet
@@ -74,6 +101,9 @@ datasets:
     name: CYP3A4_Veith
     metric: roc_auc
     task: classification
+    n_samples: 12328
+    n_tasks: 1
+    pct_positive: 41.45
     source:
       name: TDC
       benchmark: admet
@@ -82,6 +112,9 @@ datasets:
     name: DILI
     metric: roc_auc
     task: classification
+    n_samples: 475
+    n_tasks: 1
+    pct_positive: 49.68
     source:
       name: TDC
       benchmark: admet
@@ -90,6 +123,9 @@ datasets:
     name: HIA_Hou
     metric: roc_auc
     task: classification
+    n_samples: 578
+    n_tasks: 1
+    pct_positive: 86.51
     source:
       name: TDC
       benchmark: admet
@@ -98,6 +134,9 @@ datasets:
     name: PAMPA_NCATS
     metric: roc_auc
     task: classification
+    n_samples: 2034
+    n_tasks: 1
+    pct_positive: 85.5
     source:
       name: TDC
       group: ADME
@@ -105,6 +144,9 @@ datasets:
     name: Pgp_Broccatelli
     metric: roc_auc
     task: classification
+    n_samples: 1218
+    n_tasks: 1
+    pct_positive: 53.37
     source:
       name: TDC
       benchmark: admet
@@ -113,6 +155,9 @@ datasets:
     name: SARSCoV2_3CLPro_Diamond
     metric: roc_auc
     task: classification
+    n_samples: 880
+    n_tasks: 1
+    pct_positive: 8.86
     source:
       name: TDC
       group: HTS
@@ -120,6 +165,9 @@ datasets:
     name: SARSCoV2_Vitro_Touret
     metric: roc_auc
     task: classification
+    n_samples: 1484
+    n_tasks: 1
+    pct_positive: 5.93
     source:
       name: TDC
       group: HTS
@@ -127,6 +175,9 @@ datasets:
     name: hERG
     metric: roc_auc
     task: classification
+    n_samples: 655
+    n_tasks: 1
+    pct_positive: 68.85
     source:
       name: TDC
       benchmark: admet
@@ -135,6 +186,9 @@ datasets:
     name: hERG_Karim
     metric: roc_auc
     task: classification
+    n_samples: 13445
+    n_tasks: 1
+    pct_positive: 49.97
     source:
       name: TDC
       group: TOX
@@ -142,30 +196,45 @@ datasets:
     name: ogbg-molbace
     metric: roc_auc
     task: classification
+    n_samples: 1513
+    n_tasks: 1
+    pct_positive: 45.67
     source:
       name: OGB
   clf_ogbg-molbbbp:
     name: ogbg-molbbbp
     metric: roc_auc
     task: classification
+    n_samples: 2039
+    n_tasks: 1
+    pct_positive: 76.51
     source:
       name: OGB
   clf_ogbg-molclintox:
     name: ogbg-molclintox
     metric: roc_auc
     task: classification
+    n_samples: 1477
+    n_tasks: 2
+    pct_positive: 50.61
     source:
       name: OGB
   clf_ogbg-molhiv:
     name: ogbg-molhiv
     metric: roc_auc
     task: classification
+    n_samples: 41084
+    n_tasks: 1
+    pct_positive: 3.5
     source:
       name: OGB
   clf_ogbg-molmuv:
     name: ogbg-molmuv
     metric: roc_auc
     task: classification
+    n_samples: 93087
+    n_tasks: 17
+    pct_positive: 0.2
     memory_weight: 16
     source:
       name: OGB
@@ -173,12 +242,18 @@ datasets:
     name: ogbg-molsider
     metric: roc_auc
     task: classification
+    n_samples: 1427
+    n_tasks: 27
+    pct_positive: 56.76
     source:
       name: OGB
   clf_ogbg-moltox21:
     name: ogbg-moltox21
     metric: roc_auc
     task: classification
+    n_samples: 7831
+    n_tasks: 12
+    pct_positive: 7.52
     memory_weight: 4
     source:
       name: OGB

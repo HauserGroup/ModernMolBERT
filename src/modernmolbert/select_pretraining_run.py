@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Summarize and rank ModernMolBERT pretraining sweep runs."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import math

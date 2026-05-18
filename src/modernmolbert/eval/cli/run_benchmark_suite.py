@@ -53,6 +53,16 @@ def parse_args() -> argparse.Namespace:
             "<output_dir>/predictions/."
         ),
     )
+    parser.add_argument(
+        "--skip_datasets",
+        nargs="+",
+        default=None,
+        metavar="NAME",
+        help=(
+            "Skip one or more datasets by name. Matches the 'name' field in the suite config. "
+            "Example: --skip_datasets bbbp clintox"
+        ),
+    )
 
     return parser.parse_args()
 
@@ -93,12 +103,16 @@ def main() -> None:
         else:
             print(f"Feature cache directory: {args.output_dir / 'cache'}", flush=True)
 
+        if args.skip_datasets:
+            print(f"Skipping datasets: {args.skip_datasets}", flush=True)
+
         results = run_benchmark_suite(
             suite=suite,
             output_dir=args.output_dir,
             cache_dir=args.cache_dir,
             write_single_run_outputs=args.write_single_run_outputs,
             write_predictions=args.write_predictions,
+            skip_datasets=args.skip_datasets,
         )
 
         print("Done.", flush=True)

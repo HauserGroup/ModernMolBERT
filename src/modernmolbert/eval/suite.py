@@ -265,6 +265,7 @@ def run_benchmark_suite(
     cache_dir: str | Path | None = None,
     write_single_run_outputs: bool = False,
     write_predictions: bool = False,
+    skip_datasets: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """Run a full benchmark suite and write aggregate outputs."""
 
@@ -272,12 +273,19 @@ def run_benchmark_suite(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     resolved_cache_dir = Path(cache_dir) if cache_dir is not None else output_dir / "cache"
+    skip_set: frozenset[str] = frozenset(skip_datasets) if skip_datasets else frozenset()
 
     all_rows: list[dict[str, Any]] = []
     all_skip_rows: list[dict[str, Any]] = []
     run_records: list[dict[str, Any]] = []
+    skipped_dataset_names: list[str] = []
 
     for dataset_index, dataset_cfg in enumerate(suite.datasets):
+        ds_name = str(dataset_cfg.config.get("name", ""))
+        if ds_name in skip_set:
+            print(f"Skipping dataset: {ds_name!r} (--skip_datasets)", flush=True)
+            skipped_dataset_names.append(ds_name)
+            continue
         dataset = load_eval_dataset_from_config(dataset_cfg.config)
 
         matching_downstreams = [
@@ -399,6 +407,7 @@ def run_benchmark_suite(
         "predictions_dir": str(output_dir / "predictions") if write_predictions else None,
         "n_result_rows": int(len(results)),
         "n_skipped_rows": int(len(skipped)),
+        "skipped_dataset_names": skipped_dataset_names,
         "runs": run_records,
     }
 

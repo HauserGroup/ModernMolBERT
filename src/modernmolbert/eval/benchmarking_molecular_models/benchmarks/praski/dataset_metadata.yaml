@@ -1,0 +1,160 @@
+# Dataset statistics from Praski et al. (arXiv:2508.06199), Table 4.
+# Keyed by the Dataset column value in Praski_table_4.tsv.
+# MoleculeNet entries use Praski's naming (MoleculeNet_BACE etc.); the
+# corresponding OGB names used in config/datasets.yaml are noted in comments.
+
+datasets:
+
+  # TDC — Toxicity
+  AMES:
+    benchmark: TDC
+    n_samples: 7278
+    n_tasks: 1
+    pct_positive: 54.6
+
+  DILI:
+    benchmark: TDC
+    n_samples: 475
+    n_tasks: 1
+    pct_positive: 49.68
+
+  hERG:
+    benchmark: TDC
+    n_samples: 655
+    n_tasks: 1
+    pct_positive: 68.85
+
+  hERG_Karim:
+    benchmark: TDC
+    n_samples: 13445
+    n_tasks: 1
+    pct_positive: 49.97
+
+  # TDC — ADME
+  Bioavailability_Ma:
+    benchmark: TDC
+    n_samples: 640
+    n_tasks: 1
+    pct_positive: 76.88
+
+  CYP1A2_Veith:
+    benchmark: TDC
+    n_samples: 12579
+    n_tasks: 1
+    pct_positive: 46.34
+
+  CYP2C19_Veith:
+    benchmark: TDC
+    n_samples: 12665
+    n_tasks: 1
+    pct_positive: 45.95
+
+  CYP2C9_Substrate_CarbonMangels:
+    benchmark: TDC
+    n_samples: 669
+    n_tasks: 1
+    pct_positive: 21.08
+
+  CYP2C9_Veith:
+    benchmark: TDC
+    n_samples: 12092
+    n_tasks: 1
+    pct_positive: 33.45
+
+  CYP2D6_Substrate_CarbonMangels:
+    benchmark: TDC
+    n_samples: 667
+    n_tasks: 1
+    pct_positive: 28.64
+
+  CYP2D6_Veith:
+    benchmark: TDC
+    n_samples: 13130
+    n_tasks: 1
+    pct_positive: 19.15
+
+  CYP3A4_Substrate_CarbonMangels:
+    benchmark: TDC
+    n_samples: 670
+    n_tasks: 1
+    pct_positive: 52.99
+
+  CYP3A4_Veith:
+    benchmark: TDC
+    n_samples: 12328
+    n_tasks: 1
+    pct_positive: 41.45
+
+  HIA_Hou:
+    benchmark: TDC
+    n_samples: 578
+    n_tasks: 1
+    pct_positive: 86.51
+
+  PAMPA_NCATS:
+    benchmark: TDC
+    n_samples: 2034
+    n_tasks: 1
+    pct_positive: 85.5
+
+  Pgp_Broccatelli:
+    benchmark: TDC
+    n_samples: 1218
+    n_tasks: 1
+    pct_positive: 53.37
+
+  # TDC — HTS
+  SARSCoV2_3CLPro_Diamond:
+    benchmark: TDC
+    n_samples: 880
+    n_tasks: 1
+    pct_positive: 8.86
+
+  SARSCoV2_Vitro_Touret:
+    benchmark: TDC
+    n_samples: 1484
+    n_tasks: 1
+    pct_positive: 5.93
+
+  # MoleculeNet (OGB variants; config/datasets.yaml keys in parentheses)
+  MoleculeNet_BACE:           # clf_ogbg-molbace
+    benchmark: MoleculeNet
+    n_samples: 1513
+    n_tasks: 1
+    pct_positive: 45.67
+
+  MoleculeNet_BBBP:           # clf_ogbg-molbbbp
+    benchmark: MoleculeNet
+    n_samples: 2039
+    n_tasks: 1
+    pct_positive: 76.51
+
+  MoleculeNet_ClinTox:        # clf_ogbg-molclintox
+    benchmark: MoleculeNet
+    n_samples: 1477
+    n_tasks: 2
+    pct_positive: 50.61
+
+  MoleculeNet_HIV:            # clf_ogbg-molhiv
+    benchmark: MoleculeNet
+    n_samples: 41084
+    n_tasks: 1
+    pct_positive: 3.5
+
+  MoleculeNet_MUV:            # clf_ogbg-molmuv
+    benchmark: MoleculeNet
+    n_samples: 93087
+    n_tasks: 17
+    pct_positive: 0.2
+
+  MoleculeNet_SIDER:          # clf_ogbg-molsider
+    benchmark: MoleculeNet
+    n_samples: 1427
+    n_tasks: 27
+    pct_positive: 56.76
+
+  MoleculeNet_Tox21:          # clf_ogbg-moltox21
+    benchmark: MoleculeNet
+    n_samples: 7831
+    n_tasks: 12
+    pct_positive: 7.52

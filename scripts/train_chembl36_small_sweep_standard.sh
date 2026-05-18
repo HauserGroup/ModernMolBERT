@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
-# train_chembl36_small_sweep.sh
+# train_chembl36_small_sweep_standard.sh
 #
-# Full 3-axis hyperparameter sweep for ModernBERT-small on ChEMBL36 SELFIES.
-# Axes: masking_strategy (3) × mlm_probability (3) × learning_rate (3) = 27 runs.
+# Hyperparameter sweep for ModernMolBERT-small on ChEMBL36 SELFIES.
+# Axes: masking_strategy (1: standard) × mlm_probability (3) × learning_rate (3) = 9 runs.
 #
 # Runs sequentially on a single GPU (CUDA device 0).
 # Each run's stdout+stderr is written to <output_dir>/train.log.
 # Already-populated output directories are skipped (safe to re-run after partial failure).
-#
-# PREREQUISITE — before launching this script, edit LOCAL_MODERNBERT_PRESETS["small"]
-# in modernmolbert/train_selfies_ape_modernbert.py and set:
-#
-#   "intermediate_size": 2048   # was 768 — FFN bottleneck fix
-#
-# Then do a 200-step calibration run to confirm loss drops normally before committing
-# to the full sweep.
 #
 # Requirements: uv
 
@@ -31,7 +23,6 @@ TOKENIZER_PATH="tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.js
 TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.metadata.json"
 
 # ─── Fixed training hyperparameters ───────────────────────────────────────────
-# BUG FIX: MODEL_SIZE was "base" — the working, calibrated config is "small".
 MODEL_SIZE="small"
 MAX_SEQ_LENGTH=128
 MAX_STEPS=30000

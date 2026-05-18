@@ -1,10 +1,19 @@
 import types
+from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.dabest_plots import (
     dabest_embedder_comparison,
     dabest_model_comparison,
+)
+
+PRASKI_CSV = (
+    Path(__file__).parent.parent / "data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv"
+)
+praski_csv_present = pytest.mark.skipif(
+    not PRASKI_CSV.exists(), reason=f"Praski CSV not found: {PRASKI_CSV}"
 )
 
 
@@ -121,3 +130,70 @@ def test_dabest_embedder_comparison_pairs_by_dataset_and_head(monkeypatch) -> No
     assert captured["idx"] == ("ecfp", "modern")
     assert set(captured["data"].columns) == {"embedder", "test_metric", "__pair_id__"}
     assert captured["data"]["__pair_id__"].nunique() == 2
+
+
+# ── integration tests against the real Praski preprint CSV ───────────────────
+
+
+@praski_csv_present
+def test_praski_csv_loads_with_correct_schema() -> None:
+    df = pd.read_csv(PRASKI_CSV)
+    required = {"id", "dataset", "task", "embedder", "model", "test_metric", "test_metric_name"}
+    assert required.issubset(df.columns), f"Missing columns: {required - set(df.columns)}"
+    assert not df.empty
+    assert set(df["model"].unique()) == {"rf", "ridge", "knn"}
+    assert df["task"].eq("classification").all()
+
+
+@praski_csv_present
+def test_model_comparison_pairs_on_real_data(monkeypatch) -> None:
+    captured, _ = _install_fake_dabest(monkeypatch)
+
+    dabest_model_comparison(
+        PRASKI_CSV,
+        control_model="rf",
+        comparison_models=["ridge"],
+        metric_name="roc_auc",
+        embedders=["CDDD", "ECFP"],
+    )
+
+    # 2 embedders × 25 datasets = 50 pairs
+    assert captured["data"]["__pair_id__"].nunique() == 50
+    assert captured["x"] == "model"
+    assert captured["idx"] == ("rf", "ridge")
+
+
+@praski_csv_present
+def test_embedder_comparison_pairs_on_real_data(monkeypatch) -> None:
+    captured, _ = _install_fake_dabest(monkeypatch)
+
+    dabest_embedder_comparison(
+        PRASKI_CSV,
+        control_embedder="CDDD",
+        comparison_embedders=["ECFP"],
+        metric_name="roc_auc",
+        models=["rf"],
+    )
+
+    # 25 datasets × 1 model = 25 pairs
+    assert captured["data"]["__pair_id__"].nunique() == 25
+    assert captured["x"] == "embedder"
+    assert captured["idx"] == ("CDDD", "ECFP")
+
+
+@praski_csv_present
+def test_dataset_filter_reduces_pairs(monkeypatch) -> None:
+    captured, _ = _install_fake_dabest(monkeypatch)
+    datasets = ["AMES", "DILI", "hERG"]
+
+    dabest_model_comparison(
+        PRASKI_CSV,
+        control_model="rf",
+        comparison_models=["ridge"],
+        metric_name="roc_auc",
+        datasets=datasets,
+    )
+
+    df = pd.read_csv(PRASKI_CSV)
+    n_embedders = df[df["dataset"].isin(datasets)]["embedder"].nunique()
+    assert captured["data"]["__pair_id__"].nunique() == n_embedders * len(datasets)

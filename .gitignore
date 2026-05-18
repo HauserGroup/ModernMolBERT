@@ -253,6 +253,8 @@ src/modernmolbert/eval/benchmarking_molecular_models/results/arxiv_preprint_2025
 paper/main.pdf
 paper/papers/*
 paper/notes/
+paper/tables/*.docx
+/plots/
 
 ## Core latex/pdflatex auxiliary files:
 *.aux

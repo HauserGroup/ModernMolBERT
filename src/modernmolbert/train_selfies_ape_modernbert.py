@@ -13,7 +13,6 @@ import time
 import json
 import math
 import platform
-import random
 from pathlib import Path
 from typing import Any
 import os
@@ -142,9 +141,9 @@ def parse_args() -> argparse.Namespace:
     # Model
     parser.add_argument(
         "--model_size",
-        choices=["small", "medium", "base", "large"],
+        choices=["small", "base"],
         default="small",
-        help="ModernBERT architecture preset.",
+        help="ModernBERT architecture preset. 'small' ~30M/512-dim; 'base' ~90M/768-dim.",
     )
     parser.add_argument(
         "--max_seq_length",
@@ -415,7 +414,7 @@ def preview_dataset_and_tokenizer(
     elif local is not None:
         log(f"Dataset mode: local dataset at {local}")
     else:
-        log("No clue where the data is coming from")
+        log("Dataset mode: streaming from HuggingFace Hub")
     log(f"Representation: {SELFIES_REPRESENTATION}")
 
     for i, seq in enumerate(examples, start=1):
@@ -611,8 +610,11 @@ def make_train_iterable_dataset(
     )
 
     def keep_train(row: dict[str, Any]) -> bool:
+        has_content = normalize_sequence(row, args.selfies_column) is not None or "input_ids" in row
+        if not has_content:
+            return False
         if args.use_validation_split:
-            return normalize_sequence(row, args.selfies_column) is not None or "input_ids" in row
+            return True
         return not _is_validation_row(row, args)
 
     ds = ds.filter(keep_train)
@@ -700,12 +702,17 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenize
     return Dataset.from_list(rows)
 
 
-MODERNBERT_CONFIGS = {
+# HuggingFace repo IDs used only as config templates (to inherit ModernBERT-specific fields
+# like rotary embedding settings and attention implementation defaults). No pretrained weights
+# are loaded from these — all models are trained from scratch with our molecular vocabulary.
+# "large" is kept here for completeness but is not exposed as a --model_size choice.
+_MODERNBERT_CONFIG_TEMPLATES = {
     "base": "answerdotai/ModernBERT-base",
     "large": "answerdotai/ModernBERT-large",
 }
 LOCAL_MODERNBERT_PRESETS = {
-    # Designed to sit below MoLFormer-XL's ~46M params for small molecular vocabularies.
+    # ~28–30M params, 512-dim. Sub-MoLFormer-XL (46.8M) efficiency variant.
+    # Comparable to Chemformer (45M, 512-dim) and Uni-Mol (47M, 512-dim).
     # To check parameter count before a full run:
     #   uv run python -c "
     #   from transformers import AutoConfig, AutoModelForMaskedLM
@@ -724,12 +731,15 @@ LOCAL_MODERNBERT_PRESETS = {
         "global_attn_every_n_layers": 3,
         "local_attention": 128,
     },
-    # Still much smaller than official ModernBERT-base, but closer to a strong encoder.
-    "medium": {
-        "hidden_size": 512,
-        "num_hidden_layers": 10,
-        "num_attention_heads": 8,
-        "intermediate_size": 2048,
+    # ~85–95M params, 768-dim. Direct SELFormer (86.7M, 768-dim) comparator.
+    # Also matches MolBERT (85M, 768-dim) and Uni-Mol2 (84M, 768-dim).
+    # Trained from scratch with our vocabulary (not fine-tuned from official weights).
+    # Effective batch size 256: --per_device_train_batch_size 64 --gradient_accumulation_steps 4
+    "base": {
+        "hidden_size": 768,
+        "num_hidden_layers": 12,
+        "num_attention_heads": 12,
+        "intermediate_size": 3072,
         "global_attn_every_n_layers": 3,
         "local_attention": 128,
     },
@@ -744,7 +754,7 @@ def build_modernbert_config(
     if args.model_size in LOCAL_MODERNBERT_PRESETS:
         # Start from official base config so we preserve ModernBERT-specific fields,
         # then override only the scale-related fields.
-        config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS["base"])
+        config = AutoConfig.from_pretrained(_MODERNBERT_CONFIG_TEMPLATES["base"])
         for key, value in LOCAL_MODERNBERT_PRESETS[args.model_size].items():
             setattr(config, key, value)
         # Regenerate layer_types to match the new num_hidden_layers and global_attn_every_n_layers.
@@ -756,7 +766,7 @@ def build_modernbert_config(
             for i in range(config.num_hidden_layers)
         ]
     else:
-        config = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
+        config = AutoConfig.from_pretrained(_MODERNBERT_CONFIG_TEMPLATES[args.model_size])
 
     try:
         import flash_attn  # type: ignore # noqa
@@ -866,7 +876,7 @@ def write_run_metadata(
         "tokenizer_stats": tokenizer_stats,
         "final_eval_metrics": final_eval_metrics,
         "trainer_state_summary": trainer_state,
-        "args": vars(args),
+        "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
     }
 
     best_checkpoint_text = ""
@@ -958,19 +968,20 @@ def main() -> None:
         if args.model_size in LOCAL_MODERNBERT_PRESETS:
             args.max_seq_length = 256
         else:
-            _tmp = AutoConfig.from_pretrained(MODERNBERT_CONFIGS[args.model_size])
+            _tmp = AutoConfig.from_pretrained(_MODERNBERT_CONFIG_TEMPLATES[args.model_size])
             args.max_seq_length = _tmp.max_position_embeddings
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     set_seed(args.seed)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
 
     with (output_dir / "run_args.json").open("w", encoding="utf-8") as f:
-        json.dump(vars(args), f, indent=2)
+        json.dump(
+            {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
+            f,
+            indent=2,
+        )
 
     log(f"Backend: {backend}")
     log(f"bf16={args.bf16}, fp16={args.fp16}")

@@ -65,7 +65,7 @@ def _load(path: Path) -> tuple[np.ndarray, np.ndarray]:
 def _plot_roc(ax, y_true: np.ndarray, y_score: np.ndarray, label: str, color=None) -> float:
     mask = np.isfinite(y_true)
     fpr, tpr, _ = roc_curve(y_true[mask], y_score[mask])
-    auroc = auc(fpr, tpr)
+    auroc = float(auc(fpr, tpr))
     ax.plot(fpr, tpr, label=f"{label}  AUROC={auroc:.3f}", color=color, lw=1.5)
     return auroc
 
@@ -73,7 +73,7 @@ def _plot_roc(ax, y_true: np.ndarray, y_score: np.ndarray, label: str, color=Non
 def _plot_pr(ax, y_true: np.ndarray, y_score: np.ndarray, label: str, color=None) -> float:
     mask = np.isfinite(y_true)
     precision, recall, _ = precision_recall_curve(y_true[mask], y_score[mask])
-    auprc = auc(recall, precision)
+    auprc = float(auc(recall, precision))
     ax.plot(recall, precision, label=f"{label}  AUPRC={auprc:.3f}", color=color, lw=1.5)
     return auprc
 
@@ -103,18 +103,15 @@ def _clf_figure(
             color = colors[ci % len(colors)]
 
             if y_score.ndim == 2:
-                # Multioutput: one line per task column.
-                n_tasks = y_score.shape[1]
-                for t in range(n_tasks):
-                    col_true = y_true[:, t] if y_true.ndim == 2 else y_true
-                    col_score = y_score[:, t]
-                    if not _has_enough_data(col_true):
-                        continue
-                    tag = f"{emb}/{head}/task{t}"
-                    c = colors[ci % len(colors)]
-                    _plot_roc(ax_roc, col_true, col_score, tag, color=c)
-                    _plot_pr(ax_pr, col_true, col_score, tag, color=c)
-                    ci += 1
+                # Multioutput: micro-average over all tasks.
+                col_true = y_true.ravel()
+                col_score = y_score.ravel()
+                if not _has_enough_data(col_true):
+                    continue
+                tag = f"{emb}/{head} (micro)"
+                _plot_roc(ax_roc, col_true, col_score, tag, color=color)
+                _plot_pr(ax_pr, col_true, col_score, tag, color=color)
+                ci += 1
             else:
                 if not _has_enough_data(y_true):
                     continue

@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,9 @@ import pandas as pd
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Rank pretraining runs in a sweep directory by a selection metric."
+    )
     parser.add_argument("--run_root", required=True, type=Path)
     parser.add_argument("--metric", default="eval_loss")
     parser.add_argument(
@@ -24,6 +27,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output_csv", type=Path, default=None)
     parser.add_argument("--output_json", type=Path, default=None)
+    parser.add_argument(
+        "--output_report",
+        type=Path,
+        default=None,
+        help="Write a Markdown summary report to this path.",
+    )
     parser.add_argument("--copy_best_to", type=Path, default=None)
     parser.add_argument(
         "--require_complete",
@@ -41,12 +50,13 @@ def read_json(path: Path) -> dict[str, Any]:
         return json.load(f)
 
 
-def flatten_metric_dict(prefix: str, data: dict[str, Any]) -> dict[str, Any]:
-    out = {}
-    for key, value in data.items():
-        if isinstance(value, int | float | str | bool) or value is None:
-            out[f"{prefix}{key}"] = value
-    return out
+def flatten_scalar_dict(data: dict[str, Any]) -> dict[str, Any]:
+    """Return only scalar-valued entries (keys already carry their prefix)."""
+    return {
+        key: value
+        for key, value in data.items()
+        if isinstance(value, int | float | str | bool) or value is None
+    }
 
 
 def best_eval_from_log_history(
@@ -103,12 +113,16 @@ def summarize_run(run_dir: Path, metric: str, lower_is_better: bool) -> dict[str
 
     max_steps = run_args.get("max_steps")
     global_step = trainer_state.get("global_step")
-    completed = bool(has_final_model and max_steps is not None and global_step == max_steps)
+    completed = bool(
+        has_final_model
+        and max_steps is not None
+        and global_step is not None
+        and global_step >= max_steps
+    )
 
     best_metric = trainer_state.get("best_metric")
     best_checkpoint = trainer_state.get("best_model_checkpoint")
 
-    # Fallback if Trainer did not populate best_metric.
     best_from_history, best_step_from_history = best_eval_from_log_history(
         trainer_state,
         metric=metric,
@@ -121,9 +135,9 @@ def summarize_run(run_dir: Path, metric: str, lower_is_better: bool) -> dict[str
     row: dict[str, Any] = {
         "run_name": run_dir.name,
         "run_dir": str(run_dir),
-        "status": "complete"
-        if completed
-        else ("has_final_model" if has_final_model else "incomplete"),
+        "status": (
+            "complete" if completed else ("has_final_model" if has_final_model else "incomplete")
+        ),
         "has_final_model": has_final_model,
         "completed_max_steps": completed,
         "max_steps": max_steps,
@@ -145,22 +159,20 @@ def summarize_run(run_dir: Path, metric: str, lower_is_better: bool) -> dict[str
         "tokenizer_vocab_path": run_args.get("tokenizer_vocab_path"),
     }
 
-    row.update(flatten_metric_dict("eval_", eval_results))
-    row.update(flatten_metric_dict("train_", train_results))
+    # Eval and train result keys already carry their own prefix (e.g. eval_loss, train_loss).
+    row.update(flatten_scalar_dict(eval_results))
+    row.update(flatten_scalar_dict(train_results))
 
-    # Useful metadata fallbacks.
     row["num_parameters"] = metadata.get("num_parameters", row.get("train_num_parameters"))
     row["metadata_best_checkpoint"] = (metadata.get("trainer_state_summary", {}) or {}).get(
         "best_model_checkpoint"
     )
 
-    # Normalize selection metric.
+    # Resolve selection metric: prefer direct key, then eval_ prefix, then log-history fallback.
     if metric in row:
         selection_metric = row[metric]
     elif f"eval_{metric}" in row:
         selection_metric = row[f"eval_{metric}"]
-    elif metric == "eval_loss" and "eval_eval_loss" in row:
-        selection_metric = row["eval_eval_loss"]
     else:
         selection_metric = best_metric
 
@@ -177,9 +189,7 @@ def summarize_run(run_dir: Path, metric: str, lower_is_better: bool) -> dict[str
 def discover_runs(run_root: Path) -> list[Path]:
     runs = []
     for child in sorted(run_root.iterdir()):
-        if not child.is_dir():
-            continue
-        if child.name.startswith("."):
+        if not child.is_dir() or child.name.startswith("."):
             continue
         if (child / "run_args.json").exists() or (child / "trainer_state.json").exists():
             runs.append(child)
@@ -190,11 +200,99 @@ def copy_best_model(best_row: dict[str, Any], destination: Path) -> None:
     src = Path(best_row["final_model"])
     if not src.exists():
         raise FileNotFoundError(f"Best final_model does not exist: {src}")
-
     if destination.exists():
-        raise FileExistsError(f"Destination already exists: {destination}")
-
+        raise FileExistsError(
+            f"Destination already exists: {destination}. Remove it or choose a different path."
+        )
     shutil.copytree(src, destination)
+
+
+# ── report helpers ────────────────────────────────────────────────────────────
+
+
+def _fmt(v: Any) -> str:
+    if isinstance(v, float):
+        return "—" if math.isnan(v) else f"{v:.4g}"
+    return "—" if v is None else str(v)
+
+
+def _markdown_table(df: pd.DataFrame) -> str:
+    cols = list(df.columns)
+    rows = list(df.itertuples(index=False, name=None))
+    header = "| " + " | ".join(cols) + " |"
+    sep = "| " + " | ".join("---" for _ in cols) + " |"
+    body = "\n".join("| " + " | ".join(_fmt(v) for v in row) + " |" for row in rows)
+    return "\n".join([header, sep, body])
+
+
+def write_report(df: pd.DataFrame, args: argparse.Namespace, path: Path) -> None:
+    best = df.iloc[0]
+    lines: list[str] = []
+
+    lines += [
+        f"# Sweep report: {args.run_root.name}",
+        "",
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}  ",
+        f"Root: `{args.run_root}`  ",
+        f"Metric: `{args.metric}` ({'lower' if args.lower_is_better else 'higher'} is better)  ",
+        f"Runs ranked: {len(df)}",
+        "",
+        "## Ranked runs",
+        "",
+    ]
+
+    overview_cols = [
+        "rank",
+        "run_name",
+        "status",
+        "selection_metric",
+        "learning_rate",
+        "masking_strategy",
+        "mlm_probability",
+        "global_step",
+        "max_steps",
+    ]
+    lines += [_markdown_table(df[[c for c in overview_cols if c in df.columns]]), ""]
+
+    lines += [f"## Best run: `{best['run_name']}`", ""]
+
+    hp_cols = [
+        "learning_rate",
+        "warmup_steps",
+        "weight_decay",
+        "per_device_train_batch_size",
+        "gradient_accumulation_steps",
+        "masking_strategy",
+        "mlm_probability",
+        "max_seq_length",
+        "model_size",
+        "max_steps",
+        "global_step",
+    ]
+    hp_items = [(c, best[c]) for c in hp_cols if c in best.index and pd.notna(best[c])]
+    if hp_items:
+        lines += ["### Hyperparameters", ""]
+        lines += [f"- **{k}:** {_fmt(v)}" for k, v in hp_items]
+        lines.append("")
+
+    eval_items = [
+        (c, best[c])
+        for c in df.columns
+        if c.startswith("eval_") and c in best.index and pd.notna(best[c])
+    ]
+    if eval_items:
+        lines += ["### Evaluation metrics", ""]
+        lines += [f"- **{k}:** {_fmt(v)}" for k, v in eval_items]
+        lines.append("")
+
+    if best.get("final_model"):
+        lines += [f"**Final model:** `{best['final_model']}`", ""]
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ── main ──────────────────────────────────────────────────────────────────────
 
 
 def main() -> None:
@@ -205,11 +303,7 @@ def main() -> None:
         raise SystemExit(f"No runs found under {args.run_root}")
 
     rows = [
-        summarize_run(
-            run_dir,
-            metric=args.metric,
-            lower_is_better=args.lower_is_better,
-        )
+        summarize_run(run_dir, metric=args.metric, lower_is_better=args.lower_is_better)
         for run_dir in run_dirs
     ]
 
@@ -222,10 +316,7 @@ def main() -> None:
     if df.empty:
         raise SystemExit("No runs had a usable selection metric.")
 
-    df = df.sort_values(
-        by=["selection_metric"],
-        ascending=[args.lower_is_better],
-    ).reset_index(drop=True)
+    df = df.sort_values("selection_metric", ascending=args.lower_is_better).reset_index(drop=True)
     df.insert(0, "rank", range(1, len(df) + 1))
 
     display_cols = [
@@ -240,15 +331,14 @@ def main() -> None:
         "learning_rate",
         "max_steps",
         "global_step",
-        "eval_eval_loss",
-        "eval_eval_perplexity",
-        "eval_eval_masked_accuracy",
-        "train_train_loss",
-        "train_train_runtime",
+        "eval_loss",
+        "eval_perplexity",
+        "eval_masked_accuracy",
+        "train_loss",
+        "train_runtime",
         "best_model_checkpoint",
     ]
     display_cols = [c for c in display_cols if c in df.columns]
-
     print(df[display_cols].to_string(index=False))
 
     if args.output_csv:
@@ -263,6 +353,10 @@ def main() -> None:
             encoding="utf-8",
         )
         print(f"wrote JSON: {args.output_json}")
+
+    if args.output_report:
+        write_report(df, args, args.output_report)
+        print(f"wrote report: {args.output_report}")
 
     if args.copy_best_to:
         best: dict[str, Any] = {str(k): v for k, v in df.iloc[0].to_dict().items()}

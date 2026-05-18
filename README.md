@@ -60,6 +60,7 @@ src/modernmolbert/
   train_ape_tokenizer.py               # tokenizer training CLI
   validate_tokenizer.py                # tokenizer validation CLI
   train_selfies_ape_modernbert.py      # MLM pretraining CLI
+  select_pretraining_run.py            # rank sweep runs and select best checkpoint
   collator.py                          # MolecularMLMCollator (standard / span / hetero_span)
   paths.py                             # repository-relative path helpers
   utils.py                             # shared dataset/tokenizer helpers
@@ -292,6 +293,36 @@ uv run accelerate launch -m modernmolbert.train_selfies_ape_modernbert \
   --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
   --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
 ```
+
+### 7. Select the best run from a sweep
+
+After running multiple training jobs under a shared directory, rank them by evaluation metric:
+
+```bash
+uv run python -m modernmolbert.select_pretraining_run \
+  --run_root runs/my_lr_sweep \
+  --metric eval_loss \
+  --lower_is_better \
+  --output_report runs/my_lr_sweep/report.md \
+  --copy_best_to runs/best_model
+```
+
+Flags:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--run_root` | required | Directory containing one subdirectory per run |
+| `--metric` | `eval_loss` | Metric to rank by |
+| `--lower_is_better` / `--no-lower_is_better` | `True` | Direction of the metric |
+| `--require_complete` | `False` | Skip runs that did not reach `max_steps` |
+| `--output_report` | — | Write a Markdown summary to this path |
+| `--output_csv` | — | Write the full ranked table as CSV |
+| `--output_json` | — | Write the full ranked table as JSON |
+| `--copy_best_to` | — | Copy `final_model/` of the best run to this path |
+
+A run is discovered if its subdirectory contains `run_args.json` or `trainer_state.json`. Hidden directories are skipped. If `--require_complete` is set, only runs where `global_step >= max_steps` and a `final_model/` directory exists are ranked.
+
+The Markdown report (`--output_report`) contains a ranked overview table, best-run hyperparameters, and all evaluation metrics.
 
 ## Training output layout
 
@@ -642,63 +673,6 @@ print("reload ok", out.logits.shape)
 PY
 ```
 
-## Evaluation
-
-Prepare MoleculeNet datasets, then run benchmark suites through the shared suite CLI.
-
-```bash
-uv run python -m modernmolbert.eval.cli.prepare_moleculenet \
-  --split scaffold \
-  --seed 13 \
-  --output_root data/eval/moleculenet_sanitized \
-  --deepchem_data_dir data/deepchem/raw \
-  --deepchem_save_dir data/deepchem/processed
-
-uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
-  --suite configs/eval_suites/pilot_core.yaml \
-  --output_dir outputs/eval/pilot_core \
-  --overwrite
-
-uv run python -m modernmolbert.eval.cli.report_benchmark_results \
-  --results_csv outputs/eval/pilot_core/results.csv \
-  --output_dir outputs/eval/pilot_core/report
-```
-
-## Benchmark suites are the canonical evaluation path
-
-For reproducible benchmark results, use the suite runner:
-
-```bash
-
-uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
-  --suite configs/eval_suites/pilot_core.yaml \
-  --output_dir outputs/eval/pilot_core \
-  --overwrite
-
-```
-
-### Benchmark results differ between scripts
-
-Use the shared benchmark suite runner for benchmark results:
-
-```bash
-uv run python -m modernmolbert.eval.cli.run_benchmark_suite
-```
-
-Avoid comparing results from older direct embedding/sklearn paths.
-
-## With CUDA
-
-```bash
-install-cuda:
-	uv sync
-	uv pip install flash-attn --no-build-isolation
-
-install:
-	uv sync
-
-
-```
 
 ## Development principles
 

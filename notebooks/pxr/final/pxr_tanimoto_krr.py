@@ -99,7 +99,7 @@ class Config:
 
 
 def canonicalize(smi: str):
-    """Return RDKit canonical SMILES, or None if unparseable."""
+    """Return RDKit canonical SMILES, or None if unparsable."""
     mol = Chem.MolFromSmiles(smi)
     return Chem.MolToSmiles(mol) if mol is not None else None
 
@@ -411,7 +411,7 @@ def analog_neighbourhood_cv(
     results: dict = {}
     med_maes: list = []
 
-    for f_idx, (a_idx, hood) in enumerate(folds):
+    for f_idx, (a_idx, hood) in enumerate(folds):  # noqa: B007
         train_mask = np.ones(len(fp), dtype=bool)
         train_mask[hood] = False
 

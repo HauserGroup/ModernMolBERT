@@ -24,6 +24,19 @@ def test_ape_train_rejects_empty_corpus() -> None:
         tokenizer.train(corpus=[], max_vocab_size=32, min_freq_for_merge=2)
 
 
+def test_ape_train_rejects_nonpositive_checkpoint_interval() -> None:
+    tokenizer = APEPreTrainedTokenizer()
+
+    with pytest.raises(ValueError, match="checkpoint_interval"):
+        tokenizer.train(
+            corpus=["[C][O]"],
+            max_vocab_size=32,
+            min_freq_for_merge=2,
+            save_checkpoint=True,
+            checkpoint_interval=0,
+        )
+
+
 def test_load_vocabulary_rejects_duplicate_ids(tmp_path) -> None:
     vocab_path = tmp_path / "bad_vocab.json"
     vocab_path.write_text(

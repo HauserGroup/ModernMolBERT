@@ -97,19 +97,22 @@ def ape_tokenize(
 
     n = len(pieces)
     tokens: list[str] = []
+    append_token = tokens.append
+    vocab_contains = vocab.__contains__
+    join_pieces = "".join
     i = 0
 
     while i < n:
         upper = min(n, i + max_piece_span)
 
         for j in range(upper, i, -1):
-            candidate = "".join(pieces[i:j])
-            if candidate in vocab:
-                tokens.append(candidate)
+            candidate = join_pieces(pieces[i:j])
+            if vocab_contains(candidate):
+                append_token(candidate)
                 i = j
                 break
         else:
-            tokens.append(unk_token)
+            append_token(unk_token)
             i += 1
 
     return tokens
@@ -162,7 +165,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
         self.representation = _normalize_representation(representation)
         self.vocabulary_frequency: dict[str, int] = {}
-        self.pair_counts: dict[tuple[str, str] | str, int] = {}
+        self.pair_counts: dict[tuple[str, str], int] = {}
         self._max_piece_span = _max_vocab_piece_span(self.vocab, self.representation)
 
         super().__init__(
@@ -497,30 +500,50 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         checkpoint_path: str = "checkpoint",
         checkpoint_interval: int = 500,
     ) -> None:
-        self.representation = _normalize_representation(representation or type)
+        import warnings
+
+        new_rep = _normalize_representation(representation or type)
+        if new_rep != self.representation:
+            warnings.warn(
+                f"train() representation={new_rep!r} differs from tokenizer "
+                f"representation={self.representation!r}. Overwriting.",
+                UserWarning,
+                stacklevel=2,
+            )
+        self.representation = new_rep
         text_padding = " " * 80
+
+        if not corpus:
+            raise ValueError("Cannot train APE tokenizer on an empty corpus.")
 
         print(f"Pretokenizing {self.representation}", end="\r")
         tokenized_corpus = []
         vocabulary_frequency: defaultdict[str, int] = defaultdict(int)
+        saw_tokens = False
 
         for sentence in corpus:
             tokens = self.pre_tokenize(str(sentence))
             if not tokens:
                 continue
-            tokenized_corpus.append(tokens)
+            saw_tokens = True
             for token in tokens:
                 vocabulary_frequency[token] += 1
+            if len(tokens) > 1:
+                tokenized_corpus.append(tokens)
         print(
             f"Pretokenization complete, found {len(vocabulary_frequency)} tokens",
             end="\r",
         )
 
-        if not tokenized_corpus:
+        if not saw_tokens:
             raise ValueError("Cannot train APE tokenizer on an empty corpus.")
 
         pre_tokens_counts = len(vocabulary_frequency)
         merged_counter = len(vocabulary_frequency) + 1
+        if save_checkpoint and checkpoint_interval <= 0:
+            raise ValueError(
+                "checkpoint_interval must be positive when save_checkpoint is enabled."
+            )
         checkpoint_increment = checkpoint_interval
         batch = checkpoint_interval + pre_tokens_counts
         piece_count_cache: dict[str, int] = {}
@@ -539,22 +562,26 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                     pair = (tokens[i], tokens[i + 1])
 
                     if max_merge_pieces is not None:
-                        merged_candidate = "".join(pair)
+                        merged_candidate = pair[0] + pair[1]
                         if merged_piece_count(merged_candidate) > max_merge_pieces:
                             continue
 
                     pair_counts[pair] += 1
 
-            merged_pair_counts: dict[tuple[str, str] | str, int] = {
-                pair: count for pair, count in pair_counts.items()
-            }
-            self.pair_counts = merged_pair_counts
+            self.pair_counts = dict(pair_counts)
             if not pair_counts:
                 return ("", ""), 0
-            return max(pair_counts.items(), key=lambda x: x[1], default=(("", ""), 0))
+
+            most_common_pair = ("", "")
+            most_common_frequency = 0
+            for pair, count in pair_counts.items():
+                if count > most_common_frequency:
+                    most_common_pair = pair
+                    most_common_frequency = count
+            return most_common_pair, most_common_frequency
 
         while True:
-            if save_checkpoint and len(vocabulary_frequency) == batch:
+            if save_checkpoint and len(vocabulary_frequency) >= batch:
                 self.vocabulary_frequency = dict(vocabulary_frequency)
                 self.vocab = {
                     **{
@@ -585,7 +612,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                 print("\rMax vocabulary achieved", text_padding)
                 break
 
-            if all(len(tokens) < 2 for tokens in tokenized_corpus):
+            if not tokenized_corpus:
                 print("\rNo more mergeable pairs", text_padding)
                 break
 
@@ -606,7 +633,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                     f"{round(merged_counter / max_vocab_size * 100, 2)}%"
                 )
                 merged_counter += 1
-            vocabulary_frequency[merged_word] = vocabulary_frequency.get(merged_word, 0) + freq
+            vocabulary_frequency[merged_word] += freq
 
             new_tokenized_corpus = []
             for tokens in tokenized_corpus:
@@ -626,7 +653,8 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                         append_token(tokens[i])
                         i += 1
 
-                new_tokenized_corpus.append(new_tokens)
+                if len(new_tokens) > 1:
+                    new_tokenized_corpus.append(new_tokens)
 
             tokenized_corpus = new_tokenized_corpus
 
@@ -642,8 +670,6 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
 
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
         self._refresh_tokenization_cache()
-
-        checkpoint_dir = Path(checkpoint_path)
 
     def train_from_iterator(self, iterator, *args, **kwargs) -> None:
         raise NotImplementedError("train_from_iterator is not implemented for APE")

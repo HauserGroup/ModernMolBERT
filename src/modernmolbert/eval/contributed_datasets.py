@@ -159,6 +159,7 @@ def load_clintox(*, root: str | Path) -> EvalDataset:
         metadata={"source": "MoleculeNet ClinTox", "missing_label_policy": "Dropped"},
     )
 
+
 def load_tdc_herg_blockers(*, root: str | Path) -> EvalDataset:
     root = Path(root)
     task_names = ["herg_blocker"]
@@ -249,7 +250,7 @@ def register_contributed_datasets() -> None:
             license="MIT",
         )
     )
-    
+
     register_dataset(
         DatasetSpec(
             name="tdc_herg_blockers",

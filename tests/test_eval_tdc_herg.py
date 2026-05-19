@@ -17,6 +17,4 @@ def test_load_tdc_herg_blockers(tmp_path: Path) -> None:
 
     dataset.check()
     assert dataset.name == "tdc_herg_blockers"
-    assert len(dataset.train) == 2  
-
-
+    assert len(dataset.train) == 2

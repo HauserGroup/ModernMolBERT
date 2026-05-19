@@ -1,0 +1,28 @@
+{
+  "ape_source": "modernmolbert.local",
+  "created_at_utc": "2026-05-19T10:31:01.337345+00:00",
+  "creation_command": "python -m modernmolbert.train_ape_tokenizer",
+  "dataset_name": "data/pretrain/chembl36_selfies",
+  "extra_vocab_selfies_path": null,
+  "extra_vocab_symbols_added": 0,
+  "extra_vocab_symbols_path": null,
+  "extra_vocab_symbols_requested": 0,
+  "max_merge_pieces": 8,
+  "max_vocab_size": 5000,
+  "min_freq_for_merge": 500,
+  "representation": "SELFIES",
+  "seed": 42,
+  "selfies_column": "selfies",
+  "shuffle_buffer_size": 100000,
+  "special_ids": {
+    "bos_token": 0,
+    "eos_token": 2,
+    "mask_token": 4,
+    "pad_token": 1,
+    "unk_token": 3
+  },
+  "tokenizer_path": "tokenizer/chembl36_selfies_2m_ape_max8_min500.json",
+  "tokenizer_sha256": "b7f9bafdfc87c48f63a87bf5c37286fff6ad98504c5032f355100d851ba2201d",
+  "tokenizer_train_size": 2000000,
+  "vocab_size": 5005
+}

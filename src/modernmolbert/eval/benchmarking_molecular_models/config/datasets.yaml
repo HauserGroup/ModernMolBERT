@@ -264,3 +264,22 @@ datasets:
     memory_weight: 16
     source:
       name: OGB
+
+# ── Contributed (local) datasets ──────────────────────────────────────────────
+# Add your own dataset by creating a directory with train.csv + test.csv
+# (valid.csv optional). Each CSV needs a SMILES column and label column(s).
+# Rows with missing or non-numeric labels are dropped automatically.
+# SMILES are canonicalized via RDKit; invalid SMILES are dropped with a warning.
+#
+# Example entry (uncomment and edit):
+#
+# datasets:
+#   my_assay:
+#     name: my_assay
+#     task: classification         # or regression
+#     metric: roc_auc
+#     source:
+#       name: local
+#       root: data/contributed/my_assay  # relative to CWD when running scripts
+#       smiles_column: smiles            # optional, defaults to "smiles"
+#       label_columns: [active]         # optional, defaults to all non-smiles cols

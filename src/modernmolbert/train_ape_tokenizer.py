@@ -11,6 +11,7 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
   --max_merge_pieces 4 \
+  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 
 # Moderate
@@ -23,6 +24,7 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
   --max_merge_pieces 8 \
+  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 
 # Final

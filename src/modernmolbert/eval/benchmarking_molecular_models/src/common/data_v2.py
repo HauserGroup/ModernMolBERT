@@ -1,9 +1,11 @@
+import os
 import pandas as pd
 
 from collections import defaultdict
 from contextlib import contextmanager
 from importlib import import_module
 from os.path import join
+from pathlib import Path
 from random import Random
 from typing import Any, Literal
 import warnings
@@ -334,6 +336,74 @@ def build_dataset(name: str, task: str, raw_data: pd.DataFrame, splits: Splits) 
     return Dataset(name=name, data=raw_data, splits=splits, task=typed_task)
 
 
+def _drop_missing_labels(frame: pd.DataFrame, task_columns: list[str]) -> pd.DataFrame:
+    for col in task_columns:
+        frame[col] = pd.to_numeric(frame[col], errors="coerce")
+    return frame.dropna(subset=task_columns).reset_index(drop=True)
+
+
+def _infer_label_columns(df: pd.DataFrame, smiles_column: str) -> list[str]:
+    exclude = {smiles_column, "split", "id", "graph"}
+    return [c for c in df.columns if c not in exclude]
+
+
+def _load_local_dataset(dataset_config: Any, resolve_from_cwd: bool) -> Dataset:
+    root = Path(dataset_config.source.root)
+    if resolve_from_cwd and not root.is_absolute():
+        root = Path(os.getcwd()) / root
+
+    smiles_col = getattr(dataset_config.source, "smiles_column", "smiles")
+
+    if not (root / "train.csv").exists():
+        raise FileNotFoundError(f"Local dataset missing train.csv: {root / 'train.csv'}")
+    if not (root / "test.csv").exists():
+        raise FileNotFoundError(f"Local dataset missing test.csv: {root / 'test.csv'}")
+
+    train_df = pd.read_csv(root / "train.csv")
+    test_df = pd.read_csv(root / "test.csv")
+    valid_path = root / "valid.csv"
+    valid_df = pd.read_csv(valid_path) if valid_path.exists() else None
+
+    label_cols = (
+        list(dataset_config.source.label_columns)
+        if hasattr(dataset_config.source, "label_columns")
+        else _infer_label_columns(train_df, smiles_col)
+    )
+    if not label_cols:
+        raise ValueError(f"No label columns found in {root / 'train.csv'}")
+
+    train_df = _drop_missing_labels(train_df, label_cols)
+    test_df = _drop_missing_labels(test_df, label_cols)
+    if valid_df is not None:
+        valid_df = _drop_missing_labels(valid_df, label_cols)
+
+    for df in [train_df, test_df] + ([valid_df] if valid_df is not None else []):
+        if smiles_col != "smiles" and smiles_col in df.columns:
+            df.rename(columns={smiles_col: "smiles"}, inplace=True)
+
+    train_df["split"] = "train"
+    test_df["split"] = "test"
+    frames = [train_df, test_df]
+    if valid_df is not None:
+        valid_df["split"] = "valid"
+        frames.append(valid_df)
+
+    combined = pd.concat(frames, ignore_index=True)
+    splits: Splits = {
+        "train": combined.index[combined["split"] == "train"].tolist(),
+        "test": combined.index[combined["split"] == "test"].tolist(),
+    }
+    if valid_df is not None:
+        splits["valid"] = combined.index[combined["split"] == "valid"].tolist()
+
+    return build_dataset(
+        name=dataset_config.name,
+        task=dataset_config.task,
+        raw_data=combined,
+        splits=splits,
+    )
+
+
 def load(dataset_config: Any, raw_dir: str, resolve_from_cwd: bool = True) -> Dataset:
     if resolve_from_cwd:
         raw_dir = join(".", raw_dir)
@@ -353,6 +423,8 @@ def load(dataset_config: Any, raw_dir: str, resolve_from_cwd: bool = True) -> Da
         )
     elif dataset_config.source.name == "OGB":
         raw_data, splits = ogb_solver(dataset_config.name, raw_dir)
+    elif dataset_config.source.name == "local":
+        return _load_local_dataset(dataset_config, resolve_from_cwd)
     else:
         raise ValueError(f"Unknown dataset source: {dataset_config.source.name}")
 

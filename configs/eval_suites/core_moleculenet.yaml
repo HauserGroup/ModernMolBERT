@@ -49,6 +49,10 @@ datasets:
     eval_split: test
     merge_train_valid: true
 
+  - loader: registered
+    name: tdc_herg_blockers
+    root: data/eval/tdc_herg_blockers
+
 featurizers:
   - type: ecfp4
     name: ecfp4_2048

@@ -511,12 +511,11 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                 stacklevel=2,
             )
         self.representation = new_rep
-        text_padding = " " * 80
 
         if not corpus:
             raise ValueError("Cannot train APE tokenizer on an empty corpus.")
 
-        print(f"Pretokenizing {self.representation}", end="\r")
+        print(f"Pretokenizing {self.representation}...", flush=True)
         tokenized_corpus = []
         vocabulary_frequency: defaultdict[str, int] = defaultdict(int)
         saw_tokens = False
@@ -532,7 +531,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                 tokenized_corpus.append(tokens)
         print(
             f"Pretokenization complete, found {len(vocabulary_frequency)} tokens",
-            end="\r",
+            flush=True,
         )
 
         if not saw_tokens:
@@ -609,20 +608,20 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                 batch += checkpoint_increment
 
             if len(vocabulary_frequency) >= max_vocab_size:
-                print("\rMax vocabulary achieved", text_padding)
+                print("Max vocabulary achieved", flush=True)
                 break
 
             if not tokenized_corpus:
-                print("\rNo more mergeable pairs", text_padding)
+                print("No more mergeable pairs", flush=True)
                 break
 
             most_common_pair, freq = get_most_common_pair(tokenized_corpus)
             if freq < min_freq_for_merge:
-                print("\rNot enough frequency found", text_padding)
+                print("Not enough frequency found", flush=True)
                 break
 
             if not most_common_pair[0] or not most_common_pair[1]:
-                print("\rNo valid merge pair found", text_padding)
+                print("No valid merge pair found", flush=True)
                 break
 
             left_token, right_token = most_common_pair
@@ -630,7 +629,8 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             if merged_word not in vocabulary_frequency:
                 print(
                     f"New merge found: {merged_word} {merged_counter}/{max_vocab_size} "
-                    f"{round(merged_counter / max_vocab_size * 100, 2)}%"
+                    f"{round(merged_counter / max_vocab_size * 100, 2)}%",
+                    flush=True,
                 )
                 merged_counter += 1
             vocabulary_frequency[merged_word] += freq

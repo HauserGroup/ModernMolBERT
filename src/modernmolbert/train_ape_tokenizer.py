@@ -41,11 +41,11 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 
 # Validate
 uv run python -m modernmolbert.validate_tokenizer \
-  --dataset_name data/pretrain/chembl36_selfies_tokenized \
+  --dataset_name data/pretrain/chembl36_selfies \
   --selfies_column selfies \
   --split train \
-  --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max8.json \
-  --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max8.metadata.json \
+  --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
+  --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json \
   --n 10000 \
   --max_seq_length 256
 
@@ -279,7 +279,7 @@ def main() -> None:
         data_files=args.data_files,
         show_progress=args.show_progress,
     )
-    print(f"Corpus collected: {len(corpus)} sequences")
+    print(f"Corpus collected: {len(corpus)} sequences", flush=True)
 
     validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
 
@@ -312,7 +312,8 @@ def main() -> None:
         print(
             "Extra vocab coverage: "
             f"requested={len(extra_symbols)}, added={added_extra_symbols}, "
-            f"already_present={len(extra_symbols) - added_extra_symbols}"
+            f"already_present={len(extra_symbols) - added_extra_symbols}",
+            flush=True,
         )
 
     # Phase 1: write the vocab to disk.
@@ -357,16 +358,16 @@ def main() -> None:
     }
     write_tokenizer_metadata(metadata_path, metadata)
 
-    print("Tokenizer training complete.")
-    print(f"Tokenizer vocabulary: {output_vocab_path}")
-    print(f"Tokenizer metadata: {metadata_path}")
-    print(f"Vocab size: {vocab_size}")
-    print(f"Vocab SHA256: {vocab_sha256}")
-    print(f"Dataset: {args.dataset_name} (column: {resolved_column})")
-    print(f"Training size: {args.tokenizer_train_size}")
-    print(f"Max vocab: {args.max_vocab_size}, Min freq: {args.min_freq_for_merge}")
-    print(f"Extra vocab symbols requested: {len(extra_symbols)}")
-    print(f"Extra vocab symbols added: {added_extra_symbols}")
+    print("Tokenizer training complete.", flush=True)
+    print(f"Tokenizer vocabulary: {output_vocab_path}", flush=True)
+    print(f"Tokenizer metadata: {metadata_path}", flush=True)
+    print(f"Vocab size: {vocab_size}", flush=True)
+    print(f"Vocab SHA256: {vocab_sha256}", flush=True)
+    print(f"Dataset: {args.dataset_name} (column: {resolved_column})", flush=True)
+    print(f"Training size: {args.tokenizer_train_size}", flush=True)
+    print(f"Max vocab: {args.max_vocab_size}, Min freq: {args.min_freq_for_merge}", flush=True)
+    print(f"Extra vocab symbols requested: {len(extra_symbols)}", flush=True)
+    print(f"Extra vocab symbols added: {added_extra_symbols}", flush=True)
 
 
 if __name__ == "__main__":

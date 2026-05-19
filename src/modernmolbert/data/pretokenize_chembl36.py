@@ -2,7 +2,7 @@
 """Pre-tokenize ChEMBL36 SELFIES parquet shards into integer input_ids.
 
 Run once before training:
-    uv run python scripts/pretokenize_chembl36.py
+    uv run python src/modernmolbert/data/pretokenize_chembl36.py
 
 Input:  data/pretrain/chembl36_selfies/{train,valid}/*.parquet
         (SELFIES column: "selfies")
@@ -23,7 +23,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 # ── config ────────────────────────────────────────────────────────────────────
-TOKENIZER_PATH = Path("tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json")
+TOKENIZER_PATH = Path("tokenizer/chembl36_selfies_2m_min2000.json")
 INPUT_ROOT = Path("data/pretrain/chembl36_selfies")
 OUTPUT_ROOT = Path("data/pretrain/chembl36_selfies_tokenized")
 SPLITS = ["train", "valid"]

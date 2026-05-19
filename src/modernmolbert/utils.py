@@ -498,6 +498,8 @@ def collect_corpus_for_tokenizer(
     )
     corpus: list[str] = []
 
+    print(f"[corpus] Collecting {n:,} {representation} sequences...", flush=True)
+    milestones = {int(n * p) for p in (0.25, 0.50, 0.75)}
     pbar = tqdm(
         total=n,
         desc=f"Collecting {representation} corpus for APE tokenizer",
@@ -509,9 +511,15 @@ def collect_corpus_for_tokenizer(
             continue
         corpus.append(seq)
         pbar.update(1)
+        if len(corpus) in milestones:
+            print(
+                f"[corpus] {len(corpus):,}/{n:,} sequences collected ({len(corpus) * 100 // n}%)",
+                flush=True,
+            )
         if len(corpus) >= n:
             break
     pbar.close()
+    print(f"[corpus] Done: {len(corpus):,} sequences collected.", flush=True)
 
     if not corpus:
         raise RuntimeError("Tokenizer corpus is empty. Check dataset column names.")

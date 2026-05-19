@@ -25,6 +25,20 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_merge_pieces 8 \
   --seed 42
 
+# Final
+uv run python -m modernmolbert.train_ape_tokenizer \
+  --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
+  --dataset_name data/pretrain/chembl36_selfies \
+  --selfies_column selfies \
+  --representation SELFIES \
+  --tokenizer_train_size 2000000 \
+  --max_vocab_size 2000 \
+  --min_freq_for_merge 3000 \
+  --max_merge_pieces 2 \
+  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
+  --seed 42
+
+
 # Validate
 uv run python -m modernmolbert.validate_tokenizer \
   --dataset_name data/pretrain/chembl36_selfies_tokenized \

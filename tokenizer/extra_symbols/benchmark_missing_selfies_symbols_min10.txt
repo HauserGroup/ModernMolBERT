@@ -1,5 +1,6 @@
 # Missing SELFIES primitive symbols selected from benchmark diagnostics.
 # min_count=10
+# Or structural
 [NH2]
 [#O+1]
 [Sn]
@@ -7,7 +8,6 @@
 [=OH1+1]
 [=CH0]
 [Cu-3]
-[Branch3]
 [Ni-2]
 [Pt-2]
 [Pd-2]
@@ -39,3 +39,7 @@
 [Fe+3]
 [Mo]
 [Ring3]
+[-\Ring3]
+[-/Ring3]
+[=Branch3]
+[Branch3]

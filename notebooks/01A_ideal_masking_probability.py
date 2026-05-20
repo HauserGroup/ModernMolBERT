@@ -29,8 +29,8 @@ BENCH_ROOT = ROOT / "src/modernmolbert/eval/benchmarking_molecular_models"
 CONFIG_DIR = BENCH_ROOT / "config"
 
 RUNS_ROOT = ROOT / "runs/chembl36_small_mask_mlm_lr_sweep"
-DATA_DIR = ROOT / "data/benchmarks"
-PREPARED_DIR = DATA_DIR / "prepared"  # pre-existing prepared Dataset joblibs
+DATA_DIR = ROOT / "data"
+PREPARED_DIR = DATA_DIR / "prepared"
 EMBEDDED_DIR = DATA_DIR / "embedded"
 PREDICTIONS_DIR = DATA_DIR / "predictions"
 

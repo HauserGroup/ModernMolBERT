@@ -28,6 +28,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
@@ -77,6 +78,11 @@ def parse_args() -> argparse.Namespace:
         "--hf_login",
         action="store_true",
         help="Call huggingface_hub.login() before uploading (reads HF_TOKEN from env / .env).",
+    )
+    parser.add_argument(
+        "--dry_run",
+        action="store_true",
+        help="Stage and validate the upload contents without creating or updating a Hub repo.",
     )
     return parser.parse_args()
 
@@ -227,6 +233,60 @@ def build_staging_dir(source_dir: Path, run_dir: Path, repo_id: str, tmp: Path) 
     (tmp / "README.md").write_text(readme, encoding="utf-8")
 
 
+def upload_model_to_hub(
+    run_dir: Path,
+    repo_id: str,
+    checkpoint: str = "final",
+    private: bool = False,
+    commit_message: str = "Upload trained ModernMolBERT checkpoint",
+    token: str | None = None,
+    dry_run: bool = False,
+    api: HfApi | None = None,
+) -> dict[str, Any]:
+    if not run_dir.is_absolute():
+        run_dir = repo_root() / run_dir
+
+    source_dir = resolve_source_dir(run_dir, checkpoint)
+    print(f"Source: {source_dir}")
+
+    with tempfile.TemporaryDirectory() as _tmp:
+        tmp = Path(_tmp)
+        build_staging_dir(source_dir, run_dir, repo_id, tmp)
+
+        staged = sorted(tmp.iterdir())
+        staged_names = [f.name for f in staged]
+        print(f"Staged {len(staged)} files: {staged_names}")
+
+        if dry_run:
+            print(f"Dry run: skipped upload to https://huggingface.co/{repo_id}")
+        else:
+            if api is None:
+                api = HfApi(token=token)
+            api.create_repo(
+                repo_id=repo_id,
+                repo_type="model",
+                private=private,
+                exist_ok=True,
+            )
+            api.upload_folder(
+                folder_path=str(tmp),
+                repo_id=repo_id,
+                repo_type="model",
+                commit_message=commit_message,
+            )
+
+    return {
+        "repo_id": repo_id,
+        "url": f"https://huggingface.co/{repo_id}",
+        "run_dir": str(run_dir),
+        "source_dir": str(source_dir),
+        "checkpoint": checkpoint,
+        "private": private,
+        "uploaded": not dry_run,
+        "staged_files": staged_names,
+    }
+
+
 def main() -> None:
     load_dotenv()
     args = parse_args()
@@ -240,35 +300,17 @@ def main() -> None:
         login(token=token)
         token = None  # login() caches it; don't double-pass
 
-    run_dir = args.run_dir
-    if not run_dir.is_absolute():
-        run_dir = repo_root() / run_dir
+    result = upload_model_to_hub(
+        run_dir=args.run_dir,
+        repo_id=args.repo_id,
+        checkpoint=args.checkpoint,
+        private=args.private,
+        commit_message=args.commit_message,
+        token=token,
+        dry_run=args.dry_run,
+    )
 
-    source_dir = resolve_source_dir(run_dir, args.checkpoint)
-    print(f"Source: {source_dir}")
-
-    with tempfile.TemporaryDirectory() as _tmp:
-        tmp = Path(_tmp)
-        build_staging_dir(source_dir, run_dir, args.repo_id, tmp)
-
-        staged = sorted(tmp.iterdir())
-        print(f"Staged {len(staged)} files: {[f.name for f in staged]}")
-
-        api = HfApi(token=token)
-        api.create_repo(
-            repo_id=args.repo_id,
-            repo_type="model",
-            private=args.private,
-            exist_ok=True,
-        )
-        api.upload_folder(
-            folder_path=str(tmp),
-            repo_id=args.repo_id,
-            repo_type="model",
-            commit_message=args.commit_message,
-        )
-
-    print(f"Done — https://huggingface.co/{args.repo_id}")
+    print(f"Done — {result['url']}")
 
 
 if __name__ == "__main__":

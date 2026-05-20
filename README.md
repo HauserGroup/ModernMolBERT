@@ -179,6 +179,31 @@ api.upload_folder(
 )
 ```
 
+For a sweep with one trained model per run, upload every completed `final_model/`
+directory with the batch helper. The ChEMBL36 small mask/MLM/LR sweep currently
+uses this pattern:
+
+```bash
+uv run python -m modernmolbert.upload_sweep_models \
+  --run_root runs/chembl36_small_mask_mlm_lr_sweep \
+  --repo_prefix HauserGroup/ModernMolBERT-small-chembl36 \
+  --private \
+  --dry_run \
+  --manifest runs/chembl36_small_mask_mlm_lr_sweep/hf_upload_manifest.json
+```
+
+Review the dry-run manifest, then rerun without `--dry_run` to create or update
+one private Hugging Face model repo per completed run. Repo names append the run
+slug, for example
+`HauserGroup/ModernMolBERT-small-chembl36-mask-standard-mlm-0p15-lr-1e-4`.
+
+For one-off moves between machines you control, keep the large artifacts outside
+Git and use resumable `rsync`:
+
+```bash
+rsync -avP runs/chembl36_small_mask_mlm_lr_sweep/ user@remote:/path/to/runs/chembl36_small_mask_mlm_lr_sweep/
+```
+
 Uploaded checkpoints load the model from the repository root. With current
 Transformers versions, load the custom tokenizer from the `ape_tokenizer/`
 subfolder because root ModernBERT configs disable remote tokenizer code:

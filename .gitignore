@@ -247,6 +247,14 @@ tokenizer/checkpoints
 # Large files
 src/modernmolbert/eval/benchmarking_molecular_models/results/arxiv_preprint_2025_08.csv
 
+# Trained model artifacts
+checkpoints/
+models/
+wandb/
+*.safetensors
+*.pt
+*.pth
+
 # LaTex
 
 # TEMP main.pdf for now

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# train_chembl36_small_sweep.sh
+# train_chembl36_base_standard_sweep.sh
 #
-# Hyperparameter sweep for ModernMolBERT-small on ChEMBL36 SELFIES.
-# Axes: masking_strategy (3) × mlm_probability (3) × learning_rate (3) = 27 runs.
+# Hyperparameter sweep for ModernMolBERT-base on ChEMBL36 SELFIES.
+# Axes: masking_strategy (1: standard) × mlm_probability (3) × learning_rate (3) = 9 runs.
 #
 # Runs sequentially on a single GPU (CUDA device 0).
 # Each run's stdout+stderr is written to <output_dir>/train.log.
@@ -23,21 +23,20 @@ TOKENIZER_PATH="tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"
 TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json"
 
 # ─── Fixed training hyperparameters ───────────────────────────────────────────
-MODEL_SIZE="small"
+MODEL_SIZE="base"
 MAX_SEQ_LENGTH=128
 MAX_STEPS=30000
 
-# EVAL_SIZE controls how many validation examples are sampled.
-# At eval batch_size=256 this is 16 batches — MAX_EVAL_BATCHES is set to match.
+# EVAL_SIZE=4096 at eval batch_size=64 → 64 batches.
 EVAL_SIZE=4096
-MAX_EVAL_BATCHES=16
+MAX_EVAL_BATCHES=64
 
-PER_DEVICE_TRAIN_BATCH_SIZE=256
-PER_DEVICE_EVAL_BATCH_SIZE=256
-GRADIENT_ACCUMULATION_STEPS=1
+# Base model: reduce per-device batch and accumulate to keep effective batch=256.
+PER_DEVICE_TRAIN_BATCH_SIZE=64
+PER_DEVICE_EVAL_BATCH_SIZE=64
+GRADIENT_ACCUMULATION_STEPS=4
 
 WARMUP_STEPS=2000
-
 WEIGHT_DECAY=0.01
 MAX_GRAD_NORM=1.0
 SAVE_STEPS=5000
@@ -48,15 +47,15 @@ SAVE_TOTAL_LIMIT=2
 NUM_WORKERS=4
 SEED=42
 
-# ─── Sweep grid: 3 × 3 × 3 = 27 runs ─────────────────────────────────────────
-MASKING_STRATEGIES=(standard span hetero_span)
+# ─── Sweep grid: 1 × 3 × 3 = 9 runs ──────────────────────────────────────────
+MASKING_STRATEGIES=(standard)
 
 MLM_PROBS=(0.15 0.20 0.25)
 
 LEARNING_RATES=(2e-4 4e-4 8e-4)
 
 # ─── Output root ──────────────────────────────────────────────────────────────
-RUN_ROOT="runs/chembl36_small_mask_mlm_lr_sweep"
+RUN_ROOT="runs/chembl36_base_standard_mlm_lr_sweep"
 mkdir -p "${RUN_ROOT}"
 
 # ─── Preflight checks ─────────────────────────────────────────────────────────

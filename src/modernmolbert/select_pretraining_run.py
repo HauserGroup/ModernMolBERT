@@ -1,5 +1,40 @@
 #!/usr/bin/env python3
-"""Summarize and rank ModernMolBERT pretraining sweep runs."""
+"""Summarize and rank ModernMolBERT pretraining sweep runs.
+
+Ranks all runs in a sweep directory by a selection metric (default: eval_loss)
+and writes a best_run.json winner record next to the sweep.
+
+# Rank a sweep and write best_run.json + Markdown report
+uv run python -m modernmolbert.select_pretraining_run \
+  --run_root runs/chembl36_small_mask_mlm_lr_sweep \
+  --output_report runs/chembl36_small_mask_mlm_lr_sweep/sweep_report.md
+
+# Suppress best_run.json
+uv run python -m modernmolbert.select_pretraining_run \
+  --run_root runs/chembl36_small_mask_mlm_lr_sweep \
+  --no_output_best_json
+
+# Custom best_run.json path + CSV
+uv run python -m modernmolbert.select_pretraining_run \
+  --run_root runs/chembl36_small_mask_mlm_lr_sweep \
+  --output_best_json results/my_sweep_best.json \
+  --output_csv results/my_sweep.csv
+
+# Only rank completed runs
+uv run python -m modernmolbert.select_pretraining_run \
+  --run_root runs/chembl36_small_mask_mlm_lr_sweep \
+  --require_complete
+
+# Copy best final_model to a new location
+uv run python -m modernmolbert.select_pretraining_run \
+  --run_root runs/chembl36_small_mask_mlm_lr_sweep \
+  --copy_best_to models/best_chembl36_small
+
+best_run.json fields:
+  model_size, masking_strategy, mlm_probability, learning_rate — winning HP combination
+  best_metric, metric — selection metric value and name
+  run_name, run_dir, final_model, best_model_checkpoint — paths for downstream use
+"""
 
 import argparse
 import json
@@ -32,6 +67,22 @@ def parse_args() -> argparse.Namespace:
         help="Write a Markdown summary report to this path.",
     )
     parser.add_argument("--copy_best_to", type=Path, default=None)
+    parser.add_argument(
+        "--output_best_json",
+        type=Path,
+        default=None,
+        help=(
+            "Write winner summary JSON to this path. "
+            "Defaults to {run_root}/best_run.json. "
+            "Use --no_output_best_json to suppress."
+        ),
+    )
+    parser.add_argument(
+        "--no_output_best_json",
+        action="store_true",
+        default=False,
+        help="Do not write a best_run.json.",
+    )
     parser.add_argument(
         "--require_complete",
         action=argparse.BooleanOptionalAction,
@@ -290,6 +341,30 @@ def write_report(df: pd.DataFrame, args: argparse.Namespace, path: Path) -> None
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_best_json(df: pd.DataFrame, path: Path, metric: str) -> None:
+    """Write a compact winner record for downstream use (e.g. upload_model.py)."""
+    best = df.iloc[0]
+
+    def _val(key: str) -> Any:
+        v = best.get(key)
+        return None if pd.isna(v) else v
+
+    record: dict[str, Any] = {
+        "metric": metric,
+        "best_metric": _val("best_metric"),
+        "model_size": _val("model_size"),
+        "masking_strategy": _val("masking_strategy"),
+        "mlm_probability": _val("mlm_probability"),
+        "learning_rate": _val("learning_rate"),
+        "run_name": _val("run_name"),
+        "run_dir": _val("run_dir"),
+        "final_model": _val("final_model"),
+        "best_model_checkpoint": _val("best_model_checkpoint"),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 
@@ -355,6 +430,11 @@ def main() -> None:
     if args.output_report:
         write_report(df, args, args.output_report)
         print(f"wrote report: {args.output_report}")
+
+    if not args.no_output_best_json:
+        best_json_path = args.output_best_json or (args.run_root / "best_run.json")
+        write_best_json(df, best_json_path, args.metric)
+        print(f"wrote best_run.json: {best_json_path}")
 
     if args.copy_best_to:
         best: dict[str, Any] = {str(k): v for k, v in df.iloc[0].to_dict().items()}

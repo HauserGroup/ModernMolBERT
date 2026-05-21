@@ -200,6 +200,45 @@ def load_tdc_herg_blockers(*, root: str | Path) -> EvalDataset:
             "label_definition": "herg_blocker is binary: 0=non-blocker, 1=hERG blocker.",
         },
     )
+    
+def load_tdc_caco2_wang(*, root: str | Path) -> EvalDataset:
+    root = Path(root)
+    task_names = ["caco2_permeability"]
+
+    def read_split(path: Path) -> pd.DataFrame:
+        frame = pd.read_csv(path)
+        return frame.rename(columns={"Drug": "smiles", "Y": "caco2_permeability"})
+
+    train = read_split(root / "train.csv")
+    valid_path = root / "valid.csv"
+    valid = read_split(valid_path) if valid_path.exists() else None
+    test = read_split(root / "test.csv")
+
+    train = _drop_missing_labels(train, task_names=task_names)
+    test = _drop_missing_labels(test, task_names=task_names)
+    if valid is not None:
+        valid = _drop_missing_labels(valid, task_names=task_names)
+
+    return make_eval_dataset_from_splits(
+        name="tdc_caco2_wang",
+        task_type="regression",
+        task_names=task_names,
+        train=train,
+        valid=valid,
+        test=test,
+        smiles_column="smiles",
+        metadata={
+            "source": "Therapeutic Data Commons (TDC)",
+            "source_url": "https://tdcommons.ai/single_pred_tasks/adme/#caco-2-cell-effective-permeability-wang-et-al",
+            "license": "CC-BY-4.0",
+            "split_source": "tdc_scaffold_split",
+            "missing_label_policy": "Rows with missing labels are dropped in the loader.",
+            "label_definition": (
+                "caco2_permeability is the continuous TDC-provided regression target "
+                "for Caco-2 cell effective permeability."
+            ),
+        },
+    )
 
 
 def register_contributed_datasets() -> None:
@@ -264,4 +303,17 @@ def register_contributed_datasets() -> None:
         )
     )
 
+    register_dataset(
+        DatasetSpec(
+            name="tdc_caco2_wang",
+            task_type="regression",
+            task_names=("caco2_permeability",),
+            loader=load_tdc_caco2_wang,
+            description="TDC Caco2 Wang Caco-2 permeability regression benchmark.",
+            source="https://tdcommons.ai/single_pred_tasks/adme/#caco-2-cell-effective-permeability-wang-et-al",
+            citation="Wang et al. 2016; Therapeutic Data Commons",
+            license="CC-BY-4.0",
+        )
+    )
+    
     return None

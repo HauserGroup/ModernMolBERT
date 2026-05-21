@@ -53,6 +53,10 @@ datasets:
     name: tdc_herg_blockers
     root: data/eval/tdc_herg_blockers
 
+  - loader: registered
+    name: tdc_caco2
+    root: data/eval/tdc_caco2_wang
+
 featurizers:
   - type: ecfp4
     name: ecfp4_2048

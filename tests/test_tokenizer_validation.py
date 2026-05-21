@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.validate_tokenizer import _assert_ethanol_not_unknown
 from modernmolbert.utils import (
@@ -247,3 +249,63 @@ def test_collect_corpus_passes_data_files(monkeypatch):
 
     assert corpus == ["[C][C][O]", "[C][O][C]"]
     assert captured.get("data_files") == "/tmp/data/*.parquet"
+
+
+# ---------------------------------------------------------------------------
+# validate_tokenizer._fail_or_warn
+# ---------------------------------------------------------------------------
+
+
+def test_fail_or_warn_raises_system_exit_when_not_warn_only():
+    import argparse
+    from modernmolbert.validate_tokenizer import _fail_or_warn
+
+    args = argparse.Namespace(warn_only=False)
+    with pytest.raises(SystemExit):
+        _fail_or_warn(args, "something went wrong")
+
+
+def test_fail_or_warn_returns_true_and_does_not_raise_when_warn_only(capsys):
+    import argparse
+    from modernmolbert.validate_tokenizer import _fail_or_warn
+
+    args = argparse.Namespace(warn_only=True)
+    result = _fail_or_warn(args, "soft failure")
+    assert result is True
+    out = capsys.readouterr().out
+    assert "WARNING" in out
+    assert "soft failure" in out
+
+
+# ---------------------------------------------------------------------------
+# validate_tokenizer._print_unknown_examples
+# ---------------------------------------------------------------------------
+
+
+def test_print_unknown_examples_skips_when_n_zero(capsys):
+    from modernmolbert.validate_tokenizer import _print_unknown_examples
+
+    tok = _tiny_tokenizer()
+    special_ids = resolve_special_ids(tok)
+    _print_unknown_examples(tok, ["[C][C][O]"], special_ids, max_seq_length=64, n=0)
+    assert capsys.readouterr().out == ""
+
+
+def test_print_unknown_examples_prints_sequences_with_unk(capsys):
+    from modernmolbert.validate_tokenizer import _print_unknown_examples
+
+    tok = _broken_bracket_tokenizer()
+    special_ids = resolve_special_ids(tok)
+    _print_unknown_examples(tok, ["[C][C][O]"], special_ids, max_seq_length=64, n=1)
+    out = capsys.readouterr().out
+    assert "UNKNOWN EXAMPLE" in out
+
+
+def test_print_unknown_examples_skips_sequences_without_unk(capsys):
+    from modernmolbert.validate_tokenizer import _print_unknown_examples
+
+    tok = _tiny_tokenizer()
+    special_ids = resolve_special_ids(tok)
+    # [C][O] are in vocab — no UNK
+    _print_unknown_examples(tok, ["[C][O]"], special_ids, max_seq_length=64, n=5)
+    assert "UNKNOWN EXAMPLE" not in capsys.readouterr().out

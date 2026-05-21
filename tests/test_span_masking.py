@@ -256,6 +256,85 @@ def test_build_token_start_weights_heteroatom_elevated():
     assert weights[8].item() == 2.0, "[Cl] should have heteroatom weight"
 
 
+def test_build_token_start_weights_respects_selfies_atom_boundaries_and_isotopes():
+    ids_to_tokens = {
+        0: "<s>",
+        1: "<pad>",
+        2: "</s>",
+        3: "<unk>",
+        4: "<mask>",
+        5: "[C]",
+        6: "[15N]",
+        7: "[=18O]",
+        8: "[/123I]",
+        9: "[Na]",
+        10: "[Fe]",
+        11: "[Sn]",
+        12: "[Branch1]",
+        13: "[C][=O]",
+        14: "[ClH0]",
+    }
+    coll = _make_collator(
+        "hetero_span",
+        ids_to_tokens=ids_to_tokens,
+        vocab_size=15,
+        heteroatom_start_weight=3.0,
+    )
+    weights = coll._token_start_weights
+    assert weights is not None
+
+    for tok_id in (6, 7, 8, 13, 14):
+        assert weights[tok_id].item() == 3.0, f"{ids_to_tokens[tok_id]} should be elevated"
+    for tok_id in (5, 9, 10, 11, 12):
+        assert weights[tok_id].item() == 1.0, f"{ids_to_tokens[tok_id]} should not be elevated"
+
+
+def test_hetero_span_sampling_uses_hetero_start_weights(monkeypatch):
+    ids_to_tokens = {
+        0: "<s>",
+        1: "<pad>",
+        2: "</s>",
+        3: "<unk>",
+        4: "<mask>",
+        5: "[C]",
+        6: "[N]",
+        7: "[C]",
+    }
+    coll = _make_collator(
+        "hetero_span",
+        ids_to_tokens=ids_to_tokens,
+        vocab_size=8,
+        mlm_probability=0.1,
+        span_max_length=1,
+        heteroatom_start_weight=7.0,
+    )
+
+    class OneTokenSpans:
+        def sample(self, shape):
+            return torch.zeros(shape)
+
+    captured_weights = []
+
+    def choose_hetero_position(weights, num_samples, *args, **kwargs):
+        captured_weights.append(weights.detach().clone())
+        return torch.tensor([1])
+
+    coll._geom_dist = OneTokenSpans()
+    monkeypatch.setattr(torch, "multinomial", choose_hetero_position)
+
+    input_ids_row = torch.tensor([0, 5, 6, 7, 2])
+    attention_mask_row = torch.ones_like(input_ids_row)
+    special_mask_row = torch.zeros_like(input_ids_row, dtype=torch.bool)
+    for sid in SPECIAL_IDS:
+        special_mask_row |= input_ids_row.eq(sid)
+
+    masked = coll._sample_span_mask(input_ids_row, attention_mask_row, special_mask_row)
+
+    assert captured_weights, "hetero_span did not call weighted span-start sampling"
+    assert captured_weights[0].tolist() == [1.0, 7.0, 1.0]
+    assert masked.tolist() == [False, False, True, False, False]
+
+
 def test_hetero_span_output_valid():
     torch.manual_seed(1)
     ids_to_tokens = {

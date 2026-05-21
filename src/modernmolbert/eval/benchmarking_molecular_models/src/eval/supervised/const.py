@@ -5,4 +5,4 @@ CV_SPLITS = 5
 # context-switch thrash on Mac where core counts are typically 8–16.
 N_JOBS = os.cpu_count() or 1
 DEFAULT_MEMORY_WEIGHT = 1  # Actual N_JOBS will be N_JOBS / memory_weight
-VERBOSITY = 10
+VERBOSITY = 1

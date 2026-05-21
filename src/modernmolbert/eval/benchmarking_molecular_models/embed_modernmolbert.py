@@ -1,5 +1,7 @@
 import argparse
+import gc
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -38,28 +40,22 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def full_feature_matrix(feature_batch: Any, *, n_inputs: int) -> np.ndarray:
-    feature_batch.check(n_inputs=n_inputs)
-    if feature_batch.X.shape[0] > 0:
-        n_features = feature_batch.X.shape[1]
-    else:
-        n_features = int(
-            feature_batch.metadata.get("hidden_size")
-            or feature_batch.metadata.get("n_features")
-            or 0
-        )
-        if n_features <= 0:
-            raise ValueError("Cannot infer feature dimension from an all-invalid feature batch")
-
+def expand_to_nan_matrix(X_valid: np.ndarray, valid_mask: np.ndarray, n_inputs: int) -> np.ndarray:
+    """Expand compact valid-only X into a full (n_inputs, n_features) NaN matrix."""
+    n_features = X_valid.shape[1] if X_valid.shape[0] > 0 else 0
     out = np.full((n_inputs, n_features), np.nan, dtype=np.float32)
-    out[feature_batch.valid_mask] = feature_batch.X.astype(np.float32, copy=False)
+    out[valid_mask] = X_valid
     return out
 
 
 def embed_dataset(dataset: Dataset, *, featurizer: Any, embedder_name: str, batch_size: int):
     smiles = dataset.data["smiles"].astype(str).tolist()
     feature_batch = featurizer.featurize_smiles(smiles, batch_size=batch_size)
-    X = full_feature_matrix(feature_batch, n_inputs=len(smiles))
+
+    # Expand to full matrix then immediately free the compact batch
+    X = expand_to_nan_matrix(feature_batch.X, feature_batch.valid_mask, n_inputs=len(smiles))
+    del feature_batch
+    gc.collect()
 
     embedded = EmbeddedDataset(
         name=dataset.name,
@@ -118,9 +114,17 @@ def main() -> None:
     config_dir = root / args.config_dir
     embed_config = EmbeddingConfig(**load_embedding_config(config_dir))
     dataset_names = expand_dataset_selection(config_dir, args.datasets)
+    n_total = len(dataset_names)
+
+    print(f"[embed] model:    {args.model_dir}", flush=True)
+    print(f"[embed] embedder: {args.embedder}", flush=True)
+    print(f"[embed] datasets: {n_total}", flush=True)
+
     featurizer = make_featurizer(args)
 
-    for dataset_config_name in dataset_names:
+    wall_start = time.perf_counter()
+
+    for idx, dataset_config_name in enumerate(dataset_names, start=1):
         dataset_config = load_dataset_config(config_dir, dataset_config_name)
         dataset_name = dataset_config.name
         prepared_path = (
@@ -130,22 +134,48 @@ def main() -> None:
         output_path = output_dir / f"{args.embedder}.joblib"
 
         if output_path.exists() and not args.overwrite:
-            print(f"Embedding already exists, skipping: {output_path}", flush=True)
+            print(
+                f"[{idx:>2}/{n_total}] SKIP  {dataset_name} — embedding exists",
+                flush=True,
+            )
             continue
 
+        print(
+            f"[{idx:>2}/{n_total}] START {dataset_name}",
+            flush=True,
+        )
+        t0 = time.perf_counter()
+
         dataset = load_prepared_dataset(prepared_path)
+        n_samples = len(dataset.data)
+        print(f"         loaded {n_samples:,} samples", flush=True)
+
         embedded = embed_dataset(
             dataset,
             featurizer=featurizer,
             embedder_name=args.embedder,
             batch_size=args.batch_size,
         )
+
+        # Free the prepared dataset before writing the embedded one
+        del dataset
+        gc.collect()
+
         output_dir.mkdir(parents=True, exist_ok=True)
         joblib.dump(embedded, output_path)
+
+        elapsed = time.perf_counter() - t0
         print(
-            f"Embedded {dataset_name}: X={embedded.X.shape}, y={embedded.y.shape}, output={output_path}",
+            f"         DONE  X={embedded.X.shape}  y={embedded.y.shape}"
+            f"  [{elapsed:.1f}s]  → {output_path}",
             flush=True,
         )
+
+        del embedded
+        gc.collect()
+
+    total_elapsed = time.perf_counter() - wall_start
+    print(f"\n[embed] finished {n_total} datasets in {total_elapsed:.1f}s", flush=True)
 
 
 if __name__ == "__main__":

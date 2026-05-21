@@ -1,3 +1,4 @@
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -5,6 +6,7 @@ from typing import Literal
 
 import numpy as np
 import torch
+from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
 from modernmolbert.eval.featurizers.base import FeatureBatch
@@ -87,14 +89,22 @@ class ModernMolBERTSelfiesFeaturizer:
             out.check(n_inputs=len(smiles))
             return out
 
-        features: list[np.ndarray] = []
+        n_valid = len(selfies_strings)
+        X = np.empty((n_valid, hidden_size), dtype=np.float32)
+        n_batches = math.ceil(n_valid / effective_batch_size)
+        row = 0
 
         with torch.no_grad():
-            for start in range(0, len(selfies_strings), effective_batch_size):
+            for start in tqdm(
+                range(0, n_valid, effective_batch_size),
+                total=n_batches,
+                desc="batches",
+                unit="batch",
+                leave=False,
+            ):
                 batch_strings = selfies_strings[start : start + effective_batch_size]
 
                 batch = self._tokenize_selfies_batch(batch_strings)
-
                 batch = {key: value.to(self._device) for key, value in batch.items()}
 
                 outputs = self.model(**batch)
@@ -110,9 +120,9 @@ class ModernMolBERTSelfiesFeaturizer:
                         excluded_token_ids=self._special_token_ids(),
                     )
 
-                features.append(pooled.detach().cpu().float().numpy())
-
-        X = np.concatenate(features, axis=0).astype(np.float32, copy=False)
+                n_rows = len(batch_strings)
+                X[row : row + n_rows] = pooled.detach().cpu().float().numpy()
+                row += n_rows
 
         out = FeatureBatch(
             X=X,

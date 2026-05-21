@@ -97,6 +97,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main():
+    log.basicConfig(level=log.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     args = parse_args()
     root = Path(__file__).resolve().parent
     config_dir = root / args.config_dir
@@ -138,11 +139,15 @@ def main():
     else:
         short_model_name = model_name.split("/")[-1].split(".")[0]
     override = not cache
-    print(f"Override status {override}")
+    n_total = len(dataset_names)
+    print(
+        f"[score] embedder={short_model_name}  datasets={n_total}  override={override}", flush=True
+    )
 
-    for dataset_name in dataset_names:
+    for idx, dataset_name in enumerate(dataset_names, start=1):
         dataset_info = load_dataset_config(config_dir, dataset_name)
         for model_head in args.heads:
+            print(f"[{idx:>2}/{n_total}] {dataset_info.name}  head={model_head}", flush=True)
             eval(
                 cfg,
                 embed_config,
@@ -164,4 +169,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-    print("All done")
+    print("All done", flush=True)

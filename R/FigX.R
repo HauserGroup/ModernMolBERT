@@ -2,119 +2,84 @@ library(readr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(stringr)
 
-sweep_path <- "runs/chembl36_small_mask_mlm_lr_sweep/sweep_results.csv"
-out_dir <- "figures"
+data_path <- "runs/chembl36_small_mask_mlm_lr_sweep/sweep_results.csv"
+out_dir   <- "figures"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-metric_labels <- c(
-  eval_loss = "Evaluation loss",
-  eval_masked_accuracy = "Masked-token accuracy",
-  eval_perplexity = "Perplexity"
-)
+raw <- read_csv(data_path, show_col_types = FALSE)
 
-sweep <- read_csv(sweep_path, show_col_types = FALSE) |>
-  filter(strategy != "hetero_span") |>
+df <- raw |>
+  filter(strategy %in% c("standard", "span")) |>
   mutate(
-    mlm_probability = mlm_prob,
-    learning_rate_num = learning_rate,
-    learning_rate = factor(
-      learning_rate,
-      levels = sort(unique(learning_rate)),
-      labels = scales::label_scientific(digits = 1)(sort(unique(
-        learning_rate
-      )))
-    ),
     strategy = factor(strategy, levels = c("standard", "span")),
-    curve = interaction(
-      strategy,
-      learning_rate,
-      sep = " / ",
-      lex.order = TRUE
-    )
+    lr_label = case_when(
+      learning_rate == 1e-4 ~ "1e-4",
+      learning_rate == 2e-4 ~ "2e-4",
+      learning_rate == 4e-4 ~ "4e-4"
+    ),
+    lr_label = factor(lr_label, levels = c("1e-4", "2e-4", "4e-4"))
   ) |>
   pivot_longer(
-    cols = c(eval_loss, eval_masked_accuracy, eval_perplexity),
-    names_to = "metric",
+    cols      = c(eval_loss, eval_masked_accuracy),
+    names_to  = "metric",
     values_to = "value"
   ) |>
   mutate(
     metric = factor(
       metric,
-      levels = names(metric_labels),
-      labels = metric_labels
+      levels = c("eval_masked_accuracy", "eval_loss"),
+      labels = c("Masked accuracy", "Eval loss")
     )
   )
 
-curve_levels <- sweep |>
-  distinct(strategy, learning_rate_num, curve) |>
-  arrange(strategy, learning_rate_num) |>
-  pull(curve)
-
-standard_levels <- curve_levels[str_starts(
-  as.character(curve_levels),
-  "standard"
-)]
-span_levels <- curve_levels[str_starts(as.character(curve_levels), "span")]
-
-curve_colors <- c(
-  setNames(
-    colorRampPalette(RColorBrewer::brewer.pal(5, "Blues")[3:5])(
-      length(standard_levels)
-    ),
-    standard_levels
-  ),
-  setNames(
-    colorRampPalette(RColorBrewer::brewer.pal(5, "Oranges")[3:5])(
-      length(span_levels)
-    ),
-    span_levels
-  )
-)
+strategy_colors   <- c(standard = "#2171B5", span = "#D94801")
+lr_linetypes      <- c("1e-4" = "dotted", "2e-4" = "dashed", "4e-4" = "solid")
+lr_shapes         <- c("1e-4" = 1, "2e-4" = 17, "4e-4" = 16)
 
 p <- ggplot(
-  sweep,
+  df,
   aes(
-    x = mlm_probability,
-    y = value,
-    color = curve,
-    group = curve
+    x      = mlm_prob,
+    y      = value,
+    color  = strategy,
+    linetype = lr_label,
+    shape  = lr_label,
+    group  = interaction(strategy, lr_label)
   )
 ) +
-  geom_line(linewidth = 0.7) +
-  geom_point(size = 2.4) +
-  facet_grid(curve ~ metric, scales = "free_y") +
+  geom_line(linewidth = 0.75) +
+  geom_point(size = 2.5) +
+  facet_wrap(~metric, scales = "free_y", nrow = 1) +
   scale_x_continuous(
-    breaks = sort(unique(sweep$mlm_probability)),
+    breaks = sort(unique(df$mlm_prob)),
     labels = scales::label_percent(accuracy = 1)
   ) +
   scale_color_manual(
-    values = curve_colors,
-    breaks = curve_levels,
-    guide = "none"
+    values = strategy_colors,
+    labels = c(standard = "Standard", span = "Span"),
+    name   = "Strategy"
   ) +
+  scale_linetype_manual(values = lr_linetypes, name = "Learning rate") +
+  scale_shape_manual(values  = lr_shapes,     name = "Learning rate") +
   labs(
-    x = "MLM probability",
-    y = NULL
+    x        = "Trained MLM probability",
+    y        = NULL,
+    title    = "MLM sweep: all masking probabilities × learning rates",
+    subtitle = "Evaluated on each model’s own validation set"
   ) +
   theme_classic(base_size = 11) +
   theme(
-    strip.background = element_blank(),
-    strip.text = element_text(face = "bold"),
-    panel.spacing.x = unit(1.4, "lines")
+    strip.background   = element_blank(),
+    strip.text         = element_text(face = "bold", size = 10),
+    legend.position    = "bottom",
+    legend.box         = "horizontal",
+    legend.margin      = margin(t = 4),
+    panel.spacing.x    = unit(1.6, "lines"),
+    plot.title         = element_text(face = "bold"),
+    plot.subtitle      = element_text(size = 9, color = "grey40")
   )
 
-ggsave(
-  file.path(out_dir, "FigX_sweep_metrics.pdf"),
-  p,
-  width = 8.2,
-  height = 8.8
-)
-ggsave(
-  file.path(out_dir, "FigX_sweep_metrics.png"),
-  p,
-  width = 8.2,
-  height = 8.8,
-  dpi = 300
-)
+ggsave(file.path(out_dir, "FigX_sweep_all.pdf"), p, width = 9, height = 4.2)
+ggsave(file.path(out_dir, "FigX_sweep_all.png"), p, width = 9, height = 4.2, dpi = 300)
+message("Wrote figures/FigX_sweep_all.{pdf,png}")

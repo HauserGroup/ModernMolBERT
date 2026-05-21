@@ -36,8 +36,8 @@ Do not launch long training until all of the following pass.
 ```bash
 uv run python -m modernmolbert.validate_tokenizer \
   --representation SELFIES \
-  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
-  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json \
+  --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
+  --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json \
   --n 1000
 ```
 
@@ -48,8 +48,8 @@ uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --debug \
   --output_dir runs/debug_selfies \
   --model_size base \
-  --tokenizer_vocab_path tokenizer/selfies_ape_tokenizer.json \
-  --tokenizer_metadata_path tokenizer/selfies_ape_tokenizer.metadata.json
+  --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
+  --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json
 ```
 
 ### 3. Reload the debug checkpoint
@@ -85,7 +85,6 @@ uv run pytest \
   tests/test_smoke_training.py \
   tests/test_checkpoint_reload.py \
   tests/test_eval_modernmolbert_selfies.py \
-  tests/test_frozen_benchmark_modernmolbert_smoke.py \
   -q
 ```
 

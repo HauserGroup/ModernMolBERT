@@ -32,6 +32,9 @@ SPECIAL_TOKENS: dict[str, str] = {
 SELFIES_REPRESENTATION = "SELFIES"
 SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
 SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
+SMILES_REPRESENTATION = "SMILES"
+SMILES_TOKENIZER_FILENAME = "smiles_ape_tokenizer.json"
+SMILES_TOKENIZER_METADATA_FILENAME = "smiles_ape_tokenizer.metadata.json"
 PUBCHEM10M_DATASET = "mikemayuare/PubChem10M_SMILES_SELFIES"
 ZINC20_DATASET = "haydn-jones/ZINC20"
 ZINC20_CHEMBL36_DATASET = "alessandronascimento/zinc20_chembl36"
@@ -42,6 +45,12 @@ ZINC20_CHEMBL36_DATASET = "alessandronascimento/zinc20_chembl36"
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
+
+
+def infer_smiles_column(dataset_name: str, molecule_column: str | None = None) -> str:
+    if molecule_column is not None:
+        return molecule_column
+    return "smiles"
 
 
 def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
@@ -294,6 +303,10 @@ def default_selfies_tokenizer_path() -> Path:
     return repo_root() / "tokenizer" / SELFIES_TOKENIZER_FILENAME
 
 
+def default_smiles_tokenizer_path() -> Path:
+    return repo_root() / "tokenizer" / SMILES_TOKENIZER_FILENAME
+
+
 def metadata_path_for_vocab(vocab_path: Path) -> Path:
     return vocab_path.with_suffix(".metadata.json")
 
@@ -393,6 +406,14 @@ def validate_selfies_sample_shape(sequences: list[str]) -> None:
         raise ValueError(
             "Sampled values do not look like SELFIES strings (insufficient bracketed tokens)."
         )
+
+
+def validate_smiles_sample_shape(sequences: list[str]) -> None:
+    if not sequences:
+        raise ValueError("SMILES corpus is empty.")
+    empty = sum(1 for s in sequences if not s)
+    if empty / len(sequences) > 0.05:
+        raise ValueError("Sampled values do not look like SMILES strings (too many empty).")
 
 
 # ---------------------------------------------------------------------------

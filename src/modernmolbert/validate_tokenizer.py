@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate SELFIES tokenizer quality before model training."""
+"""Validate APE tokenizer quality before model training."""
 
 import argparse
 from pathlib import Path
@@ -11,14 +11,17 @@ from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
+    SMILES_REPRESENTATION,
     assert_metadata_representation,
     compute_tokenization_stats,
     default_selfies_tokenizer_path,
+    default_smiles_tokenizer_path,
     eligible_token_ids,
     encode_sequence,
     file_sha256,
     get_streaming_dataset,
     infer_selfies_column,
+    infer_smiles_column,
     load_tokenizer_metadata,
     metadata_path_for_vocab,
     normalize_sequence,
@@ -26,6 +29,7 @@ from modernmolbert.utils import (
     sample_jsonl_sequences,
     tokenizer_vocab_size,
     validate_selfies_sample_shape,
+    validate_smiles_sample_shape,
 )
 
 DATASET_NAME = PUBCHEM10M_DATASET
@@ -33,12 +37,13 @@ DATASET_NAME = PUBCHEM10M_DATASET
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate tokenizer metadata and tokenization quality for SELFIES.",
+        description="Validate APE tokenizer metadata and tokenization quality.",
     )
     parser.add_argument(
         "--tokenizer_vocab_path",
         type=str,
-        default=str(default_selfies_tokenizer_path()),
+        default=None,
+        help="Path to tokenizer vocabulary JSON. Defaults by representation.",
     )
     parser.add_argument(
         "--tokenizer_metadata_path",
@@ -48,15 +53,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--representation",
         type=str,
-        choices=[SELFIES_REPRESENTATION],
+        choices=[SELFIES_REPRESENTATION, SMILES_REPRESENTATION],
         default=SELFIES_REPRESENTATION,
     )
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
-        "--selfies_column",
+        "--molecule_column",
         type=str,
         default=None,
-        help="Column containing SELFIES strings. Defaults by dataset.",
+        help="Column containing molecule strings. Defaults by dataset and representation.",
     )
     parser.add_argument(
         "--split",
@@ -111,7 +116,7 @@ def _sample_sequences(args: argparse.Namespace) -> list[str]:
     if args.fixture_jsonl:
         return sample_jsonl_sequences(
             Path(args.fixture_jsonl),
-            representation=args.selfies_column,
+            representation=args.molecule_column,
             n=args.n,
         )
 
@@ -127,7 +132,7 @@ def _sample_sequences(args: argparse.Namespace) -> list[str]:
     try:
         with tqdm(total=args.n, desc="Sampling sequences", unit="seq") as pbar:
             for row in ds:
-                seq = normalize_sequence(row, args.selfies_column)
+                seq = normalize_sequence(row, args.molecule_column)
                 if seq is None:
                     continue
                 rows.append(seq)
@@ -170,7 +175,7 @@ def _print_unknown_examples(
             continue
         tokens = tokenizer.convert_ids_to_tokens(encoded)
         print("UNKNOWN EXAMPLE")
-        print(f"selfies: {seq[:300]}")
+        print(f"sequence: {seq[:300]}")
         print(f"ids: {encoded[:80]}")
         print(f"tokens: {tokens[:80]}")
         shown += 1
@@ -179,25 +184,37 @@ def _print_unknown_examples(
 
 
 def _assert_ethanol_not_unknown(
-    tokenizer: APEPreTrainedTokenizer, special_ids: dict[str, int]
+    tokenizer: APEPreTrainedTokenizer,
+    special_ids: dict[str, int],
+    representation: str,
 ) -> None:
-    ethanol = "[C][C][O]"
+    ethanol = "CCO" if representation == SMILES_REPRESENTATION else "[C][C][O]"
     encoded = encode_sequence(tokenizer, ethanol, max_seq_length=256)["input_ids"]
     eligible = eligible_token_ids(encoded, special_ids)
     if not eligible:
-        raise ValueError("Tokenizer produced no usable tokens for ethanol SELFIES.")
+        raise ValueError(f"Tokenizer produced no usable tokens for ethanol ({ethanol}).")
     unk_id = special_ids["unk_token"]
     unk_rate = sum(1 for x in eligible if x == unk_id) / len(eligible)
     if unk_rate > 0.05:
         raise ValueError(
-            f"Tokenizer is not SELFIES-compatible: [C][C][O] unk_rate={unk_rate:.3f}, ids={encoded}"
+            f"Tokenizer is not {representation}-compatible: {ethanol} unk_rate={unk_rate:.3f}, ids={encoded}"
         )
 
 
 def main() -> None:
     load_dotenv()
     args = parse_args()
-    args.selfies_column = infer_selfies_column(args.dataset_name, args.selfies_column)
+
+    if args.tokenizer_vocab_path is None:
+        if args.representation == SMILES_REPRESENTATION:
+            args.tokenizer_vocab_path = str(default_smiles_tokenizer_path())
+        else:
+            args.tokenizer_vocab_path = str(default_selfies_tokenizer_path())
+
+    if args.representation == SMILES_REPRESENTATION:
+        args.molecule_column = infer_smiles_column(args.dataset_name, args.molecule_column)
+    else:
+        args.molecule_column = infer_selfies_column(args.dataset_name, args.molecule_column)
 
     vocab_path = Path(args.tokenizer_vocab_path)
     if not vocab_path.exists():
@@ -233,9 +250,12 @@ def main() -> None:
     warning_count = 0
 
     sequences = _sample_sequences(args)
-    validate_selfies_sample_shape(sequences)
+    if args.representation == SMILES_REPRESENTATION:
+        validate_smiles_sample_shape(sequences)
+    else:
+        validate_selfies_sample_shape(sequences)
     try:
-        _assert_ethanol_not_unknown(tokenizer, special_ids)
+        _assert_ethanol_not_unknown(tokenizer, special_ids, args.representation)
     except ValueError as exc:
         warning_count += int(_fail_or_warn(args, str(exc)))
 
@@ -247,7 +267,7 @@ def main() -> None:
     )
 
     print(f"representation: {args.representation}")
-    print(f"selfies_column: {args.selfies_column}")
+    print(f"molecule_column: {args.molecule_column}")
     print(f"split: {args.split}")
     print(f"dataset_name: {args.dataset_name}")
     if args.data_files:

@@ -93,14 +93,18 @@ from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
+    SMILES_REPRESENTATION,
     collect_corpus_for_tokenizer,
     default_selfies_tokenizer_path,
+    default_smiles_tokenizer_path,
     file_sha256,
     infer_selfies_column,
+    infer_smiles_column,
     metadata_path_for_vocab,
     resolve_special_ids,
     tokenizer_vocab_size,
     validate_selfies_sample_shape,
+    validate_smiles_sample_shape,
     write_tokenizer_metadata,
 )
 
@@ -115,15 +119,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output_vocab_path",
         type=str,
-        default=str(default_selfies_tokenizer_path()),
-        help="Where to write tokenizer vocabulary JSON.",
+        default=None,
+        help="Where to write tokenizer vocabulary JSON. Defaults by representation.",
     )
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
-        "--selfies_column",
+        "--molecule_column",
         type=str,
         default=None,
-        help="Column containing SELFIES strings. Defaults by dataset.",
+        help="Column containing molecule strings. Defaults by dataset and representation.",
     )
     parser.add_argument(
         "--data_dir",
@@ -145,7 +149,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--representation",
         type=str,
-        choices=[SELFIES_REPRESENTATION],
+        choices=[SELFIES_REPRESENTATION, SMILES_REPRESENTATION],
         default=SELFIES_REPRESENTATION,
     )
     parser.add_argument("--tokenizer_train_size", type=int, default=2_000_000)
@@ -266,7 +270,17 @@ def validate_selfies_symbols(symbols: list[str]) -> None:
 def main() -> None:
     load_dotenv()
     args = parse_args()
-    resolved_column = infer_selfies_column(args.dataset_name, args.selfies_column)
+
+    if args.output_vocab_path is None:
+        if args.representation == SMILES_REPRESENTATION:
+            args.output_vocab_path = str(default_smiles_tokenizer_path())
+        else:
+            args.output_vocab_path = str(default_selfies_tokenizer_path())
+
+    if args.representation == SMILES_REPRESENTATION:
+        resolved_column = infer_smiles_column(args.dataset_name, args.molecule_column)
+    else:
+        resolved_column = infer_selfies_column(args.dataset_name, args.molecule_column)
 
     output_vocab_path = Path(args.output_vocab_path)
     output_vocab_path.parent.mkdir(parents=True, exist_ok=True)
@@ -283,13 +297,16 @@ def main() -> None:
     )
     print(f"Corpus collected: {len(corpus)} sequences", flush=True)
 
-    validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
+    if args.representation == SMILES_REPRESENTATION:
+        validate_smiles_sample_shape(corpus[: min(512, len(corpus))])
+    else:
+        validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
 
     max_merge_pieces = args.max_merge_pieces
     if max_merge_pieces is not None and max_merge_pieces <= 0:
         max_merge_pieces = None
 
-    tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
+    tokenizer = APEPreTrainedTokenizer(representation=args.representation)
     tokenizer.train(
         corpus,
         representation=args.representation,
@@ -306,7 +323,9 @@ def main() -> None:
         symbols_path=args.extra_vocab_symbols_path,
         selfies_path=args.extra_vocab_selfies_path,
     )
-    validate_selfies_symbols(extra_symbols)
+
+    if args.representation == SELFIES_REPRESENTATION:
+        validate_selfies_symbols(extra_symbols)
 
     added_extra_symbols = tokenizer.add_tokens_to_vocabulary(extra_symbols)
 
@@ -329,9 +348,9 @@ def main() -> None:
 
     # Phase 3: write metadata — SHA reflects the final on-disk vocab.
     metadata = {
-        "representation": SELFIES_REPRESENTATION,
+        "representation": args.representation,
         "dataset_name": args.dataset_name,
-        "selfies_column": resolved_column,
+        "molecule_column": resolved_column,
         "tokenizer_train_size": args.tokenizer_train_size,
         "max_vocab_size": args.max_vocab_size,
         "min_freq_for_merge": args.min_freq_for_merge,

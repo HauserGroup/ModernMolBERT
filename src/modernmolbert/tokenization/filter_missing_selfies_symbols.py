@@ -74,6 +74,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--min_count", type=int, default=10)
+    parser.add_argument(
+        "--representation",
+        choices=["SELFIES", "SMILES"],
+        default="SELFIES",
+        help="Representation label written into the output file header comment.",
+    )
     return parser.parse_args()
 
 
@@ -121,7 +127,9 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
 
     with args.output.open("w", encoding="utf-8") as f:
-        f.write("# Missing SELFIES primitive symbols selected from benchmark diagnostics.\n")
+        f.write(
+            f"# Missing {args.representation} primitive symbols selected from benchmark diagnostics.\n"
+        )
         f.write(f"# min_count={args.min_count}\n")
         for symbol, _count in selected:
             f.write(f"{symbol}\n")

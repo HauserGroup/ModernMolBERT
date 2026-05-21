@@ -62,6 +62,72 @@ def test_smiles_to_selfies_returns_none_for_encoder_failures(monkeypatch) -> Non
     assert corpus.smiles_to_selfies("not-smiles") is None
 
 
+def test_export_benchmark_corpus_main_smiles_mode_counts_primitives_without_conversion(
+    monkeypatch, tmp_path: Path
+) -> None:
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    frame = pd.DataFrame({"smiles": ["CCO", "CCO", "N#N"]})
+    joblib.dump(_DatasetObject(frame), prepared / "tiny.joblib")
+    output = tmp_path / "symbols.tsv"
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "export_benchmark_corpus.py",
+            "--prepared_dir",
+            str(prepared),
+            "--output",
+            str(output),
+            "--split",
+            "all",
+            "--mode",
+            "symbol_counts",
+            "--representation",
+            "SMILES",
+        ],
+    )
+
+    corpus.main()
+
+    lines = output.read_text(encoding="utf-8").splitlines()
+    counts = {parts[0]: int(parts[1]) for parts in (line.split("\t") for line in lines[1:])}
+    # duplicate CCO is deduplicated; unique SMILES are CCO and N#N
+    assert counts["C"] == 2  # CCO → C, C
+    assert counts["O"] == 1  # CCO → O
+    assert counts["N"] == 2  # N#N → N, N
+    assert counts["#"] == 1  # N#N → #
+
+
+def test_export_benchmark_corpus_selfies_mode_rejects_smiles_representation(
+    monkeypatch, tmp_path: Path
+) -> None:
+    prepared = tmp_path / "prepared"
+    prepared.mkdir()
+    frame = pd.DataFrame({"smiles": ["CCO"]})
+    joblib.dump(_DatasetObject(frame), prepared / "tiny.joblib")
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "export_benchmark_corpus.py",
+            "--prepared_dir",
+            str(prepared),
+            "--output",
+            str(tmp_path / "out.txt"),
+            "--mode",
+            "selfies",
+            "--representation",
+            "SMILES",
+        ],
+    )
+
+    with pytest.raises(ValueError, match="--mode selfies"):
+        corpus.main()
+
+
 def test_export_benchmark_corpus_main_writes_symbol_counts_from_joblib(
     monkeypatch, tmp_path: Path
 ) -> None:

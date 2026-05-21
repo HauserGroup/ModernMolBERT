@@ -200,7 +200,8 @@ def load_tdc_herg_blockers(*, root: str | Path) -> EvalDataset:
             "label_definition": "herg_blocker is binary: 0=non-blocker, 1=hERG blocker.",
         },
     )
-    
+
+
 def load_tdc_caco2_wang(*, root: str | Path) -> EvalDataset:
     root = Path(root)
     task_names = ["caco2_permeability"]
@@ -315,5 +316,5 @@ def register_contributed_datasets() -> None:
             license="CC-BY-4.0",
         )
     )
-    
+
     return None

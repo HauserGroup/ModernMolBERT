@@ -79,10 +79,12 @@ def check_if_already_evaluated(
 
     if runs > 1:
         # Duplicate rows indicate a previously interrupted override. Remove
-        # extras and treat as evaluated so the caller can decide to skip/override.
-        log.warning(f"Found {runs} duplicate result rows for {ctx}. Deduplicating (keeping last).")
+        # all of them and return False so the caller reruns and writes a clean row.
+        log.warning(
+            f"Found {runs} duplicate result rows for {ctx}. Deleting all and re-evaluating."
+        )
         delete_previous_evaluations(output_csv, dataset_name, model_name, metric_name, head_name)
-        return True
+        return False
 
     return runs == 1
 
@@ -180,7 +182,7 @@ def eval_procedure(
         {
             "dataset": embedded_data.name,
             "task": embedded_data.task,
-            "embedder": embedded_data.embedder,
+            "embedder": model_name,
             "model": result.model,
             "hyperparams": dump_hyperparams(result.hyperparams),
             "library_hash": model_version_hash,

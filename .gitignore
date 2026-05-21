@@ -236,6 +236,7 @@ src/modernmolbert/eval/junk/
 /*plan*.md
 *repomix*.xml
 CLAUDE.md
+GEMINI.md
 .claude/
 .vscode/
 

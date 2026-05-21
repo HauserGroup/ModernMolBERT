@@ -101,7 +101,10 @@ def read_results_csv(output_csv: str | Path) -> pd.DataFrame:
     output_csv = Path(output_csv)
     if not output_csv.exists():
         return empty_results_frame()
-    return to_praski_schema(pd.read_csv(output_csv))
+    try:
+        return to_praski_schema(pd.read_csv(output_csv))
+    except Exception:
+        return empty_results_frame()
 
 
 def result_mask(

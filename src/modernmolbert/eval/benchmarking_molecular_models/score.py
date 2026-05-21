@@ -1,5 +1,6 @@
 import argparse
 import logging as log
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,35 @@ from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.proced
 )
 
 
+@dataclass(frozen=True)
+class DatasetItem:
+    """Resolved dataset entry used by the scoring loop.
+
+    config_name:
+        Name returned by expand_dataset_selection(...), e.g. clf_ogbg-molhiv.
+        This is only a config selector.
+
+    name:
+        Canonical prepared dataset name from dataset_info.name, e.g. ogbg-molhiv.
+        This is the identity used for logging, results, skips, and checkpoints.
+
+    info:
+        Fully loaded dataset config object passed into eval_procedure(...).
+    """
+
+    config_name: str
+    name: str
+    info: Any
+
+
+@dataclass(frozen=True)
+class SkippedItem:
+    """Dataset skipped before scoring, with a human-readable reason."""
+
+    name: str
+    reason: str
+
+
 def cfg_get(cfg: Any, key: str, default: Any = None) -> Any:
     """Read a config value from either dict-like or attribute-like configs."""
     if cfg is None:
@@ -40,18 +70,6 @@ def cfg_get(cfg: Any, key: str, default: Any = None) -> Any:
     return getattr(cfg, key, default)
 
 
-def normalize_dataset_name(name: str | Path) -> str:
-    """Normalize dataset references to config stems.
-
-    Examples
-    --------
-    bace -> bace
-    bace.yaml -> bace
-    config/datasets/bace.yaml -> bace
-    """
-    return Path(str(name)).stem
-
-
 def as_list(value: Any) -> list[Any]:
     """Return value as a list while treating None as an empty list."""
     if value is None:
@@ -63,22 +81,255 @@ def as_list(value: Any) -> list[Any]:
     return list(value)
 
 
+def normalize_name(name: str | Path) -> str:
+    """Normalize dataset selectors and names for matching.
+
+    Handles:
+      ogbg-molhiv
+      clf_ogbg-molhiv
+      reg_esol
+      ogbg-molhiv.yaml
+      config/datasets/clf_ogbg-molhiv.yaml
+
+    The prepared dataset identity remains dataset_info.name. This function is
+    only for user-facing matching, especially --skip_datasets.
+    """
+    stem = Path(str(name)).stem
+
+    for prefix in ("clf_", "reg_"):
+        if stem.startswith(prefix):
+            stem = stem.removeprefix(prefix)
+
+    return stem
+
+
+def safe_file_component(value: str) -> str:
+    """Make a conservative filename component."""
+    return str(value).replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
+
+
+def dataset_checkpoint_path(
+    *,
+    checkpoint_dir: str | Path,
+    dataset: str,
+    embedder: str,
+) -> Path:
+    """Return the expected per-dataset checkpoint path.
+
+    This path must match write_dataset_checkpoint(...). If checkpoint writing is
+    later moved fully into praski_export.py, this function should be moved there
+    too and imported here.
+    """
+    safe_dataset = safe_file_component(dataset)
+    safe_embedder = safe_file_component(embedder)
+    return Path(checkpoint_dir) / f"{safe_dataset}__{safe_embedder}.csv"
+
+
+def checkpoint_exists(
+    *,
+    checkpoint_dir: Path | None,
+    dataset: str,
+    embedder: str,
+) -> bool:
+    """Check whether a dataset/embedder checkpoint already exists."""
+    if checkpoint_dir is None:
+        return False
+
+    path = dataset_checkpoint_path(
+        checkpoint_dir=checkpoint_dir,
+        dataset=dataset,
+        embedder=embedder,
+    )
+    return path.exists() and path.stat().st_size > 0
+
+
+def make_short_model_name(model_name: str) -> str:
+    """Convert model/embedder path or identifier to the stored embedding name.
+
+    Existing embedding files are expected under:
+
+        data/embedded/<dataset>/<short_model_name>.joblib
+
+    Examples:
+      runs/modernmolbert_best_span -> modernmolbert_best_span
+      modernmolbert_best_span      -> modernmolbert_best_span
+    """
+    final_component = model_name.split("/")[-1]
+
+    if "gpt" in model_name.lower():
+        return final_component
+
+    return final_component.split(".")[0]
+
+
+def resolve_model_name(cfg: Any, args: argparse.Namespace) -> str | None:
+    """Resolve embedder/model name from CLI, compatibility overrides, or config."""
+    model_name = args.model_name
+
+    for override in args.overrides:
+        if override.startswith("model_name=") or override.startswith("embedder="):
+            model_name = override.split("=", 1)[1]
+
+    model_cfg = cfg_get(cfg, "model", {})
+
+    return (
+        model_name
+        or cfg_get(model_cfg, "embedding_name", None)
+        or cfg_get(cfg, "model_name", None)
+        or cfg_get(model_cfg, "model_name", None)
+    )
+
+
+def resolve_dataset_selections(cfg: Any, args: argparse.Namespace) -> list[str]:
+    """Return dataset selections from CLI or score.yaml."""
+    return as_list(args.datasets or cfg_get(cfg, "datasets", ["all"]))
+
+
+def resolve_skip_set(cfg: Any, args: argparse.Namespace) -> set[str]:
+    """Return normalized skip names from CLI or score.yaml."""
+    skip_values = (
+        args.skip_datasets
+        or cfg_get(cfg, "skip_datasets", None)
+        or cfg_get(cfg, "skip_dataset", [])
+    )
+
+    return {normalize_name(name) for name in as_list(skip_values)}
+
+
+def load_dataset_items(
+    *,
+    config_dir: Path,
+    selections: list[str],
+) -> list[DatasetItem]:
+    """Expand dataset selections and load configs exactly once.
+
+    The returned DatasetItem.name is the canonical prepared dataset name.
+    This is the name used for skip logic, checkpoint logic, logs, and results.
+    """
+    config_names = expand_dataset_selection(config_dir, selections)
+
+    items: list[DatasetItem] = []
+
+    for config_name in config_names:
+        dataset_info = load_dataset_config(config_dir, config_name)
+
+        items.append(
+            DatasetItem(
+                config_name=str(config_name),
+                name=str(dataset_info.name),
+                info=dataset_info,
+            )
+        )
+
+    return items
+
+
+def should_skip_item(item: DatasetItem, skip_set: set[str]) -> bool:
+    """Return True if a dataset item matches user-requested skips."""
+    if not skip_set:
+        return False
+
+    candidate_names = {
+        normalize_name(item.config_name),
+        normalize_name(item.name),
+    }
+
+    return bool(candidate_names & skip_set)
+
+
+def build_run_plan(
+    *,
+    items: list[DatasetItem],
+    skip_set: set[str],
+    checkpoint_dir: Path | None,
+    embedder: str,
+    resume: bool,
+) -> tuple[list[DatasetItem], list[SkippedItem]]:
+    """Apply all pre-run decisions once.
+
+    This is the only place where requested skips and checkpoint-resume skips are
+    applied. The scoring loop should only iterate over the returned run_items.
+    """
+    run_items: list[DatasetItem] = []
+    skipped_items: list[SkippedItem] = []
+
+    for item in items:
+        if should_skip_item(item, skip_set):
+            skipped_items.append(SkippedItem(item.name, "requested skip"))
+            continue
+
+        if resume and checkpoint_exists(
+            checkpoint_dir=checkpoint_dir,
+            dataset=item.name,
+            embedder=embedder,
+        ):
+            skipped_items.append(SkippedItem(item.name, "checkpoint exists"))
+            continue
+
+        run_items.append(item)
+
+    return run_items, skipped_items
+
+
+def print_run_plan(
+    *,
+    items: list[DatasetItem],
+    run_items: list[DatasetItem],
+    skipped_items: list[SkippedItem],
+    skip_set: set[str],
+    embedder: str,
+    heads: list[str],
+    override: bool,
+    safe: bool,
+    resume: bool,
+) -> None:
+    """Print the complete plan before scoring starts."""
+    print(
+        (
+            f"[score] embedder={embedder}  "
+            f"expanded_datasets={len(items)}  "
+            f"datasets_to_run={len(run_items)}  "
+            f"heads={heads}  "
+            f"override={override}  "
+            f"safe={safe}  "
+            f"resume={resume}"
+        ),
+        flush=True,
+    )
+
+    if skip_set:
+        print(f"[score] requested skips: {sorted(skip_set)}", flush=True)
+
+    if skipped_items:
+        print("[score] skipped datasets:", flush=True)
+        for skipped in skipped_items:
+            print(f"  - {skipped.name}: {skipped.reason}", flush=True)
+
+    print("[score] run plan:", flush=True)
+    for idx, item in enumerate(run_items, start=1):
+        print(f"  [{idx:>2}/{len(run_items)}] {item.name}", flush=True)
+
+
 def run_eval(
     *,
     safe: bool,
     embed_config: EmbeddingConfig,
     full_model_name: str,
     short_model_name: str,
-    dataset_info,
+    dataset_info: Any,
     model_head: str,
     output_csv: Path,
     override: bool,
-) -> None:
+) -> bool:
     """Run one dataset/head evaluation.
 
-    `full_model_name` is kept for logging.
-    `short_model_name` is passed to `eval_procedure`, because this is the
-    name expected for the precomputed embedding files.
+    Returns True if the head completed successfully.
+
+    In safe mode:
+      exceptions are logged and False is returned.
+
+    In non-safe mode:
+      exceptions propagate.
     """
     log.info(
         "Evaluating model %s on dataset %s with metric %s using head %s",
@@ -88,27 +339,7 @@ def run_eval(
         model_head,
     )
 
-    if safe:
-        log.info("Running in safe mode")
-
-        try:
-            eval_procedure(
-                dataset_info=dataset_info,
-                embedded_dir=embed_config.embedded_directory,
-                predictions_dir=embed_config.predictions_directory,
-                model_name=short_model_name,
-                model_head=model_head,
-                output_csv=output_csv,
-                override=override,
-            )
-        except Exception as e:
-            import traceback
-
-            log.error("Error during evaluation: %s", e)
-            log.error(traceback.format_exc())
-            return
-
-    else:
+    try:
         eval_procedure(
             dataset_info=dataset_info,
             embedded_dir=embed_config.embedded_directory,
@@ -118,6 +349,57 @@ def run_eval(
             output_csv=output_csv,
             override=override,
         )
+    except Exception as exc:
+        if not safe:
+            raise
+
+        import traceback
+
+        log.error(
+            "Error during evaluation for dataset=%s head=%s: %s",
+            dataset_info.name,
+            model_head,
+            exc,
+        )
+        log.error(traceback.format_exc())
+        return False
+
+    return True
+
+
+def write_checkpoint_if_successful(
+    *,
+    results_csv: Path,
+    checkpoint_dir: Path | None,
+    dataset: str,
+    embedder: str,
+    dataset_success: bool,
+) -> None:
+    """Write a per-dataset checkpoint if at least one head succeeded."""
+    if checkpoint_dir is None:
+        return
+
+    if not dataset_success:
+        print(
+            f"[score] {dataset}: no successful heads; not writing checkpoint",
+            flush=True,
+        )
+        return
+
+    write_dataset_checkpoint(
+        results_csv=results_csv,
+        checkpoint_dir=checkpoint_dir,
+        dataset=dataset,
+        embedder=embedder,
+    )
+
+    checkpoint = dataset_checkpoint_path(
+        checkpoint_dir=checkpoint_dir,
+        dataset=dataset,
+        embedder=embedder,
+    )
+
+    print(f"[score] wrote checkpoint: {checkpoint}", flush=True)
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,6 +410,10 @@ def parse_args() -> argparse.Namespace:
         "--model-name",
         dest="model_name",
         required=False,
+        help=(
+            "Embedding/model name. Expected embeddings at "
+            "data/embedded/<dataset>/<embedder>.joblib."
+        ),
     )
 
     parser.add_argument(
@@ -146,22 +432,27 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--skip_datasets",
+        "--skip-datasets",
         nargs="+",
         default=None,
         metavar="NAME",
         help=(
-            "Skip one or more datasets by name. Accepts stems such as 'bace' "
-            "or config filenames such as 'bace.yaml'. Defaults to "
-            "skip_datasets in config/score.yaml."
+            "Skip one or more datasets by name. Accepts canonical dataset names "
+            "such as 'ogbg-molhiv' and config names such as 'clf_ogbg-molhiv'."
         ),
     )
 
-    parser.add_argument("--config-dir", default="config")
+    parser.add_argument(
+        "--config-dir",
+        default="config",
+        help="Config directory relative to this script directory.",
+    )
 
     parser.add_argument(
         "--output-csv",
         type=Path,
         default=Path("data/benchmark_results.csv"),
+        help="Main accumulated results CSV.",
     )
 
     parser.add_argument(
@@ -172,15 +463,27 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--resume",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip dataset/embedder combinations with existing checkpoint CSVs.",
+    )
+
+    parser.add_argument(
         "--cache",
         action=argparse.BooleanOptionalAction,
         default=None,
+        help=(
+            "Use cached scoring results if supported by eval_procedure. "
+            "Equivalent to override = not cache."
+        ),
     )
 
     parser.add_argument(
         "--safe",
         action=argparse.BooleanOptionalAction,
         default=None,
+        help="Log errors and continue instead of aborting on the first failed head.",
     )
 
     parser.add_argument(
@@ -190,62 +493,6 @@ def parse_args() -> argparse.Namespace:
     )
 
     return parser.parse_args()
-
-
-def resolve_model_name(cfg: Any, args: argparse.Namespace) -> str | None:
-    """Resolve embedder/model name from CLI, compatibility overrides, or config."""
-    model_name = args.model_name
-
-    for override in args.overrides:
-        if override.startswith("model_name="):
-            model_name = override.split("=", 1)[1]
-
-    model_cfg = cfg_get(cfg, "model", {})
-
-    model_name = (
-        model_name
-        or cfg_get(model_cfg, "embedding_name", None)
-        or cfg_get(cfg, "model_name", None)
-        or cfg_get(model_cfg, "model_name", None)
-    )
-
-    return model_name
-
-
-def resolve_dataset_names(config_dir: Path, cfg: Any, args: argparse.Namespace) -> list[str]:
-    """Resolve selected datasets, then remove skipped datasets.
-
-    Dataset selections and skip selections may come either from CLI or score.yaml.
-    Skip selections are normalized to stems, so both `bace` and `bace.yaml`
-    match expanded dataset name `bace`.
-    """
-    dataset_selections = args.datasets or cfg_get(cfg, "datasets", ["all"])
-    dataset_names = expand_dataset_selection(config_dir, dataset_selections)
-
-    skip_selections = (
-        args.skip_datasets
-        or cfg_get(cfg, "skip_datasets", None)
-        or cfg_get(cfg, "skip_dataset", [])
-    )
-
-    skip_set = frozenset(normalize_dataset_name(name) for name in as_list(skip_selections))
-
-    if skip_set:
-        print(f"Skipping datasets: {sorted(skip_set)}", flush=True)
-
-        dataset_names = [
-            name for name in dataset_names if normalize_dataset_name(name) not in skip_set
-        ]
-
-    return dataset_names
-
-
-def make_short_model_name(model_name: str) -> str:
-    """Convert model/embedder path or identifier to the stored embedding name."""
-    if "gpt" in model_name.lower():
-        return model_name.split("/")[-1]
-
-    return model_name.split("/")[-1].split(".")[0]
 
 
 def main() -> None:
@@ -260,57 +507,102 @@ def main() -> None:
     embedding_cfg = load_embedding_config(config_dir)
 
     model_name = resolve_model_name(cfg, args)
-
     if not model_name:
         raise ValueError(
             "Scoring requires --embedder <name>. "
             "Expected embeddings at data/embedded/<dataset>/<embedder>.joblib."
         )
 
-    dataset_names = resolve_dataset_names(config_dir, cfg, args)
+    short_model_name = make_short_model_name(model_name)
 
     cache = cfg_get(cfg, "cache", True) if args.cache is None else args.cache
     safe = cfg_get(cfg, "safe", False) if args.safe is None else args.safe
-
     override = not cache
 
-    embed_config = EmbeddingConfig(**embedding_cfg)
-    short_model_name = make_short_model_name(model_name)
+    args.output_csv.parent.mkdir(parents=True, exist_ok=True)
+    if args.checkpoint_dir is not None:
+        args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    n_total = len(dataset_names)
+    dataset_selections = resolve_dataset_selections(cfg, args)
+    skip_set = resolve_skip_set(cfg, args)
 
-    print(
-        f"[score] embedder={short_model_name}  datasets={n_total}  override={override}",
-        flush=True,
+    items = load_dataset_items(
+        config_dir=config_dir,
+        selections=dataset_selections,
     )
 
-    for idx, dataset_name in enumerate(dataset_names, start=1):
-        dataset_info = load_dataset_config(config_dir, dataset_name)
+    run_items, skipped_items = build_run_plan(
+        items=items,
+        skip_set=skip_set,
+        checkpoint_dir=args.checkpoint_dir,
+        embedder=short_model_name,
+        resume=args.resume,
+    )
+
+    print_run_plan(
+        items=items,
+        run_items=run_items,
+        skipped_items=skipped_items,
+        skip_set=skip_set,
+        embedder=short_model_name,
+        heads=list(args.heads),
+        override=override,
+        safe=safe,
+        resume=args.resume,
+    )
+
+    embed_config = EmbeddingConfig(**embedding_cfg)
+
+    attempted = 0
+    successful_datasets = 0
+    failed_datasets = 0
+
+    for idx, item in enumerate(run_items, start=1):
+        attempted += 1
+        dataset_success = False
 
         for model_head in args.heads:
             print(
-                f"[{idx:>2}/{n_total}] {dataset_info.name}  head={model_head}",
+                f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}",
                 flush=True,
             )
 
-            run_eval(
+            success = run_eval(
                 safe=safe,
                 embed_config=embed_config,
                 full_model_name=model_name,
                 short_model_name=short_model_name,
-                dataset_info=dataset_info,
+                dataset_info=item.info,
                 model_head=model_head,
                 output_csv=args.output_csv,
                 override=override,
             )
+            dataset_success = dataset_success or success
 
-        if args.checkpoint_dir is not None:
-            write_dataset_checkpoint(
-                results_csv=args.output_csv,
-                checkpoint_dir=args.checkpoint_dir,
-                dataset=dataset_info.name,
-                embedder=short_model_name,
-            )
+        write_checkpoint_if_successful(
+            results_csv=args.output_csv,
+            checkpoint_dir=args.checkpoint_dir,
+            dataset=item.name,
+            embedder=short_model_name,
+            dataset_success=dataset_success,
+        )
+
+        if dataset_success:
+            successful_datasets += 1
+        else:
+            failed_datasets += 1
+
+    print(
+        (
+            "[score] complete: "
+            f"expanded={len(items)}, "
+            f"skipped={len(skipped_items)}, "
+            f"attempted={attempted}, "
+            f"successful_datasets={successful_datasets}, "
+            f"failed_datasets={failed_datasets}"
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

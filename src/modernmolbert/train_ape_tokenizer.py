@@ -80,6 +80,110 @@ unk_rate > 0
 large difference between ChEMBL validation and benchmark molecules
   → add missing symbols or broaden tokenizer corpus
 
+
+### And for SMILES
+
+# Config 1: Paper-faithful baseline
+# Reproduces the exact conditions under which the paper measured
+# SMILYAPE's 8.6 tokens/molecule and its BBBP 0.754 result.
+# min_freq=2000 on 2M molecules naturally saturates at ~5300 tokens,
+# so max_vocab=5500 just ensures no artificial truncation before saturation.
+# max_merge_pieces=8 allows benzene-ring-scale tokens (c1ccccc1 = 8 primitives)
+# without over-compressing functional group context.
+uv run python -m modernmolbert.train_ape_tokenizer \
+  --output_vocab_path tokenizer/chembl36_smiles_2m_ape_max8_mf2000.json \
+  --dataset_name data/pretrain/chembl36_selfies \
+  --molecule_column smiles_canonical_clean \
+  --representation SMILES \
+  --tokenizer_train_size 2000000 \
+  --max_vocab_size 5500 \
+  --min_freq_for_merge 2000 \
+  --max_merge_pieces 8 \
+  --seed 42
+
+# Ideal targets (paper-consistent):
+# mean_len: 8–18      (paper found 8.6 on downstream small-molecule sets;
+#                      ChEMBL is more diverse so expect slightly higher)
+# p95_len:  <80
+# unk_rate: 0
+# truncation_rate@128: ~0   (128 is sufficient for SMILES; 256 is wasteful)
+
+
+# Config 2: SELFIES-final analogue
+# Direct translation of your best SELFIES preset into SMILES.
+# SELFIES final: max_merge_pieces=2, min_freq=3000, max_vocab=2000.
+# max_merge_pieces=6 is the SMILES equivalent in chemical depth
+# (amide C(=O)N and ester C(=O)O both require 6 primitives).
+# High min_freq=3000 ensures only robust, corpus-wide tokens survive —
+# the same philosophy that made the SELFIES final the best performer.
+# Smaller vocab (2000) forces broader sharing of tokens across molecule types.
+uv run python -m modernmolbert.train_ape_tokenizer \
+  --output_vocab_path tokenizer/chembl36_smiles_2m_ape_max6_mf3000.json \
+  --dataset_name data/pretrain/chembl36_smiles \
+  --smiles_column smiles \
+  --representation SMILES \
+  --tokenizer_train_size 2000000 \
+  --max_vocab_size 2000 \
+  --min_freq_for_merge 3000 \
+  --max_merge_pieces 6 \
+  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_smiles_symbols_min10.txt \
+  --seed 42
+
+# Ideal targets:
+# mean_len: 18–35     (less compression than Config 1; more tokens per molecule,
+#                      more attention positions, more local context preserved)
+# p95_len:  <120
+# unk_rate: 0
+# truncation_rate@128: ~0
+
+
+# Config 3: Substructure-scale tokens
+# Tests whether functional-group-level tokens improve downstream tasks
+# beyond what the paper found with max_merge_pieces=8.
+# max_merge_pieces=12 allows tokens up to the scale of a fused ring
+# or multi-atom pharmacophore fragment (e.g. c1ccncc1, NC(=O)c1).
+# The paper showed SMILYAPE's attention focuses on immediate neighbors
+# (weight 0.108 vs SELFYAPE's 0.096) — the hypothesis here is that
+# encoding functional groups as single tokens preserves that local-context
+# signal while giving the transformer richer atomic units to reason over.
+# Vocabulary capped at 4000 to avoid long-tail noise tokens that appear
+# only in scaffold-specific subsets.
+uv run python -m modernmolbert.train_ape_tokenizer \
+  --output_vocab_path tokenizer/chembl36_smiles_2m_ape_max12_mf2000.json \
+  --dataset_name data/pretrain/chembl36_smiles \
+  --smiles_column smiles \
+  --representation SMILES \
+  --tokenizer_train_size 2000000 \
+  --max_vocab_size 4000 \
+  --min_freq_for_merge 2000 \
+  --max_merge_pieces 12 \
+  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_smiles_symbols_min10.txt \
+  --seed 42
+
+# Ideal targets:
+# mean_len: 8–14      (most compressed; watch carefully — if mean_len
+#                      drops below ~8, the transformer has too few positions
+#                      to attend meaningfully across the molecule)
+# p95_len:  <60
+# unk_rate: 0
+# truncation_rate@128: ~0
+# Red flag: inspect actual token strings — if tokens contain half-open
+# parentheses like 'C(=O' or unclosed ring digits, max_merge_pieces is
+# crossing structural character boundaries inappropriately.
+
+
+# Validate all three
+uv run python -m modernmolbert.validate_tokenizer \
+  --dataset_name data/pretrain/chembl36_smiles \
+  --smiles_column smiles \
+  --split train \
+  --tokenizer_vocab_path tokenizer/chembl36_smiles_2m_ape_max8_mf2000.json \
+  --tokenizer_metadata_path tokenizer/chembl36_smiles_2m_ape_max8_mf2000.metadata.json \
+  --n 10000 \
+  --max_seq_length 128   # 256 is conservative overkill for SMILES;
+                          # 128 handles >99% of ChEMBL drug-like molecules
+
+
 """
 
 import argparse

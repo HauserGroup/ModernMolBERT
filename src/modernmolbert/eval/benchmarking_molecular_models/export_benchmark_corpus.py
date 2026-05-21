@@ -18,6 +18,59 @@ corpus maps valid primitive symbols from downstream datasets to `<unk>`.
 Missing symbols can be force-added to the tokenizer vocabulary as atomic symbols
 after APE merge training.
 
+Extra vocabulary symbols:
+    `train_ape_tokenizer` supports forcing additional primitive symbols into the
+    tokenizer vocabulary after APE merge training and before writing the final
+    vocabulary. This is useful when a tokenizer trained on the pretraining corpus
+    has low sequence truncation but nonzero `<unk>` rates on downstream datasets
+    because rare valid primitives are absent from the tokenizer vocabulary. The
+    extra symbols do not affect learned APE merge rules.
+
+    Store generated symbol files under tokenizer/extra_symbols/ because they are
+    inputs to tokenizer training, not benchmark dataset artifacts.
+
+    `--extra_vocab_symbols_path` expects a plain UTF-8 text file with one
+    primitive token per line. Blank lines and lines starting with `#` are
+    ignored. For SELFIES, each non-comment line must be one bracketed SELFIES
+    symbol, for example:
+
+        # stereochemistry
+        [C@@H1]
+        [C@H1]
+        [C@@]
+        [C@]
+        # directional bonds
+        [/C]
+        [\\C]
+        [/N]
+        [\\N]
+
+    Do not pass a full SELFIES molecule such as `[C][C@@H1][O]` to
+    `--extra_vocab_symbols_path`; that option expects one primitive token per
+    line.
+
+    `--extra_vocab_selfies_path` expects a plain UTF-8 text file with one full
+    SELFIES string per line. Blank lines and lines starting with `#` are ignored,
+    and all bracketed SELFIES symbols are extracted with SELFIES_SYMBOL_RE. This
+    is useful when an analysis script exports full converted SELFIES strings
+    rather than a precomputed symbol list. For example:
+
+        [C][C@@H1][Branch1][C][O][C]
+        [C][=C][/C][=C][\\C][Ring1][=Branch1]
+        [N][C@H1][C][=O][O]
+
+    To train from a full-SELFIES input file, pass it during tokenizer training:
+
+        uv run python -m modernmolbert.train_ape_tokenizer \\
+          --output_vocab_path tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json \\
+          --dataset_name data/pretrain/chembl36_selfies \\
+          --molecule_column selfies \\
+          --representation SELFIES \\
+          --tokenizer_train_size 2000000 \\
+          --max_vocab_size 5000 \\
+          --min_freq_for_merge 2000 \\
+          --extra_vocab_selfies_path data/prepared/benchmark_selfies_for_vocab_coverage.txt
+
 Recommended workflow (SELFIES):
     1. Export benchmark symbol counts:
         uv run python -m modernmolbert.eval.benchmarking_molecular_models.export_benchmark_corpus \\

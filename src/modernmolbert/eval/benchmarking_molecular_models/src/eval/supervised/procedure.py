@@ -1,3 +1,4 @@
+import gc
 import os
 
 import joblib
@@ -31,6 +32,47 @@ from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils 
     NpEncoder,
     get_model_version_hash,
 )
+
+
+def load_embedded_dataset(
+    embedded_dir: str,
+    dataset_info: Any,
+    model_name: str,
+) -> "EmbeddedDataset | None":
+    """Load and preprocess an embedding from disk.
+
+    Handles legacy JSON format, torch tensor conversion, and 1-D reshape.
+    Returns None if the file is missing; raises on empty data.
+    """
+    embedded_filename = join(os.getcwd(), embedded_dir, dataset_info.name, f"{model_name}.joblib")
+    legacy_filename = join(os.getcwd(), embedded_dir, dataset_info.name, f"{model_name}.json")
+
+    if os.path.exists(legacy_filename):
+        log.info("Legacy embedded dataset found, converting to new format")
+        embedded_data = EmbeddedDataset.deserialize_legacy(legacy_filename)
+    elif not os.path.exists(embedded_filename):
+        log.error(f"Embedded dataset not found: {embedded_filename}")
+        return None
+    else:
+        embedded_data: EmbeddedDataset = joblib.load(embedded_filename)
+
+    if embedded_data.X is None:
+        log.error("Embedded dataset is empty")
+        raise RuntimeError("Embedded dataset is empty")
+
+    if isinstance(embedded_data.X, torch.Tensor):
+        log.info("Converting torch.Tensor to numpy array")
+        embedded_data.X = embedded_data.X.detach().cpu().numpy()
+
+    if len(embedded_data.X.shape) == 1:
+        log.warning("Invalid X shape (1 dim), assuming invalid concatenation")
+        desired_samples = embedded_data.y.shape[0]
+        embedded_data.X = embedded_data.X.reshape(desired_samples, -1)
+
+    log.info(
+        f"Shape {embedded_data.X.shape} for dataset {embedded_data.name}, task {embedded_data.task}"
+    )
+    return embedded_data
 
 
 def eval_embedding(
@@ -116,6 +158,7 @@ def eval_procedure(
     model_head: str,
     output_csv: str | Path,
     override: bool = False,
+    preloaded: "EmbeddedDataset | None" = None,
 ):
     model_version_hash = get_model_version_hash()
 
@@ -140,33 +183,13 @@ def eval_procedure(
         log.error("Skipping KNN evaluation for MUV datasets, not supported")
         return
 
-    embedded_filename = join(os.getcwd(), embedded_dir, dataset_info.name, f"{model_name}.joblib")
-    legacy_filename = join(os.getcwd(), embedded_dir, dataset_info.name, f"{model_name}.json")
-
-    if os.path.exists(legacy_filename):
-        log.info("Legacy embedded dataset found, converting to new format")
-        embedded_data = EmbeddedDataset.deserialize_legacy(legacy_filename)
-    elif not os.path.exists(embedded_filename):
-        log.error(f"Embedded dataset not found: {embedded_filename}")
-        return
+    owns_data = preloaded is None
+    if owns_data:
+        embedded_data = load_embedded_dataset(embedded_dir, dataset_info, model_name)
+        if embedded_data is None:
+            return
     else:
-        embedded_data: EmbeddedDataset = joblib.load(embedded_filename)
-
-    if embedded_data.X is None:
-        log.error("Embedded dataset is empty")
-        raise RuntimeError("Embedded dataset is empty")
-
-    if isinstance(embedded_data.X, torch.Tensor):
-        log.info("Converting torch.Tensor to numpy array")
-        embedded_data.X = embedded_data.X.detach().cpu().numpy()
-
-    if len(embedded_data.X.shape) == 1:
-        log.warning("Invalid X shape (1 dim), assuming invalid concatenation")
-        desired_samples = embedded_data.y.shape[0]
-        embedded_data.X = embedded_data.X.reshape(desired_samples, -1)
-    log.info(
-        f"Shape {embedded_data.X.shape} for dataset {embedded_data.name}, task {embedded_data.task}"
-    )
+        embedded_data = preloaded
 
     result = eval_embedding(
         embedded_data,
@@ -177,11 +200,17 @@ def eval_procedure(
     )
     log.info(f"Evaluation complete, test result: {result.metric_value}")
 
+    dataset_name = embedded_data.name
+    task = embedded_data.task
+    if owns_data:
+        del embedded_data
+        gc.collect()
+
     append_result_row(
         output_csv,
         {
-            "dataset": embedded_data.name,
-            "task": embedded_data.task,
+            "dataset": dataset_name,
+            "task": task,
             "embedder": model_name,
             "model": result.model,
             "hyperparams": dump_hyperparams(result.hyperparams),

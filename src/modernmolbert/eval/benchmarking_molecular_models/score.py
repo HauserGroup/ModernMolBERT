@@ -1,4 +1,5 @@
 import argparse
+import gc
 import logging as log
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models
 )
 from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.procedure import (
     eval_procedure,
+    load_embedded_dataset,
 )
 
 
@@ -320,6 +322,7 @@ def run_eval(
     model_head: str,
     output_csv: Path,
     override: bool,
+    preloaded: Any = None,
 ) -> bool:
     """Run one dataset/head evaluation.
 
@@ -348,6 +351,7 @@ def run_eval(
             model_head=model_head,
             output_csv=output_csv,
             override=override,
+            preloaded=preloaded,
         )
     except Exception as exc:
         if not safe:
@@ -561,6 +565,12 @@ def main() -> None:
         attempted += 1
         dataset_success = False
 
+        embedded_data = load_embedded_dataset(
+            embedded_dir=embed_config.embedded_directory,
+            dataset_info=item.info,
+            model_name=short_model_name,
+        )
+
         for model_head in args.heads:
             print(
                 f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}",
@@ -576,8 +586,12 @@ def main() -> None:
                 model_head=model_head,
                 output_csv=args.output_csv,
                 override=override,
+                preloaded=embedded_data,
             )
             dataset_success = dataset_success or success
+
+        del embedded_data
+        gc.collect()
 
         write_checkpoint_if_successful(
             results_csv=args.output_csv,

@@ -1,3 +1,4 @@
+import gc
 import numpy as np
 import logging as log
 
@@ -105,12 +106,15 @@ def fit_model(
         )
         grid_search.fit(X, y_model)
 
-    return {
+    result = {
         "model": model_head,
         "model_obj": grid_search.best_estimator_,
         "best_params": grid_search.best_params_,
         "best_score": grid_search.best_score_,
     }
+    del grid_search
+    gc.collect()
+    return result
     # greater_is_better = scorer._sign > 0
     # # filter out nans
     # res = [x for x in res if not np.isnan(x["best_score"])]
@@ -133,10 +137,9 @@ def fit_and_eval_embedding(
         model_head=model_head,
         memory_weight=memory_weight,
     )
+    del X_train, y_train
     X_test, y_test = get_test_data(dataset)
-    print(
-        f"Shapes: X_test={X_test.shape}, y_test={y_test.shape}, X_train={X_train.shape}, y_train={y_train.shape}"
-    )
+    print(f"Shapes: X_test={X_test.shape}, y_test={y_test.shape}", flush=True)
     if dataset.task == "regression":
         y_pred = best_model["model_obj"].predict(X_test)
     else:

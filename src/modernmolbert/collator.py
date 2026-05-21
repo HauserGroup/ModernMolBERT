@@ -61,7 +61,7 @@ class MolecularMLMCollator(DataCollatorMixin):
     _HETEROATOM_IN_BRACKET: ClassVar[re.Pattern] = re.compile(
         r"\["
         r"[=#/\\@+\-]*"
-        r"(?:Cl|Br|Se|Si|[NOSPFI])"
+        r"(?:(?:Cl|Br|Se|Si)(?![a-z])|[NOSPFI])"
         r"[^\]]*"
         r"\]"
     )
@@ -88,6 +88,10 @@ class MolecularMLMCollator(DataCollatorMixin):
         if self.masking_strategy == "hetero_span":
             if self.heteroatom_start_weight <= 0.0:
                 raise ValueError("heteroatom_start_weight must be > 0")
+            if not self.ids_to_tokens:
+                raise ValueError(
+                    "hetero_span requires ids_to_tokens to be populated; got empty dict"
+                )
             self._token_start_weights = self._build_token_start_weights()
         else:
             self._token_start_weights = None

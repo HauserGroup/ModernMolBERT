@@ -237,6 +237,7 @@ src/modernmolbert/eval/junk/
 *repomix*.xml
 CLAUDE.md
 .claude/
+.vscode/
 
 # eval
 tmp_eval/

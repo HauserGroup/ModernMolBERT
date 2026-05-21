@@ -8,7 +8,7 @@ from modernmolbert.select_pretraining_run import (
     best_eval_from_log_history,
     copy_best_model,
     discover_runs,
-    flatten_metric_dict,
+    flatten_scalar_dict,
     summarize_run,
 )
 
@@ -54,16 +54,15 @@ def _make_complete_run(run_dir: Path) -> None:
     (final_model / "pytorch_model.bin").write_bytes(b"weights")
 
 
-def test_flatten_metric_dict_keeps_json_scalar_values_only() -> None:
-    flattened = flatten_metric_dict(
-        "eval_",
+def test_flatten_scalar_dict_keeps_json_scalar_values_only() -> None:
+    flattened = flatten_scalar_dict(
         {
-            "loss": 0.2,
-            "ok": True,
-            "name": "run",
-            "missing": None,
-            "nested": {"ignored": 1},
-            "list": [1, 2],
+            "eval_loss": 0.2,
+            "eval_ok": True,
+            "eval_name": "run",
+            "eval_missing": None,
+            "eval_nested": {"ignored": 1},
+            "eval_list": [1, 2],
         },
     )
 

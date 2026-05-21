@@ -144,7 +144,7 @@ def test_collator_random_replacement_candidates_exclude_special_ids():
         special_token_ids=[0, 1, 2, 3, 4],
     )
 
-    assert collator.eligible_random_token_ids().tolist() == [5, 6, 7, 8, 9, 10]
+    assert collator._eligible_random_token_ids().tolist() == [5, 6, 7, 8, 9, 10]
 
 
 def test_collator_random_replacement_candidates_require_content_tokens():
@@ -157,7 +157,7 @@ def test_collator_random_replacement_candidates_require_content_tokens():
     )
 
     with pytest.raises(ValueError, match="No eligible non-special token IDs"):
-        collator.eligible_random_token_ids()
+        collator._eligible_random_token_ids()
 
 
 def test_standard_masking_replacement_runs_without_special_tokens():

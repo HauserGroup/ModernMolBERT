@@ -137,7 +137,7 @@ def test_ethanol_gate_fails_when_selfies_symbols_are_unknown():
     special_ids = resolve_special_ids(tokenizer)
 
     try:
-        _assert_ethanol_not_unknown(tokenizer, special_ids)
+        _assert_ethanol_not_unknown(tokenizer, special_ids, SELFIES_REPRESENTATION)
         raise AssertionError("Expected ethanol gate to fail for broken tokenizer")
     except ValueError as exc:
         assert "unk_rate" in str(exc)

@@ -17,7 +17,8 @@ def get_train_data(dataset: EmbeddedDataset) -> tuple[np.ndarray, np.ndarray]:
         train_split = dataset.splits["train"] + dataset.splits["valid"]
     else:
         train_split = dataset.splits["train"].tolist() + dataset.splits["valid"].tolist()
-    return dataset.X[train_split], dataset.y_np[train_split]
+    X = dataset.X[train_split].astype(np.float32, copy=False)
+    return X, dataset.y_np[train_split]
 
 
 def get_test_data(dataset: EmbeddedDataset) -> tuple[np.ndarray, np.ndarray]:
@@ -25,7 +26,8 @@ def get_test_data(dataset: EmbeddedDataset) -> tuple[np.ndarray, np.ndarray]:
         test_split = dataset.splits["test"]
     else:
         test_split = dataset.splits["test"].tolist()
-    return dataset.X[test_split], dataset.y_np[test_split]
+    X = dataset.X[test_split].astype(np.float32, copy=False)
+    return X, dataset.y_np[test_split]
 
 
 def load_embedding(dataset_info, model_name: str, embedded_dir: str) -> EmbeddedDataset | None:

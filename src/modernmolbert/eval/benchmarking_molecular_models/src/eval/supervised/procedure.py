@@ -54,7 +54,7 @@ def load_embedded_dataset(
         log.error(f"Embedded dataset not found: {embedded_filename}")
         return None
     else:
-        embedded_data: EmbeddedDataset = joblib.load(embedded_filename)
+        embedded_data: EmbeddedDataset = joblib.load(embedded_filename, mmap_mode="r")
 
     if embedded_data.X is None:
         log.error("Embedded dataset is empty")

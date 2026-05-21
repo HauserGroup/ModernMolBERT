@@ -47,9 +47,17 @@ def load_dataset_config(config_dir: str | Path, dataset: str) -> Config:
     return registry[dataset_name]
 
 
+def _strip_task_prefix(name: str) -> str:
+    for prefix in ("clf_", "reg_"):
+        if name.startswith(prefix):
+            return name[len(prefix) :]
+    return name
+
+
 def expand_dataset_selection(config_dir: str | Path, selections: list[str]) -> list[str]:
     registry = load_dataset_registry(config_dir)
     available = sorted(registry.keys())
+    by_bare_name = {_strip_task_prefix(k): k for k in available}
     selected: list[str] = []
 
     for selection in selections:
@@ -58,7 +66,13 @@ def expand_dataset_selection(config_dir: str | Path, selections: list[str]) -> l
         elif any(ch in selection for ch in "*?[]"):
             selected.extend(name for name in available if fnmatch(name, selection))
         else:
-            selected.append(Path(selection).stem)
+            stem = Path(selection).stem
+            if stem in available:
+                selected.append(stem)
+            elif stem in by_bare_name:
+                selected.append(by_bare_name[stem])
+            else:
+                selected.append(stem)  # will be caught by missing check below
 
     deduped = list(dict.fromkeys(selected))
     missing = [name for name in deduped if name not in available]

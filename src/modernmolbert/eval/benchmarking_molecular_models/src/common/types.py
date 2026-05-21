@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any
 from abc import ABC, abstractmethod
 
@@ -164,7 +165,7 @@ class EmbeddedDataset:
         log.info(f"Removed {invalid_count} invalid samples from the dataset '{self.name}'")
         return invalid_count
 
-    @property
+    @cached_property
     def y_np(self) -> np.ndarray:
         if "split" in self.y.columns:
             self.y = self.y.drop(columns=["split"])

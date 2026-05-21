@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 
 import pandas as pd
@@ -196,6 +194,10 @@ def write_dataset_checkpoint(
 
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    output_path = checkpoint_dir / f"{dataset}.csv"
+    safe_dataset = dataset.replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
+    safe_embedder = (
+        embedder.replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
+    )
+    output_path = checkpoint_dir / f"{safe_dataset}__{safe_embedder}.csv"
     out.to_csv(output_path, index=False)
     return out

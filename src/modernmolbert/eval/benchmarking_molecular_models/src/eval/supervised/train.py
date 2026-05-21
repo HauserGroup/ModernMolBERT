@@ -62,6 +62,7 @@ def fit_model(
     else:
         scorer = get_sklearn_scorer("roc_auc")
         y_model = np.nan_to_num(y_arr, nan=0).ravel()
+    del y_arr
 
     log.info(f"Shapes: X={X.shape}, y={y_model.shape}")
 

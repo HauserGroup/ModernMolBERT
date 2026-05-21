@@ -304,6 +304,34 @@ def detect_backend(args: argparse.Namespace) -> str:
     return "cpu"
 
 
+def load_and_patch_config(source_dir: Path, run_dir: Path) -> dict[str, Any]:
+    config_path = source_dir / "config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+
+    config.setdefault("model_type", "modernbert")
+
+    # For a masked-LM checkpoint, this is the right public loading class.
+    config.setdefault("architectures", ["ModernBertForMaskedLM"])
+
+    # Keep these aligned with the tokenizer metadata.
+    config.setdefault("vocab_size", 631)
+    config.setdefault("pad_token_id", 1)
+    config.setdefault("bos_token_id", 0)
+    config.setdefault("eos_token_id", 2)
+
+    # Hugging Face models do not usually need mask_token_id in config,
+    # but it is useful metadata.
+    config.setdefault("mask_token_id", 4)
+
+    run_args_path = run_dir / "run_args.json"
+    if run_args_path.exists():
+        run_args = json.loads(run_args_path.read_text(encoding="utf-8"))
+        if "max_seq_length" in run_args:
+            config.setdefault("max_position_embeddings", run_args["max_seq_length"])
+
+    return config
+
+
 def validate_args(args: argparse.Namespace, backend: str) -> None:
     if args.max_seq_length is not None and args.max_seq_length <= 0:
         raise ValueError("max_seq_length must be positive")

@@ -4,7 +4,7 @@
 # Conservative
 uv run python -m modernmolbert.train_ape_tokenizer \
   --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max4.json \
-  --dataset_name data/pretrain/chembl36_selfies_tokenized \
+  --dataset_name data/pretrain/chembl36_selfies \
   --selfies_column selfies \
   --representation SELFIES \
   --tokenizer_train_size 500000 \
@@ -17,7 +17,7 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 # Moderate
   uv run python -m modernmolbert.train_ape_tokenizer \
   --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max8.json \
-  --dataset_name data/pretrain/chembl36_selfies_tokenized \
+  --dataset_name data/pretrain/chembl36_selfies \
   --selfies_column selfies \
   --representation SELFIES \
   --tokenizer_train_size 500000 \

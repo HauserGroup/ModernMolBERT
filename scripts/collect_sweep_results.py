@@ -15,7 +15,9 @@ from pathlib import Path
 SWEEP_DIR = Path("runs/chembl36_small_mask_mlm_lr_sweep")
 OUT_FILE = SWEEP_DIR / "sweep_results.csv"
 
-# Columns pulled from all_results.json (in order)
+# Columns pulled from all_results.json (in order). These legacy names are kept
+# for backwards compatibility with existing notebooks. The final_eval_* columns
+# below make the source explicit for new analysis.
 METRIC_KEYS = [
     "eval_loss",
     "eval_masked_accuracy",
@@ -25,6 +27,12 @@ METRIC_KEYS = [
     "num_parameters",
     "train_runtime",
     "eval_runtime",
+]
+
+FINAL_EVAL_KEYS = [
+    "eval_loss",
+    "eval_masked_accuracy",
+    "eval_perplexity",
 ]
 
 # Regex to parse dir names like: mask_hetero_span__mlm_0p15__lr_1e-4
@@ -46,6 +54,49 @@ def _parse_dir_name(name: str) -> dict | None:
     }
 
 
+def _load_json(path: Path) -> dict:
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
+def _numeric(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _eval_history(trainer_state: dict) -> list[dict]:
+    history = trainer_state.get("log_history", [])
+    if not isinstance(history, list):
+        return []
+    return [
+        entry
+        for entry in history
+        if isinstance(entry, dict) and _numeric(entry.get("eval_loss")) is not None
+    ]
+
+
+def _best_logged_eval(history: list[dict]) -> dict:
+    if not history:
+        return {}
+    return min(history, key=lambda entry: float(entry["eval_loss"]))
+
+
+def _last_logged_eval(history: list[dict]) -> dict:
+    return history[-1] if history else {}
+
+
+def _checkpoint_step(checkpoint: object) -> int | str:
+    if not isinstance(checkpoint, str) or "-" not in checkpoint:
+        return ""
+    raw_step = checkpoint.rsplit("-", 1)[-1]
+    try:
+        return int(raw_step)
+    except ValueError:
+        return raw_step
+
+
 def collect(sweep_dir: Path) -> list[dict]:
     rows = []
     for run_dir in sorted(sweep_dir.iterdir()):
@@ -61,8 +112,19 @@ def collect(sweep_dir: Path) -> list[dict]:
             print(f"  skip {run_dir.name}: no all_results.json", file=sys.stderr)
             continue
 
-        results = json.loads(results_path.read_text())
-        args = json.loads(args_path.read_text()) if args_path.exists() else {}
+        results = _load_json(results_path)
+        args = _load_json(args_path)
+        trainer_state = _load_json(run_dir / "trainer_state.json")
+        eval_history = _eval_history(trainer_state)
+        best_logged = _best_logged_eval(eval_history)
+        last_logged = _last_logged_eval(eval_history)
+        best_checkpoint = trainer_state.get("best_model_checkpoint", "")
+        load_best_model_at_end = args.get("load_best_model_at_end", "")
+        metric_source = (
+            "best_model_final_eval"
+            if load_best_model_at_end is not False and best_checkpoint
+            else "final_model_eval"
+        )
 
         row = {
             "run": run_dir.name,
@@ -70,7 +132,26 @@ def collect(sweep_dir: Path) -> list[dict]:
             "strategy": parsed["strategy"],
             "mlm_prob": parsed["mlm_prob"],
             "learning_rate": args.get("learning_rate", parsed["lr_from_name"]),
+            "eval_masking_strategy": args.get("masking_strategy", parsed["strategy"]),
+            "eval_mlm_probability": args.get("mlm_probability", parsed["mlm_prob"]),
+            "load_best_model_at_end": load_best_model_at_end,
+            "metric_source": metric_source,
+            "metric_note": (
+                "Final eval after training; if load_best_model_at_end was enabled, "
+                "the best checkpoint was loaded first. Validation masking uses this "
+                "run-specific masking_strategy and mlm_probability."
+            ),
+            "best_checkpoint": best_checkpoint,
+            "best_step": trainer_state.get("best_global_step", "")
+            or _checkpoint_step(best_checkpoint),
+            "best_logged_eval_loss": best_logged.get("eval_loss", ""),
+            "best_logged_eval_masked_accuracy": best_logged.get("eval_masked_accuracy", ""),
+            "last_logged_eval_step": last_logged.get("step", ""),
+            "last_logged_eval_loss": last_logged.get("eval_loss", ""),
+            "last_logged_eval_masked_accuracy": last_logged.get("eval_masked_accuracy", ""),
         }
+        for key in FINAL_EVAL_KEYS:
+            row[f"final_{key}"] = results.get(key, "")
         for key in METRIC_KEYS:
             row[key] = results.get(key, "")
 

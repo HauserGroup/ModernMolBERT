@@ -13,14 +13,14 @@
 set -euo pipefail
 
 # ─── Dataset ──────────────────────────────────────────────────────────────────
-DATASET_NAME="data/pretrain/chembl36_selfies_tokenized"
+DATASET_NAME="data/pretrain/chembl36_selfies"
 SELFIES_COLUMN="selfies"
 TRAIN_SPLIT="train"
 VALIDATION_SPLIT="valid"
 
 # ─── Tokenizer ────────────────────────────────────────────────────────────────
-TOKENIZER_PATH="tokenizer/chembl36_selfies_2m_min2000.json"
-TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_min2000.metadata.json"
+TOKENIZER_PATH="tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"
+TOKENIZER_METADATA_PATH="tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json"
 
 # ─── Fixed training hyperparameters ───────────────────────────────────────────
 MODEL_SIZE="small"

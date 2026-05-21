@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 
 def _setup_vocab(tmp_path: Path) -> Path:
@@ -124,3 +125,16 @@ def test_process_shard_creates_parent_directory(tmp_path: Path) -> None:
     pd.DataFrame({"selfies": ["[C]"]}).to_parquet(src)
     m._process_shard((src, dst))
     assert dst.exists()
+
+
+def test_main_emits_deprecation_warning_for_legacy_cli(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from modernmolbert.data import pretokenize_chembl36 as m
+
+    monkeypatch.setattr(m, "TOKENIZER_PATH", _setup_vocab(tmp_path))
+    monkeypatch.setattr(m, "INPUT_ROOT", tmp_path / "input")
+    monkeypatch.setattr(m, "OUTPUT_ROOT", tmp_path / "output")
+
+    with pytest.warns(DeprecationWarning, match="pretokenize_chembl36 is deprecated"):
+        m.main()

@@ -51,6 +51,8 @@ converts the canonical SMILES to SELFIES, applies light small-molecule filters,
 deduplicates molecules, and writes deterministic hash splits. The trainer can
 consume the prepared files through `--data_files` and `--selfies_column selfies`.
 
+`data/pretrain/chembl36_selfies_tokenized` and `modernmolbert.data.pretokenize_chembl36` are deprecated for new runs. The precomputed `input_ids` are tied to the tokenizer that created them, so train from `data/pretrain/chembl36_selfies` and let the training CLI encode SELFIES with the active tokenizer.
+
 ## MoleculeNet preparation
 
 MoleculeNet datasets are prepared locally from DeepChem into sanitized Parquet files containing raw SMILES, canonical SMILES, SELFIES, validity flags, and task labels.

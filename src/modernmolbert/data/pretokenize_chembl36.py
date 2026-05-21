@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Pre-tokenize ChEMBL36 SELFIES parquet shards into integer input_ids.
+"""Deprecated ChEMBL36 SELFIES pre-tokenization helper.
+
+This script is retained for reproducing older experiments. New pretraining runs
+should use ``data/pretrain/chembl36_selfies`` directly and let
+``modernmolbert.train_selfies_ape_modernbert`` tokenize SELFIES rows with the
+current tokenizer at training time.
 
 Run once before training:
     uv run python src/modernmolbert/data/pretokenize_chembl36.py
@@ -9,13 +14,14 @@ Input:  data/pretrain/chembl36_selfies/{train,valid}/*.parquet
 Output: data/pretrain/chembl36_selfies_tokenized/{train,valid}/*.parquet
         (adds column: "input_ids" — list[int], includes BOS and EOS)
 
-The training script can then skip the Python tokenizer entirely; the collator
-only needs to apply masking on the pre-computed integer sequences.
+The generated ``input_ids`` are tied to one tokenizer vocabulary. Reusing them
+with a different tokenizer silently trains on the wrong token IDs.
 """
 
 import json
 import re
 import time
+import warnings
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
 
@@ -29,6 +35,12 @@ OUTPUT_ROOT = Path("data/pretrain/chembl36_selfies_tokenized")
 SPLITS = ["train", "valid"]
 SELFIES_COL = "selfies"
 NUM_WORKERS = min(cpu_count(), 8)  # capped at 8 — usually I/O bound before that
+
+DEPRECATION_MESSAGE = (
+    "modernmolbert.data.pretokenize_chembl36 is deprecated. "
+    "Use data/pretrain/chembl36_selfies directly for training so SELFIES are "
+    "encoded with the active tokenizer."
+)
 
 # ── tokenizer (loaded once per worker via initializer) ────────────────────────
 SELFIES_RE = re.compile(r"\[[^\]]+\]")
@@ -85,6 +97,8 @@ def _process_shard(args: tuple[Path, Path]) -> tuple[str, int]:
 
 # ── main ──────────────────────────────────────────────────────────────────────
 def main() -> None:
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning, stacklevel=2)
+
     if not TOKENIZER_PATH.exists():
         raise FileNotFoundError(f"Tokenizer not found: {TOKENIZER_PATH}")
 
@@ -135,6 +149,8 @@ def main() -> None:
         "selfies_column": SELFIES_COL,
         "pretokenized": True,
         "tokenizer_path": str(TOKENIZER_PATH),
+        "deprecated": True,
+        "deprecation_message": DEPRECATION_MESSAGE,
     }
     meta_path = OUTPUT_ROOT / "metadata.json"
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -144,10 +160,10 @@ def main() -> None:
 
     print(f"Output: {OUTPUT_ROOT}/")
     print(
-        "\nTrain with:\n"
-        f"  --dataset_name {OUTPUT_ROOT}\n"
+        "\nDeprecated output. Prefer training with:\n"
+        f"  --dataset_name {INPUT_ROOT}\n"
         "  --use_validation_split --validation_split valid\n"
-        "  (input_ids used directly; SELFIES tokenization skipped)"
+        "  (SELFIES are tokenized with the active tokenizer at training time)"
     )
 
 

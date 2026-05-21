@@ -232,6 +232,8 @@ uv run python -m modernmolbert.data.prepare_chembl36_selfies \
 
 This prepares the dataset with no test split by default. The prepared dataset will be used for model pretraining in the training steps below.
 
+The ChEMBL36 pre-tokenized dataset path (`data/pretrain/chembl36_selfies_tokenized`) is deprecated for new runs. Train from `data/pretrain/chembl36_selfies` so SELFIES are encoded with the tokenizer selected by the current run.
+
 ### 1. Train the SELFIES tokenizer
 
 ```bash

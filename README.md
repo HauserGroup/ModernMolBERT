@@ -204,6 +204,27 @@ Git and use resumable `rsync`:
 rsync -avP runs/chembl36_small_mask_mlm_lr_sweep/ user@remote:/path/to/runs/chembl36_small_mask_mlm_lr_sweep/
 ```
 
+
+To make a compact sweep archive without intermediate checkpoints, TensorBoard
+logs, duplicated tokenizer folders, or generated checkpoint READMEs, pass tar
+excludes before the `-C ... .` input path. Tar processes options in order; if
+the source path comes first, the excludes can arrive too late to affect traversal.
+
+```bash
+tar -cvzf chembl36_small_mask_mlm_lr_sweep.tar.gz \
+  --exclude='./*/checkpoint*' \
+  --exclude='./*/runs' \
+  --exclude='./*/ape_tokenizer' \
+  --exclude='./*/README.checkpoint.md' \
+  -C runs/chembl36_small_mask_mlm_lr_sweep .
+```
+
+Verify the archive does not contain excluded paths:
+
+```bash
+tar -tf chembl36_small_mask_mlm_lr_sweep.tar.gz | rg 'checkpoint|/runs/|ape_tokenizer|README\.checkpoint'
+```
+
 Uploaded checkpoints load the model from the repository root. With current
 Transformers versions, load the custom tokenizer from the `ape_tokenizer/`
 subfolder because root ModernBERT configs disable remote tokenizer code:

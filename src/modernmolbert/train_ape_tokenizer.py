@@ -179,10 +179,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Optional text file with one primitive SELFIES token per line, e.g. "
-            "[C@@H1]. These tokens are force-added after APE merge training and "
-            "before saving the final vocabulary. Do not pass full SELFIES molecule "
-            "strings here."
+            "Optional text file with one primitive token per line "
+            "(SELFIES: e.g. [C@@H1]; SMILES: e.g. [Fe+3]). "
+            "These tokens are force-added after APE merge training and "
+            "before saving the final vocabulary. Do not pass full molecule strings here. "
+            "For SELFIES representation, tokens are validated as bracket tokens."
         ),
     )
     parser.add_argument(
@@ -228,13 +229,12 @@ def load_extra_vocab_symbols(
 ) -> list[str]:
     """Load additional vocabulary symbols to force into the tokenizer.
 
-    symbols_path expects one token per line, e.g.:
-        [C@@H1]
-        [C@H1]
-        [/C]
+    symbols_path expects one primitive token per line, e.g.:
+        [C@@H1]   (SELFIES bracket token)
+        [Fe+3]    (SMILES bracket atom)
 
-    selfies_path expects one SELFIES string per line. All bracketed SELFIES
-    primitive symbols are extracted.
+    selfies_path expects one full SELFIES string per line. All bracketed
+    SELFIES primitive symbols are extracted. Only valid for SELFIES representation.
     """
 
     symbols: set[str] = set()

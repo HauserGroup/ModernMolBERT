@@ -48,7 +48,7 @@ NUM_WORKERS=4
 SEED=42
 
 # ─── Sweep grid: 1 × 3 × 3 = 9 runs ──────────────────────────────────────────
-MASKING_STRATEGIES=(standard)
+MASKING_STRATEGIES=(standard span hetero_span)
 
 MLM_PROBS=(0.15 0.20 0.25)
 

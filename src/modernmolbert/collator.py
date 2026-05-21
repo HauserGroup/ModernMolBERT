@@ -57,11 +57,15 @@ class MolecularMLMCollator(DataCollatorMixin):
     return_tensors: str = "pt"
 
     # ClassVar: excluded from __init__ by dataclass machinery.
-    # Ordered longest-first so alternation matches Cl before C, Br before B, Se before S.
+    # Match bracketed SELFIES atoms, including optional bond/stereo prefixes and
+    # isotope numbers. The element boundary prevents "[Na]" from matching "N",
+    # "[Fe]" from matching "F", or "[Branch1]" from matching "Br".
     _HETEROATOM_IN_BRACKET: ClassVar[re.Pattern] = re.compile(
         r"\["
         r"[=#/\\@+\-]*"
-        r"(?:(?:Cl|Br|Se|Si)(?![a-z])|[NOSPFI])"
+        r"\d*"
+        r"(?:(?:Cl|Br|Se|Si)|[NOSPFI])"
+        r"(?![a-z])"
         r"[^\]]*"
         r"\]"
     )
@@ -221,8 +225,9 @@ class MolecularMLMCollator(DataCollatorMixin):
         """Return a (vocab_size,) float weight tensor for heteroatom-biased span starts.
 
         Covered heteroatom set: N, O, S, P, F, Cl, Br, I, Se, Si.
-        Elements not in this set (e.g. B, Sn, As, Ge) receive weight 1.0.
-        If intentional coverage of additional elements is needed, extend
+        Isotope-prefixed heteroatoms are covered, e.g. [15N], [=18O],
+        [/123I]. Elements not in this set (e.g. B, Fe, Na, Sn, As, Ge)
+        receive weight 1.0. If intentional coverage of additional elements is needed, extend
         _HETEROATOM_IN_BRACKET accordingly.
 
         Token IDs in special_token_ids receive weight 0.0 as a defensive guard;
@@ -296,7 +301,7 @@ class MolecularMLMCollator(DataCollatorMixin):
             span_len = int(span_lengths[draw_idx].item())
             end = min(start + span_len, seq_len)
 
-            invalid = (~attention_mask_row[start:end]) | special_mask_row[start:end]
+            invalid = (~attention_mask_row[start:end].bool()) | special_mask_row[start:end]
             first_invalid = invalid.nonzero(as_tuple=False)
             if len(first_invalid) > 0:
                 end = start + int(first_invalid[0].item())

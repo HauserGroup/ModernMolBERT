@@ -4,6 +4,7 @@ import joblib
 import json
 import torch
 import logging as log
+from pathlib import Path
 
 from os.path import join
 from typing import Any
@@ -55,7 +56,7 @@ def dump_hyperparams(hyperparams: dict) -> str:
 
 
 def check_if_already_evaluated(
-    output_csv: str,
+    output_csv: str | Path,
     dataset_name: str,
     model_name: str,
     metric_name: str,
@@ -87,7 +88,7 @@ def check_if_already_evaluated(
 
 
 def delete_previous_evaluations(
-    output_csv: str,
+    output_csv: str | Path,
     dataset_name: str,
     model_name: str,
     metric_name: str,
@@ -111,7 +112,7 @@ def eval_procedure(
     predictions_dir: str,
     model_name: str,
     model_head: str,
-    output_csv: str,
+    output_csv: str | Path,
     override: bool = False,
 ):
     model_version_hash = get_model_version_hash()

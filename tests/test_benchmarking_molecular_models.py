@@ -501,17 +501,17 @@ def test_score_writes_dataset_checkpoint(monkeypatch, tmp_path) -> None:
     checkpoint_dir = tmp_path / "checkpoints"
 
     def fake_eval(
-        cfg,
+        safe,
         embed_config,
-        model_name,
-        dataset_info,
+        full_model_name,
         short_model_name,
+        dataset_info,
         model_head,
-        output_csv_arg,
+        output_csv,
         override,
     ):
         append_result_row(
-            output_csv_arg,
+            output_csv,
             {
                 "dataset": dataset_info.name,
                 "task": dataset_info.task,
@@ -526,7 +526,7 @@ def test_score_writes_dataset_checkpoint(monkeypatch, tmp_path) -> None:
             },
         )
 
-    monkeypatch.setattr(score, "eval", fake_eval)
+    monkeypatch.setattr(score, "run_eval", fake_eval)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -656,3 +656,128 @@ def test_run_scoring_requires_embedder_name() -> None:
 
     assert result.returncode == 1
     assert "Usage:" in result.stdout
+
+
+def test_score_normalize_dataset_name() -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.score import normalize_dataset_name
+
+    assert normalize_dataset_name("bace") == "bace"
+    assert normalize_dataset_name("bace.yaml") == "bace"
+    assert normalize_dataset_name("config/datasets/bace.yaml") == "bace"
+    assert normalize_dataset_name(Path("bace.yaml")) == "bace"
+
+
+def test_score_resolve_dataset_names_with_skip(tmp_path: Path) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.score import resolve_dataset_names
+    from argparse import Namespace
+
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    (config_dir / "datasets.yaml").write_text("datasets:\n  bace: {}\n  tox21: {}\n  clintox: {}\n")
+
+    # Test skipping from CLI args (stem or yaml)
+    args = Namespace(datasets=["all"], skip_datasets=["bace.yaml", "tox21"])
+    cfg = {}
+    names = resolve_dataset_names(config_dir, cfg, args)
+    assert names == ["clintox"]
+
+    # Test skipping from config list
+    args = Namespace(datasets=["all"], skip_datasets=None)
+    cfg = {"skip_datasets": ["bace", "clintox.yaml"]}
+    names = resolve_dataset_names(config_dir, cfg, args)
+    assert names == ["tox21"]
+
+    # Test skipping from config string (legacy support)
+    args = Namespace(datasets=["all"], skip_datasets=None)
+    cfg = {"skip_dataset": "bace.yaml"}
+    names = resolve_dataset_names(config_dir, cfg, args)
+    assert sorted(names) == ["clintox", "tox21"]
+
+
+def test_score_resolve_model_name() -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.score import resolve_model_name
+    from argparse import Namespace
+
+    # CLI args have highest precedence
+    args = Namespace(model_name="cli_model", overrides=[])
+    assert resolve_model_name({}, args) == "cli_model"
+
+    # Overrides beat config but not explicit model_name (actually overrides beat model_name in the loop, wait. Let's check: loop overwrites model_name).
+    args = Namespace(model_name="cli_model", overrides=["model_name=override_model"])
+    assert resolve_model_name({}, args) == "override_model"
+
+    # Config model.embedding_name precedence
+    args = Namespace(model_name=None, overrides=[])
+    cfg = {"model": {"embedding_name": "cfg_embed_name", "model_name": "cfg_model_name"}}
+    assert resolve_model_name(cfg, args) == "cfg_embed_name"
+
+    # Config model_name precedence
+    cfg = {"model_name": "root_model_name"}
+    assert resolve_model_name(cfg, args) == "root_model_name"
+
+    # Config model.model_name precedence
+    cfg = {"model": {"model_name": "cfg_model_name"}}
+    assert resolve_model_name(cfg, args) == "cfg_model_name"
+
+
+def test_score_main_skips_datasets(monkeypatch, tmp_path) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models import score
+
+    config_dir = tmp_path / "config"
+    write_embedding_test_config(config_dir)
+
+    # We define two datasets
+    (config_dir / "datasets.yaml").write_text(
+        "\n".join(
+            [
+                "datasets:",
+                "  tiny_clf:",
+                "    name: tiny",
+                "    metric: roc_auc",
+                "    task: classification",
+                "  other_clf:",
+                "    name: other",
+                "    metric: roc_auc",
+                "    task: classification",
+            ]
+        )
+    )
+    (config_dir / "score.yaml").write_text("cache: true\n")
+
+    eval_calls = []
+
+    def fake_eval(
+        safe,
+        embed_config,
+        full_model_name,
+        short_model_name,
+        dataset_info,
+        model_head,
+        output_csv,
+        override,
+    ):
+        eval_calls.append(dataset_info.name)
+
+    monkeypatch.setattr(score, "run_eval", fake_eval)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "score.py",
+            "--config-dir",
+            str(config_dir),
+            "--datasets",
+            "all",
+            "--skip_datasets",
+            "tiny_clf.yaml",
+            "--heads",
+            "rf",
+            "--embedder",
+            "fake_embedder",
+        ],
+    )
+
+    score.main()
+
+    # The skip_datasets flag should have omitted tiny_clf, so only other is called
+    assert eval_calls == ["other"]

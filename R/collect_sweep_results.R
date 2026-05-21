@@ -110,7 +110,10 @@ eval_history <- function(trainer_state) {
   history_tbl |>
     mutate(
       step = map(entry, ~ get_named_value(.x, "step", "")),
-      eval_masked_accuracy = map(entry, ~ get_named_value(.x, "eval_masked_accuracy", ""))
+      eval_masked_accuracy = map(
+        entry,
+        ~ get_named_value(.x, "eval_masked_accuracy", "")
+      )
     ) |>
     select(entry, step, eval_loss, eval_masked_accuracy)
 }
@@ -133,7 +136,11 @@ last_logged_eval <- function(history_tbl) {
     pluck(1)
 }
 checkpoint_step <- function(checkpoint) {
-  if (is.null(checkpoint) || !is.character(checkpoint) || !str_detect(checkpoint, "-")) {
+  if (
+    is.null(checkpoint) ||
+      !is.character(checkpoint) ||
+      !str_detect(checkpoint, "-")
+  ) {
     return("")
   }
   raw_step <- str_split(checkpoint, "-", simplify = TRUE)
@@ -165,7 +172,9 @@ collect_one_run <- function(run_dir) {
   last_logged <- last_logged_eval(history_tbl)
   best_checkpoint <- get_named_value(trainer_state, "best_model_checkpoint", "")
   load_best_model_at_end <- get_named_value(args, "load_best_model_at_end", "")
-  metric_source <- if (!identical(load_best_model_at_end, FALSE) && !identical(best_checkpoint, "")) {
+  metric_source <- if (
+    !identical(load_best_model_at_end, FALSE) && !identical(best_checkpoint, "")
+  ) {
     "best_model_final_eval"
   } else {
     "final_model_eval"
@@ -180,8 +189,16 @@ collect_one_run <- function(run_dir) {
     strategy = parsed$strategy,
     mlm_prob = parsed$mlm_prob,
     learning_rate = get_named_value(args, "learning_rate", parsed$lr_from_name),
-    eval_masking_strategy = get_named_value(args, "masking_strategy", parsed$strategy),
-    eval_mlm_probability = get_named_value(args, "mlm_probability", parsed$mlm_prob),
+    eval_masking_strategy = get_named_value(
+      args,
+      "masking_strategy",
+      parsed$strategy
+    ),
+    eval_mlm_probability = get_named_value(
+      args,
+      "mlm_probability",
+      parsed$mlm_prob
+    ),
     load_best_model_at_end = load_best_model_at_end,
     metric_source = metric_source,
     metric_note = paste(
@@ -192,10 +209,18 @@ collect_one_run <- function(run_dir) {
     best_checkpoint = best_checkpoint,
     best_step = best_step,
     best_logged_eval_loss = get_named_value(best_logged, "eval_loss", ""),
-    best_logged_eval_masked_accuracy = get_named_value(best_logged, "eval_masked_accuracy", ""),
+    best_logged_eval_masked_accuracy = get_named_value(
+      best_logged,
+      "eval_masked_accuracy",
+      ""
+    ),
     last_logged_eval_step = get_named_value(last_logged, "step", ""),
     last_logged_eval_loss = get_named_value(last_logged, "eval_loss", ""),
-    last_logged_eval_masked_accuracy = get_named_value(last_logged, "eval_masked_accuracy", "")
+    last_logged_eval_masked_accuracy = get_named_value(
+      last_logged,
+      "eval_masked_accuracy",
+      ""
+    )
   )
   final_metrics <- FINAL_EVAL_KEYS |>
     set_names(paste0("final_", FINAL_EVAL_KEYS)) |>

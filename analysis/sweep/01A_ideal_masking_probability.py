@@ -16,6 +16,26 @@ import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from modernmolbert.eval.benchmarking_molecular_models.embed_modernmolbert import (
+    embed_dataset,
+    load_prepared_dataset,
+    make_featurizer,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+    load_dataset_config,
+    load_dataset_registry,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.const import (
+    DEFAULT_MEMORY_WEIGHT,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+    get_skfp_roc_auc,
+    log_predictions,
+    multioutput_auroc_score,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
+    fit_and_eval_embedding,
+)
 from sklearn.metrics import auc, roc_curve
 
 
@@ -106,28 +126,6 @@ plt.show()
 
 # %% [markdown]
 # ## 2. Benchmark Optimal Models on MoleculeNet
-
-# %%
-from modernmolbert.eval.benchmarking_molecular_models.embed_modernmolbert import (
-    embed_dataset,
-    load_prepared_dataset,
-    make_featurizer,
-)
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
-    load_dataset_config,
-    load_dataset_registry,
-)
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.const import (
-    DEFAULT_MEMORY_WEIGHT,
-)
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
-    get_skfp_roc_auc,
-    log_predictions,
-    multioutput_auroc_score,
-)
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
-    fit_and_eval_embedding,
-)
 
 HEAD = "ridge"
 

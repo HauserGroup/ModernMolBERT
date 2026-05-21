@@ -191,9 +191,9 @@ def count_tanimoto(A: np.ndarray, B: np.ndarray) -> np.ndarray:
     norm_A = A.sum(axis=1)
     norm_B = B.sum(axis=1)
     L1 = cdist(A, B, metric="cityblock")
-    numer = norm_A[:, None] + norm_B[None, :] - L1
+    numerator = norm_A[:, None] + norm_B[None, :] - L1
     denom = norm_A[:, None] + norm_B[None, :] + L1
-    return np.where(denom > 0, numer / denom, 0.0)
+    return np.where(denom > 0, numerator / denom, 0.0)
 
 
 def tanimoto(A: np.ndarray, B: np.ndarray, use_counts: bool) -> np.ndarray:
@@ -535,7 +535,7 @@ def load_training_data(
     df["SMILES_canon"] = df[_COL_SMILES].apply(canonicalize)
     n_bad = df["SMILES_canon"].isna().sum()
     if n_bad:
-        warnings.warn(f"{n_bad} training SMILES dropped (unparseable).", UserWarning, stacklevel=2)
+        warnings.warn(f"{n_bad} training SMILES dropped (unparsable).", UserWarning, stacklevel=2)
     return df.dropna(subset=["SMILES_canon", _COL_PEC50]).reset_index(drop=True)
 
 

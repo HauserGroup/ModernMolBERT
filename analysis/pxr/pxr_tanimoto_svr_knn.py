@@ -552,4 +552,4 @@ summary = tmp.groupby("bin").apply(
     )
 )
 
-summary
+print(summary)

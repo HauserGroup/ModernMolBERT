@@ -7,186 +7,124 @@ import pandas as pd
 # Configuration
 # =============================================================================
 
-INPUT_CSV = "../data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv"
-# Path to your benchmark results CSV (or glob pattern if one file per model)
-OWN_RESULTS_CSV = "../data/modernmolbert_benchmark_results.csv"
+INPUT_CSV = Path("../data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv")
+OWN_RESULTS_CSV = Path("../data/modernmolbert_benchmark_results.csv")
 OUTPUT_DIR = Path("../outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-CORR_METHOD = "spearman"
-N_BINS = 25
-
 
 # =============================================================================
-# Load and normalise own benchmark results
+# Load and align data
 # =============================================================================
 
 
-def load_own_results(path: str | Path) -> pd.DataFrame:
-    """
-    Load ModernMolBERT benchmark results and return a dataframe that
-    matches the Praski schema:
-
-        dataset | embedder | model | test_metric [| cv_metric]
-
-    Adjust column renaming below to match your actual output format.
-
-    Expected own-results format (adapt as needed):
-        dataset       : benchmark dataset name  (e.g. "BBBP")
-        embedder      : model name              (e.g. "ModernMolBERT-small")
-        downstream    : downstream model type   (e.g. "rf", "knn", "logistic")
-        test_roc_auc  : held-out ROC-AUC
-        cv_roc_auc    : cross-val ROC-AUC       (optional)
-    """
+def load_own_results(path: Path) -> pd.DataFrame:
+    """Load ModernMolBERT results aligned to Praski schema columns."""
     own = pd.read_csv(path)
-
-    # ── Rename to match Praski schema ─────────────────────────────────────
-    # TODO: adjust these keys to match your actual column names
     own = own.rename(
         columns={
-            "downstream": "model",  # nuisance downstream model
-            "test_roc_auc": "test_metric",  # primary metric
-            "cv_roc_auc": "cv_metric",  # optional; drop line if absent
+            "downstream": "model",
+            "test_roc_auc": "test_metric",
+            "cv_roc_auc": "cv_metric",
         }
     )
-
-    # Keep only the columns the rest of the pipeline expects
     keep = ["dataset", "embedder", "model", "test_metric"]
     if "cv_metric" in own.columns:
         keep.append("cv_metric")
+    if "test_metric_name" in own.columns:
+        keep.append("test_metric_name")
     return own[keep]
 
 
-# =============================================================================
-# Load raw data
-# =============================================================================
-
 praski = pd.read_csv(INPUT_CSV)
 own = load_own_results(OWN_RESULTS_CSV)
-
-# Concatenate; own results appear as additional embedders
 df = pd.concat([praski, own], ignore_index=True)
-
-# `df` is the original benchmark table.
-# Important raw columns:
-# - dataset: benchmark dataset name; this is the paired unit going forward
-# - embedder: representation method to compare
-# - model: nuisance model type
-# - *_metric: numeric performance columns
-# - *_metric_name: optional human-readable metric names, if present
-
-
-# =============================================================================
-# Create strict long data frame
-# =============================================================================
-
-metric_value_cols = [c for c in df.columns if c.endswith("_metric")]
-metric_name_cols = [f"{c}_name" for c in metric_value_cols]
-
-# `long_df` is the strict long-format data frame.
-# It preserves model-level results before any max-collapse.
-# Columns:
-# - dataset
-# - embedder
-# - model
-# - metric_name: source metric column, e.g. cv_metric or test_metric
-# - metric_value: numeric value
-long_df = df.melt(
-    id_vars=["dataset", "embedder", "model"],
-    value_vars=metric_value_cols,
-    var_name="metric_name",
-    value_name="metric_value",
-)
-
-long_df = long_df.dropna(subset=["metric_value"])[
-    ["dataset", "embedder", "model", "metric_name", "metric_value"]
-].reset_index(drop=True)
-
-long_df.to_csv(OUTPUT_DIR / "long_metrics.csv", index=False)
 
 
 # =============================================================================
 # Collapse nuisance model dimension
+#
+# For each (dataset, embedder, test_metric_name), keep the downstream model
+# that achieved the highest test_metric. This is the "best head" per embedder
+# per dataset — the number we actually care about for comparison.
 # =============================================================================
 
-# `best_df` is the main embedder-comparison data frame.
-# For each dataset x embedder x metric_name, it keeps the maximum metric_value
-# and preserves the model that produced that maximum.
-#
-# Columns:
-# - dataset
-# - embedder
-# - metric_name
-# - metric_value
-# - model: winning nuisance model
-best_idx = (
-    long_df.sort_values(
-        ["dataset", "embedder", "metric_name", "metric_value", "model"],
-        ascending=[True, True, True, False, True],
-    )
-    .drop_duplicates(
-        subset=["dataset", "embedder", "metric_name"],
-        keep="first",
-    )
-    .index
-)
+group_keys = ["dataset", "embedder"]
+if "test_metric_name" in df.columns:
+    group_keys.append("test_metric_name")
 
 best_df = (
-    long_df.loc[best_idx, ["dataset", "embedder", "metric_name", "metric_value", "model"]]
-    .sort_values(["dataset", "embedder", "metric_name"])
+    df.sort_values(
+        [*group_keys, "test_metric", "model"],
+        ascending=[*(True for _ in group_keys), False, True],
+    )
+    .drop_duplicates(subset=group_keys, keep="first")
     .reset_index(drop=True)
-)
+)[
+    [
+        "dataset",
+        "embedder",
+        *([c] if (c := "test_metric_name") in df.columns else []),
+        "test_metric",
+        "model",
+    ]
+]
 
 best_df.to_csv(OUTPUT_DIR / "best_metric_by_dataset_embedder.csv", index=False)
 
-# =============================================================================
-
-# Save wide embedder tables split by metric_name
 
 # =============================================================================
-
-OUTPUT_DIR = Path("processed_outputs")
-
-OUTPUT_DIR.mkdir(exist_ok=True)
-
-# `best_df` is the input here:
-
-# dataset, embedder, metric_name, metric_value, model
-
+# DABEST repeated-measures export
 #
+# DABEST repeated measures (paired="baseline") expects long format:
+#
+#   x      = embedder       — the condition / group being compared
+#   y      = test_metric    — the measurement value
+#   id_col = dataset        — the paired unit (one "subject" per dataset)
+#
+# Each dataset appears once per embedder, forming a paired structure.
+# Datasets missing any embedder are retained; DABEST handles incomplete pairs.
+#
+# If multiple metric types are present (e.g. ROC-AUC vs RMSE), datasets using
+# different metrics are not comparable and must be analysed separately.
+# We export one CSV per metric name so each file is ready to pass directly
+# to dabest.load().
+#
+# Example Python usage:
+#
+#   import dabest, pandas as pd
+#   df = pd.read_csv("dabest_test_metric__roc_auc.csv")
+#   analysis = dabest.load(
+#       df, x="embedder", y="test_metric", id_col="dataset",
+#       idx=("MolBERT", "ModernMolBERT"),
+#       paired="baseline",
+#   )
+#   analysis.mean_diff.plot()
+# =============================================================================
 
-# The nuisance model dimension has already been collapsed:
+dabest_cols = ["dataset", "embedder", "test_metric"]
 
-# for each dataset x embedder x metric_name, metric_value is the maximum
+if "test_metric_name" in best_df.columns:
+    groups = best_df.groupby("test_metric_name", sort=True)
+else:
+    groups = [("all", best_df)]
 
-# across models, and model records which model produced that maximum.
+for metric_name, metric_df in groups:
+    out = metric_df[dabest_cols].copy()
 
-wide_tables_by_metric = {}
+    safe = str(metric_name).replace("/", "_").replace("\\", "_").replace(" ", "_").replace(":", "_")
+    path = OUTPUT_DIR / f"dabest_test_metric__{safe}.csv"
+    out.to_csv(path, index=False)
 
-for metric_name, metric_df in best_df.groupby("metric_name", sort=True):
-    wide_df = metric_df.pivot_table(
-        index="dataset",
-        columns="embedder",
-        values="metric_value",
-        aggfunc="max",
-    ).sort_index()
+    n_datasets = out["dataset"].nunique()
+    n_embedders = out["embedder"].nunique()
+    coverage = out.groupby("dataset")["embedder"].count()
+    complete = (coverage == n_embedders).sum()
 
-    wide_df.columns.name = None
-
-    wide_tables_by_metric[metric_name] = wide_df
-
-    safe_metric_name = (
-        str(metric_name).replace("/", "_").replace("\\", "_").replace(" ", "_").replace(":", "_")
-    )
-
-    wide_df.to_csv(
-        OUTPUT_DIR / f"embedder_metrics_wide_{safe_metric_name}.csv",
-        index=True,
-    )
-
-print("Saved wide embedder tables:")
-
-for metric_name, wide_df in wide_tables_by_metric.items():
-    print(f"- {metric_name}: {wide_df.shape[0]} datasets x {wide_df.shape[1]} embedders")
+    print(f"[{metric_name}] {n_datasets} datasets × {n_embedders} embedders")
+    print(f"  complete pairs: {complete}/{n_datasets} datasets")
+    print(f"  embedders: {sorted(out['embedder'].unique())}")
+    print(f"  → {path}")
+    print()
 
 # %%

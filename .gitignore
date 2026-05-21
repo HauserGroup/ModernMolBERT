@@ -241,7 +241,7 @@ GEMINI.md
 .vscode/
 
 # eval
-tmp_eval/
+tmp*/
 tokenizer/tests
 tokenizer/checkpoints
 

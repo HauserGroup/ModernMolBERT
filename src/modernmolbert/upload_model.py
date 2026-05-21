@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+"""
+uv run python -m modernmolbert.upload_model \
+  --run_dir runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_span \
+  --repo_id HauserGroup/ModernMolBERT-small-chembl36 \
+  --tokenizer_repo_id HauserGroup/ApeTokenizer-SELFIES \
+  --checkpoint final \
+  --private \
+  --dry_run \
+  --keep_staging_dir tmp-hf-model
+"""
+
 import argparse
 import json
 import os
@@ -16,7 +27,6 @@ from modernmolbert.utils import repo_root
 
 
 MODEL_MAX_LENGTH = 256
-EXPECTED_VOCAB_SIZE = 631
 EXPECTED_SPECIAL_IDS = {
     "bos_token_id": 0,
     "pad_token_id": 1,
@@ -75,6 +85,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Keep staged upload files in this directory for debugging.",
+    )
+    parser.add_argument(
+        "--tokenizer_repo_id",
+        type=str,
+        default="HauserGroup/ApeTokenizer-SELFIES",
+        help=(
+            "Separate HuggingFace tokenizer repo for the README usage example. "
+            "AutoTokenizer.from_pretrained does not currently work reliably from the "
+            "model repo because model_type=modernbert can route through a backend "
+            "tokenizer path. Defaults to HauserGroup/ApeTokenizer-SELFIES."
+        ),
     )
 
     return parser.parse_args()
@@ -147,25 +168,76 @@ def load_json_if_exists(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def load_and_patch_config(source_dir: Path, run_dir: Path) -> dict[str, Any]:
+def load_and_patch_config(source_dir: Path, run_dir: Path, vocab_size: int) -> dict[str, Any]:
     config_path = source_dir / "config.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
 
     config.setdefault("model_type", "modernbert")
     config.setdefault("architectures", ["ModernBertForMaskedLM"])
 
-    config.setdefault("vocab_size", EXPECTED_VOCAB_SIZE)
-    config.setdefault("bos_token_id", EXPECTED_SPECIAL_IDS["bos_token_id"])
-    config.setdefault("pad_token_id", EXPECTED_SPECIAL_IDS["pad_token_id"])
-    config.setdefault("eos_token_id", EXPECTED_SPECIAL_IDS["eos_token_id"])
-    config.setdefault("unk_token_id", EXPECTED_SPECIAL_IDS["unk_token_id"])
-    config.setdefault("mask_token_id", EXPECTED_SPECIAL_IDS["mask_token_id"])
+    config["vocab_size"] = vocab_size
+    config["bos_token_id"] = EXPECTED_SPECIAL_IDS["bos_token_id"]
+    config["pad_token_id"] = EXPECTED_SPECIAL_IDS["pad_token_id"]
+    config["eos_token_id"] = EXPECTED_SPECIAL_IDS["eos_token_id"]
+    config["unk_token_id"] = EXPECTED_SPECIAL_IDS["unk_token_id"]
+    config["mask_token_id"] = EXPECTED_SPECIAL_IDS["mask_token_id"]
+
+    config["cls_token_id"] = EXPECTED_SPECIAL_IDS["bos_token_id"]
+    config["sep_token_id"] = EXPECTED_SPECIAL_IDS["eos_token_id"]
+
+    config.pop("auto_map", None)
 
     run_args = load_json_if_exists(run_dir / "run_args.json")
     if "max_seq_length" in run_args:
         config.setdefault("max_position_embeddings", int(run_args["max_seq_length"]))
 
     return config
+
+
+def load_direct_ape_tokenizer(tmp: Path):
+    import importlib.util
+
+    tokenizer_py = tmp / "tokenization_ape.py"
+    spec = importlib.util.spec_from_file_location("tokenization_ape", tokenizer_py)
+
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not import tokenizer code from {tokenizer_py}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    return module.APEPreTrainedTokenizer.from_pretrained(str(tmp))
+
+
+def validate_direct_ape_tokenizer(tmp: Path, expected_vocab_size: int) -> None:
+    import importlib.util
+
+    tokenizer_py = tmp / "tokenization_ape.py"
+    spec = importlib.util.spec_from_file_location("tokenization_ape", tokenizer_py)
+
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not import tokenizer code from {tokenizer_py}")
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    tokenizer = module.APEPreTrainedTokenizer.from_pretrained(str(tmp))
+
+    if tokenizer.vocab_size != expected_vocab_size:
+        raise ValueError(
+            f"Direct tokenizer vocab mismatch: {tokenizer.vocab_size} != {expected_vocab_size}"
+        )
+
+    if tokenizer.model_max_length != MODEL_MAX_LENGTH:
+        raise ValueError(
+            f"Direct tokenizer max length mismatch: {tokenizer.model_max_length} != {MODEL_MAX_LENGTH}"
+        )
+
+    print(
+        f"[validate] direct APE tokenizer OK: vocab_size={tokenizer.vocab_size}, "
+        f"max_length={tokenizer.model_max_length}",
+        flush=True,
+    )
 
 
 def find_tokenizer_vocab(source_dir: Path, run_dir: Path) -> Path:
@@ -186,11 +258,11 @@ def find_tokenizer_vocab(source_dir: Path, run_dir: Path) -> Path:
 
 def find_tokenization_code(source_dir: Path, run_dir: Path) -> Path:
     candidates = [
+        repo_root() / "src" / "modernmolbert" / "tokenization_ape.py",
         source_dir / "ape_tokenizer" / "tokenization_ape.py",
         source_dir / "tokenization_ape.py",
         run_dir / "final_model" / "ape_tokenizer" / "tokenization_ape.py",
         run_dir / "final_model" / "tokenization_ape.py",
-        repo_root() / "src" / "modernmolbert" / "tokenization_ape.py",
     ]
 
     for candidate in candidates:
@@ -199,6 +271,13 @@ def find_tokenization_code(source_dir: Path, run_dir: Path) -> Path:
 
     checked = "\n".join(str(candidate) for candidate in candidates)
     raise FileNotFoundError(f"Could not find tokenization_ape.py. Checked:\n{checked}")
+
+
+def read_vocab_size(vocab_path: Path) -> int:
+    vocab = json.loads(vocab_path.read_text(encoding="utf-8"))
+    if not isinstance(vocab, dict):
+        raise ValueError(f"Expected vocab JSON object at {vocab_path}")
+    return len(vocab)
 
 
 def write_tokenizer_config(tmp: Path) -> None:
@@ -230,10 +309,13 @@ def write_tokenizer_config(tmp: Path) -> None:
     )
 
 
-def stage_tokenizer_files(source_dir: Path, run_dir: Path, tmp: Path) -> None:
+def stage_tokenizer_files(
+    source_dir: Path,
+    run_dir: Path,
+    tmp: Path,
+    vocab_path: Path,
+) -> None:
     from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
-
-    vocab_path = find_tokenizer_vocab(source_dir, run_dir)
 
     tokenizer = APEPreTrainedTokenizer(
         representation="SELFIES",
@@ -243,6 +325,7 @@ def stage_tokenizer_files(source_dir: Path, run_dir: Path, tmp: Path) -> None:
     tokenizer.save_pretrained(str(tmp))
 
     write_tokenizer_config(tmp)
+    shutil.copy(tmp / "vocab.json", tmp / "selfies_vocab.json")
 
     tokenization_code = find_tokenization_code(source_dir, run_dir)
     shutil.copy(tokenization_code, tmp / "tokenization_ape.py")
@@ -266,8 +349,13 @@ def stage_tokenizer_files(source_dir: Path, run_dir: Path, tmp: Path) -> None:
                 break
 
 
-def build_readme(source_dir: Path, run_dir: Path, repo_id: str) -> str:
-    config = load_and_patch_config(source_dir, run_dir)
+def build_readme(source_dir: Path, run_dir: Path, repo_id: str, vocab_size: int) -> str:
+
+    config = load_and_patch_config(
+        source_dir,
+        run_dir,
+        vocab_size=vocab_size,
+    )
     run_args = load_json_if_exists(run_dir / "run_args.json")
     state = load_json_if_exists(run_dir / "trainer_state.json")
 
@@ -336,11 +424,15 @@ def build_readme(source_dir: Path, run_dir: Path, repo_id: str) -> str:
         f"model = AutoModelForMaskedLM.from_pretrained('{repo_id}')\n"
         "tokenizer = AutoTokenizer.from_pretrained(\n"
         f"    '{repo_id}',\n"
+        "    subfolder='ape_tokenizer',\n"
         "    trust_remote_code=True,\n"
         "    use_fast=False,\n"
         ")\n"
         "```\n\n"
-        "This model expects SELFIES strings. Convert SMILES before tokenization.\n"
+        "This model expects SELFIES strings. Convert SMILES before tokenization. "
+        "Load the tokenizer from `ape_tokenizer/`; root ModernBERT configs can "
+        "route `AutoTokenizer` to the built-in fast ModernBERT tokenizer instead "
+        "of this custom slow tokenizer.\n"
     )
 
     return (
@@ -358,13 +450,18 @@ def build_readme(source_dir: Path, run_dir: Path, repo_id: str) -> str:
 def build_staging_dir(source_dir: Path, run_dir: Path, repo_id: str, tmp: Path) -> None:
     shutil.copy(source_dir / "model.safetensors", tmp / "model.safetensors")
 
-    config = load_and_patch_config(source_dir, run_dir)
+    vocab_path = find_tokenizer_vocab(source_dir, run_dir)
+    vocab_size = read_vocab_size(vocab_path)
+    config = load_and_patch_config(source_dir, run_dir, vocab_size=vocab_size)
     (tmp / "config.json").write_text(
         json.dumps(config, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
-    stage_tokenizer_files(source_dir, run_dir, tmp)
+    stage_tokenizer_files(source_dir, run_dir, tmp, vocab_path)
+    tokenizer_tmp = tmp / "ape_tokenizer"
+    tokenizer_tmp.mkdir(parents=True, exist_ok=True)
+    stage_tokenizer_files(source_dir, run_dir, tokenizer_tmp, vocab_path)
 
     for name in (
         "run_args.json",
@@ -381,7 +478,12 @@ def build_staging_dir(source_dir: Path, run_dir: Path, repo_id: str, tmp: Path) 
             shutil.copy(src, tmp / name)
 
     (tmp / "README.md").write_text(
-        build_readme(source_dir, run_dir, repo_id),
+        build_readme(
+            source_dir,
+            run_dir,
+            repo_id,
+            vocab_size=vocab_size,
+        ),
         encoding="utf-8",
     )
 
@@ -402,22 +504,65 @@ def validate_staged_files(tmp: Path) -> None:
         raise FileNotFoundError(f"Staging directory is missing files: {missing}")
 
 
+def validate_tokenizer_config(tmp: Path) -> None:
+    tokenizer_config_path = tmp / "tokenizer_config.json"
+    tokenizer_config = json.loads(tokenizer_config_path.read_text(encoding="utf-8"))
+
+    if "tokenizer_class" in tokenizer_config:
+        raise ValueError(
+            "tokenizer_config.json still contains tokenizer_class; "
+            "this can force Transformers down the wrong tokenizer path."
+        )
+
+    expected_auto_map = {
+        "AutoTokenizer": [
+            "tokenization_ape.APEPreTrainedTokenizer",
+            None,
+        ],
+    }
+
+    if tokenizer_config.get("auto_map") != expected_auto_map:
+        raise ValueError(f"Unexpected tokenizer auto_map: {tokenizer_config.get('auto_map')!r}")
+
+    if tokenizer_config.get("model_max_length") != MODEL_MAX_LENGTH:
+        raise ValueError(
+            f"Unexpected model_max_length={tokenizer_config.get('model_max_length')!r}"
+        )
+
+    if tokenizer_config.get("use_fast") is not False:
+        raise ValueError("tokenizer_config.json should contain use_fast=false")
+
+
 def validate_staged_model(tmp: Path) -> None:
     import torch
-    from transformers import AutoConfig, AutoModelForMaskedLM, AutoTokenizer
+    from transformers import AutoConfig, AutoModelForMaskedLM
 
     print("[validate] loading config", flush=True)
-    config = AutoConfig.from_pretrained(tmp)
+    config = AutoConfig.from_pretrained(tmp, local_files_only=True)
 
-    print("[validate] loading tokenizer", flush=True)
-    tokenizer = AutoTokenizer.from_pretrained(
-        tmp,
-        trust_remote_code=True,
-        use_fast=False,
-    )
+    print("[validate] loading direct APE tokenizer", flush=True)
+    tokenizer = load_direct_ape_tokenizer(tmp)
+
+    if tokenizer.model_max_length != MODEL_MAX_LENGTH:
+        raise ValueError(
+            f"Tokenizer max length mismatch: tokenizer={tokenizer.model_max_length}, "
+            f"expected={MODEL_MAX_LENGTH}"
+        )
+
+    if tokenizer.bos_token_id != EXPECTED_SPECIAL_IDS["bos_token_id"]:
+        raise ValueError(f"bos_token_id mismatch: {tokenizer.bos_token_id}")
+
+    if tokenizer.eos_token_id != EXPECTED_SPECIAL_IDS["eos_token_id"]:
+        raise ValueError(f"eos_token_id mismatch: {tokenizer.eos_token_id}")
+
+    if tokenizer.unk_token_id != EXPECTED_SPECIAL_IDS["unk_token_id"]:
+        raise ValueError(f"unk_token_id mismatch: {tokenizer.unk_token_id}")
+
+    if tokenizer.mask_token_id != EXPECTED_SPECIAL_IDS["mask_token_id"]:
+        raise ValueError(f"mask_token_id mismatch: {tokenizer.mask_token_id}")
 
     print("[validate] loading model", flush=True)
-    model = AutoModelForMaskedLM.from_pretrained(tmp)
+    model = AutoModelForMaskedLM.from_pretrained(tmp, local_files_only=True)
     model.eval()
 
     if config.model_type != "modernbert":
@@ -425,12 +570,14 @@ def validate_staged_model(tmp: Path) -> None:
 
     if tokenizer.vocab_size != config.vocab_size:
         raise ValueError(
-            f"Tokenizer/model vocab mismatch: tokenizer={tokenizer.vocab_size}, config={config.vocab_size}"
+            f"Tokenizer/model vocab mismatch: tokenizer={tokenizer.vocab_size}, "
+            f"config={config.vocab_size}"
         )
 
     if tokenizer.pad_token_id != config.pad_token_id:
         raise ValueError(
-            f"pad_token_id mismatch: tokenizer={tokenizer.pad_token_id}, config={config.pad_token_id}"
+            f"pad_token_id mismatch: tokenizer={tokenizer.pad_token_id}, "
+            f"config={config.pad_token_id}"
         )
 
     example = (
@@ -456,7 +603,9 @@ def validate_staged_model(tmp: Path) -> None:
 
     print(f"[validate] OK model: {n_params / 1e6:.1f}M parameters", flush=True)
     print(
-        f"[validate] OK tokenizer: vocab_size={tokenizer.vocab_size}, max_length={tokenizer.model_max_length}",
+        f"[validate] OK tokenizer: {type(tokenizer)}; "
+        f"vocab_size={tokenizer.vocab_size}; "
+        f"max_length={tokenizer.model_max_length}",
         flush=True,
     )
     print(f"[validate] OK logits shape={tuple(out.logits.shape)}", flush=True)
@@ -495,6 +644,7 @@ def upload_model_to_hub(
     dry_run: bool = False,
     keep_staging_dir: Path | None = None,
     api: HfApi | None = None,
+    tokenizer_repo_id: str = "HauserGroup/ApeTokenizer-SELFIES",
 ) -> dict[str, Any]:
     if not run_dir.is_absolute():
         run_dir = repo_root() / run_dir
@@ -545,7 +695,8 @@ def upload_model_to_hub(
         "private": private,
         "uploaded": not dry_run,
         "staged_files": staged_names,
-        "staging_dir": str(tmp),
+        "staging_dir": str(tmp) if keep_staging_dir is not None else None,
+        "tokenizer_repo_id": tokenizer_repo_id,
     }
 
 
@@ -570,6 +721,7 @@ def main() -> None:
         token=token,
         dry_run=args.dry_run,
         keep_staging_dir=args.keep_staging_dir,
+        tokenizer_repo_id=args.tokenizer_repo_id,
     )
 
     print(f"Done — {result['url']}", flush=True)

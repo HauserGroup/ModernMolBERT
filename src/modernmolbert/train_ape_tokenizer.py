@@ -119,14 +119,13 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 # Smaller vocab (2000) forces broader sharing of tokens across molecule types.
 uv run python -m modernmolbert.train_ape_tokenizer \
   --output_vocab_path tokenizer/chembl36_smiles_2m_ape_max6_mf3000.json \
-  --dataset_name data/pretrain/chembl36_smiles \
-  --smiles_column smiles \
+  --dataset_name data/pretrain/chembl36_selfies \
+  --molecule_column smiles_canonical_clean \
   --representation SMILES \
   --tokenizer_train_size 2000000 \
   --max_vocab_size 2000 \
   --min_freq_for_merge 3000 \
   --max_merge_pieces 6 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_smiles_symbols_min10.txt \
   --seed 42
 
 # Ideal targets:
@@ -151,13 +150,12 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 uv run python -m modernmolbert.train_ape_tokenizer \
   --output_vocab_path tokenizer/chembl36_smiles_2m_ape_max12_mf2000.json \
   --dataset_name data/pretrain/chembl36_smiles \
-  --smiles_column smiles \
+  --molecule_column smiles_canonical_clean \
   --representation SMILES \
   --tokenizer_train_size 2000000 \
   --max_vocab_size 4000 \
   --min_freq_for_merge 2000 \
   --max_merge_pieces 12 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_smiles_symbols_min10.txt \
   --seed 42
 
 # Ideal targets:
@@ -172,16 +170,16 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 # crossing structural character boundaries inappropriately.
 
 
-# Validate all three
+# Validate
 uv run python -m modernmolbert.validate_tokenizer \
-  --dataset_name data/pretrain/chembl36_smiles \
-  --smiles_column smiles \
+  --representation SMILES \
+  --dataset_name data/pretrain/chembl36_selfies \
+  --molecule_column smiles_canonical_clean \
   --split train \
-  --tokenizer_vocab_path tokenizer/chembl36_smiles_2m_ape_max8_mf2000.json \
-  --tokenizer_metadata_path tokenizer/chembl36_smiles_2m_ape_max8_mf2000.metadata.json \
+  --tokenizer_vocab_path tokenizer/chembl36_smiles_2m_ape_max6_mf3000.json \
+  --tokenizer_metadata_path tokenizer/chembl36_smiles_2m_ape_max6_mf3000.metadata.json \
   --n 10000 \
-  --max_seq_length 128   # 256 is conservative overkill for SMILES;
-                          # 128 handles >99% of ChEMBL drug-like molecules
+  --max_seq_length 128
 
 
 """

@@ -1,0 +1,15 @@
+representation: SMILES
+molecule_column: smiles_canonical_clean
+split: train
+dataset_name: data/pretrain/chembl36_selfies
+tokenizer_path: tokenizer/chembl36_smiles_2m_ape_max6_mf3000.json
+tokenizer_metadata_path: tokenizer/chembl36_smiles_2m_ape_max6_mf3000.metadata.json
+vocab_size: 1386
+special_ids: {'pad_token': 1, 'bos_token': 0, 'eos_token': 2, 'unk_token': 3, 'mask_token': 4}
+sample_size: 10000
+unk_rate: 0.000000
+mean_len: 14.05
+p50_len: 13
+p95_len: 23
+p99_len: 33
+truncation_rate@128: 0.000000

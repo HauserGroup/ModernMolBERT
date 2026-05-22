@@ -22,7 +22,7 @@
     "unk_token": 3
   },
   "tokenizer_path": "tokenizer/chembl36_smiles_2m_ape_max6_mf3000.json",
-  "tokenizer_sha256": "92f3ece080b9ceb4befd2394b5d9260bc649a7965dc64f2b32ef951d1a401419",
+  "tokenizer_sha256": "faf7748e8959b252c9d0ad83c2228df37a45dc9a68c15ead1ced2942cc8f155e",
   "tokenizer_train_size": 2000000,
   "vocab_size": 1386
 }

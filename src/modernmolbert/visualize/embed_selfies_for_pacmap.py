@@ -47,6 +47,7 @@ def embed_texts(
 
     tokenizer = AutoTokenizer.from_pretrained(
         tokenizer_source,
+        subfolder="ape_tokenizer",
         trust_remote_code=True,
     )
 

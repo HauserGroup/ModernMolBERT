@@ -1,9 +1,13 @@
 import argparse
 from types import SimpleNamespace
 from typing import cast
+
+import numpy as np
+import pandas as pd
 import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models import score
+from modernmolbert.eval.benchmarking_molecular_models.src.common.types import EmbeddedDataset
 
 
 def make_dataset_info(name: str, metric: str = "roc_auc"):
@@ -11,6 +15,21 @@ def make_dataset_info(name: str, metric: str = "roc_auc"):
         name=name,
         metric=metric,
         task="classification",
+    )
+
+
+def make_embedded_dataset() -> EmbeddedDataset:
+    return EmbeddedDataset(
+        name="toy",
+        task="classification",
+        embedder="base_embedder",
+        splits={
+            "train": [0, 1, 2, 3, 4, 5],
+            "valid": [6, 7],
+            "test": [8, 9, 10, 11],
+        },
+        X=np.arange(24).reshape(12, 2),
+        y=pd.DataFrame({"label": np.arange(12)}),
     )
 
 
@@ -89,6 +108,73 @@ def test_resolve_skip_set_normalizes_cli_skip_names() -> None:
         "ogbg-molhiv",
         "ogbg-molmuv",
     }
+
+
+def test_resolve_subsample_config_defaults_to_train_scope() -> None:
+    args = argparse.Namespace(
+        subsample_size=128,
+        subsample_scope=None,
+        subsample_seed=None,
+    )
+
+    subsample = score.resolve_subsample_config({}, args)
+
+    assert subsample == score.SubsampleConfig(max_samples=128, scope="train", seed=13)
+
+
+def test_resolve_subsample_config_reads_score_yaml_values() -> None:
+    args = argparse.Namespace(
+        subsample_size=None,
+        subsample_scope=None,
+        subsample_seed=None,
+    )
+
+    subsample = score.resolve_subsample_config(
+        {"subsample": 64, "subsample_scope": "all", "subsample_seed": 7},
+        args,
+    )
+
+    assert subsample == score.SubsampleConfig(max_samples=64, scope="all", seed=7)
+
+
+def test_make_scoring_model_name_adds_subsample_identity() -> None:
+    name = score.make_scoring_model_name(
+        "modernmolbert_best_span",
+        score.SubsampleConfig(max_samples=512, scope="train", seed=13),
+    )
+
+    assert name == "modernmolbert_best_span__subsample_train512_seed13"
+
+
+def test_subsample_embedded_dataset_train_scope_keeps_full_test_split() -> None:
+    embedded = make_embedded_dataset()
+
+    subset = score.subsample_embedded_dataset(
+        embedded,
+        subsample=score.SubsampleConfig(max_samples=4, scope="train", seed=13),
+        embedder_name="base__subsample_train4_seed13",
+    )
+
+    assert subset.embedder == "base__subsample_train4_seed13"
+    assert subset.X.shape == (8, 2)
+    assert len(subset.splits["train"]) + len(subset.splits["valid"]) == 4
+    assert len(subset.splits["test"]) == 4
+    assert subset.y.iloc[subset.splits["test"]]["label"].tolist() == [8, 9, 10, 11]
+    assert embedded.X.shape == (12, 2)
+
+
+def test_subsample_embedded_dataset_all_scope_samples_test_too() -> None:
+    embedded = make_embedded_dataset()
+
+    subset = score.subsample_embedded_dataset(
+        embedded,
+        subsample=score.SubsampleConfig(max_samples=6, scope="all", seed=13),
+        embedder_name="base__subsample_all6_seed13",
+    )
+
+    assert subset.X.shape == (6, 2)
+    assert sum(len(indices) for indices in subset.splits.values()) == 6
+    assert 0 < len(subset.splits["test"]) < len(embedded.splits["test"])
 
 
 def test_should_skip_item_does_not_match_unrelated_name() -> None:

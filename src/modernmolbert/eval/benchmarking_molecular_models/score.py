@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     write_dataset_checkpoint,
 )
@@ -15,6 +17,7 @@ from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
     load_yaml_config,
 )
 from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+    EmbeddedDataset,
     EmbeddingConfig,
 )
 from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
@@ -53,6 +56,15 @@ class SkippedItem:
 
     name: str
     reason: str
+
+
+@dataclass(frozen=True)
+class SubsampleConfig:
+    """Scoring-time dataset subsampling options."""
+
+    max_samples: int
+    scope: str
+    seed: int
 
 
 def cfg_get(cfg: Any, key: str, default: Any = None) -> Any:
@@ -198,6 +210,186 @@ def resolve_skip_set(cfg: Any, args: argparse.Namespace) -> set[str]:
     return {normalize_name(name) for name in as_list(skip_values)}
 
 
+def resolve_subsample_config(cfg: Any, args: argparse.Namespace) -> SubsampleConfig | None:
+    """Return scoring-time subsampling options from CLI or score.yaml."""
+    max_samples = args.subsample_size
+    if max_samples is None:
+        max_samples = cfg_get(cfg, "subsample_size", cfg_get(cfg, "subsample", None))
+
+    if max_samples is None:
+        return None
+
+    try:
+        max_samples = int(max_samples)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("--subsample must be a positive integer") from exc
+
+    if max_samples <= 0:
+        raise ValueError("--subsample must be a positive integer")
+
+    scope = args.subsample_scope or cfg_get(cfg, "subsample_scope", "train")
+    if scope not in {"train", "all"}:
+        raise ValueError("--subsample-scope must be one of: train, all")
+
+    seed = args.subsample_seed
+    if seed is None:
+        seed = cfg_get(cfg, "subsample_seed", 13)
+
+    return SubsampleConfig(max_samples=max_samples, scope=str(scope), seed=int(seed))
+
+
+def make_scoring_model_name(model_name: str, subsample: SubsampleConfig | None) -> str:
+    """Return the result/checkpoint identity for this scoring run."""
+    if subsample is None:
+        return model_name
+
+    return f"{model_name}__subsample_{subsample.scope}{subsample.max_samples}_seed{subsample.seed}"
+
+
+def split_indices(dataset: EmbeddedDataset) -> dict[str, np.ndarray]:
+    """Normalize split index containers to integer numpy arrays."""
+    return {
+        str(split_name): np.asarray(indices, dtype=int)
+        for split_name, indices in dataset.splits.items()
+    }
+
+
+def allocate_subsample_counts(
+    split_sizes: dict[str, int],
+    max_samples: int,
+) -> dict[str, int]:
+    """Allocate a total sample budget across splits proportional to split size."""
+    total = sum(split_sizes.values())
+    if total <= max_samples:
+        return dict(split_sizes)
+
+    nonempty = {name: size for name, size in split_sizes.items() if size > 0}
+    if not nonempty:
+        return {name: 0 for name in split_sizes}
+
+    counts = {name: 0 for name in split_sizes}
+    if max_samples >= len(nonempty):
+        for name in nonempty:
+            counts[name] = 1
+
+    remaining = max_samples - sum(counts.values())
+    weights = {name: max(0, size - counts[name]) for name, size in nonempty.items()}
+    remaining_weight = sum(weights.values())
+
+    if remaining > 0 and remaining_weight > 0:
+        fractional: list[tuple[float, str]] = []
+        for name, weight in weights.items():
+            exact = remaining * weight / remaining_weight
+            add = int(np.floor(exact))
+            add = min(add, split_sizes[name] - counts[name])
+            counts[name] += add
+            fractional.append((exact - add, name))
+
+        spare = max_samples - sum(counts.values())
+        for _, name in sorted(fractional, reverse=True):
+            if spare <= 0:
+                break
+            capacity = split_sizes[name] - counts[name]
+            if capacity <= 0:
+                continue
+            counts[name] += 1
+            spare -= 1
+
+    if sum(counts.values()) < max_samples:
+        for name, size in sorted(nonempty.items(), key=lambda item: item[1], reverse=True):
+            while counts[name] < size and sum(counts.values()) < max_samples:
+                counts[name] += 1
+
+    return counts
+
+
+def sample_split_indices(
+    *,
+    splits: dict[str, np.ndarray],
+    split_names: set[str],
+    max_samples: int,
+    seed: int,
+) -> dict[str, np.ndarray]:
+    """Sample selected splits and leave unselected splits unchanged."""
+    rng = np.random.default_rng(seed)
+    target_sizes = {
+        name: int(len(indices)) for name, indices in splits.items() if name in split_names
+    }
+    target_counts = allocate_subsample_counts(target_sizes, max_samples)
+
+    sampled: dict[str, np.ndarray] = {}
+    for name, indices in splits.items():
+        if name not in split_names:
+            sampled[name] = indices
+            continue
+
+        count = target_counts.get(name, 0)
+        if count >= len(indices):
+            sampled[name] = indices
+        elif count <= 0:
+            sampled[name] = np.asarray([], dtype=int)
+        else:
+            sampled[name] = np.sort(rng.choice(indices, size=count, replace=False))
+
+    return sampled
+
+
+def subsample_embedded_dataset(
+    dataset: EmbeddedDataset,
+    *,
+    subsample: SubsampleConfig,
+    embedder_name: str,
+) -> EmbeddedDataset:
+    """Return a split-aware scoring subset without mutating the loaded embedding."""
+    splits = split_indices(dataset)
+    if subsample.scope == "train":
+        sampled_split_names = {"train", "valid"}
+    elif subsample.scope == "all":
+        sampled_split_names = set(splits)
+    else:
+        raise ValueError(f"Unknown subsample scope: {subsample.scope}")
+
+    sampled_splits = sample_split_indices(
+        splits=splits,
+        split_names=sampled_split_names,
+        max_samples=subsample.max_samples,
+        seed=subsample.seed,
+    )
+
+    kept_arrays = [indices for indices in sampled_splits.values() if len(indices) > 0]
+    selected = np.unique(np.concatenate(kept_arrays)) if kept_arrays else np.asarray([], dtype=int)
+    old_to_new = {int(old_idx): new_idx for new_idx, old_idx in enumerate(selected.tolist())}
+
+    remapped_splits = {
+        name: [
+            old_to_new[int(old_idx)] for old_idx in indices.tolist() if int(old_idx) in old_to_new
+        ]
+        for name, indices in sampled_splits.items()
+    }
+
+    y = dataset.y.iloc[selected].reset_index(drop=True)
+    subset = EmbeddedDataset(
+        name=dataset.name,
+        task=dataset.task,
+        embedder=embedder_name,
+        splits=remapped_splits,
+        X=dataset.X[selected],
+        y=y,
+    )
+
+    log.info(
+        "Subsampled dataset %s scope=%s max_samples=%s seed=%s: X %s -> %s; splits=%s",
+        dataset.name,
+        subsample.scope,
+        subsample.max_samples,
+        subsample.seed,
+        dataset.X.shape,
+        subset.X.shape,
+        {name: len(indices) for name, indices in remapped_splits.items()},
+    )
+    return subset
+
+
 def load_dataset_items(
     *,
     config_dir: Path,
@@ -284,6 +476,8 @@ def print_run_plan(
     override: bool,
     safe: bool,
     resume: bool,
+    source_embedder: str | None = None,
+    subsample: SubsampleConfig | None = None,
 ) -> None:
     """Print the complete plan before scoring starts."""
     print(
@@ -294,10 +488,14 @@ def print_run_plan(
             f"heads={heads}  "
             f"override={override}  "
             f"safe={safe}  "
-            f"resume={resume}"
+            f"resume={resume}  "
+            f"subsample={subsample or 'disabled'}"
         ),
         flush=True,
     )
+
+    if source_embedder is not None and source_embedder != embedder:
+        print(f"[score] source_embedder={source_embedder}", flush=True)
 
     if skip_set:
         print(f"[score] requested skips: {sorted(skip_set)}", flush=True)
@@ -491,6 +689,36 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--subsample",
+        "--subsample-size",
+        dest="subsample_size",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Subsample at most N rows per dataset while scoring. By default this "
+            "limits the train+valid rows and keeps the full test split."
+        ),
+    )
+
+    parser.add_argument(
+        "--subsample-scope",
+        choices=["train", "all"],
+        default=None,
+        help=(
+            "Which splits to subsample: 'train' samples train+valid only and "
+            "keeps test intact; 'all' samples every split."
+        ),
+    )
+
+    parser.add_argument(
+        "--subsample-seed",
+        type=int,
+        default=None,
+        help="Random seed for scoring-time subsampling. Defaults to 13.",
+    )
+
+    parser.add_argument(
         "overrides",
         nargs="*",
         help="Compatibility support for key=value overrides such as model_name=my_embedder.",
@@ -529,6 +757,8 @@ def main() -> None:
 
     dataset_selections = resolve_dataset_selections(cfg, args)
     skip_set = resolve_skip_set(cfg, args)
+    subsample_config = resolve_subsample_config(cfg, args)
+    scoring_model_name = make_scoring_model_name(short_model_name, subsample_config)
 
     items = load_dataset_items(
         config_dir=config_dir,
@@ -539,7 +769,7 @@ def main() -> None:
         items=items,
         skip_set=skip_set,
         checkpoint_dir=args.checkpoint_dir,
-        embedder=short_model_name,
+        embedder=scoring_model_name,
         resume=args.resume,
     )
 
@@ -548,11 +778,13 @@ def main() -> None:
         run_items=run_items,
         skipped_items=skipped_items,
         skip_set=skip_set,
-        embedder=short_model_name,
+        embedder=scoring_model_name,
         heads=list(args.heads),
         override=override,
         safe=safe,
         resume=args.resume,
+        source_embedder=short_model_name,
+        subsample=subsample_config,
     )
 
     embed_config = EmbeddingConfig(**embedding_cfg)
@@ -570,6 +802,21 @@ def main() -> None:
             dataset_info=item.info,
             model_name=short_model_name,
         )
+        if embedded_data is None:
+            log.error(
+                "Skipping dataset=%s because no embedding was loaded for source embedder=%s",
+                item.name,
+                short_model_name,
+            )
+            failed_datasets += 1
+            continue
+
+        if subsample_config is not None:
+            embedded_data = subsample_embedded_dataset(
+                embedded_data,
+                subsample=subsample_config,
+                embedder_name=scoring_model_name,
+            )
 
         for model_head in args.heads:
             print(
@@ -581,7 +828,7 @@ def main() -> None:
                 safe=safe,
                 embed_config=embed_config,
                 full_model_name=model_name,
-                short_model_name=short_model_name,
+                short_model_name=scoring_model_name,
                 dataset_info=item.info,
                 model_head=model_head,
                 output_csv=args.output_csv,
@@ -597,7 +844,7 @@ def main() -> None:
             results_csv=args.output_csv,
             checkpoint_dir=args.checkpoint_dir,
             dataset=item.name,
-            embedder=short_model_name,
+            embedder=scoring_model_name,
             dataset_success=dataset_success,
         )
 

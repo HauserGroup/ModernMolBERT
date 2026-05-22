@@ -586,6 +586,70 @@ def test_multioutput_auroc_masks_nan_labels_per_output() -> None:
     assert multioutput_auroc_score(y_true, y_score) == 1.0
 
 
+def test_multioutput_auroc_handles_inhomogeneous_predict_proba_list() -> None:
+    y_true = np.array(
+        [
+            [0, 0, 1],
+            [1, 0, 0],
+            [0, 0, 1],
+            [1, 0, 0],
+        ],
+        dtype=float,
+    )
+    y_score = [
+        np.array([[0.9, 0.1], [0.2, 0.8], [0.8, 0.2], [0.1, 0.9]]),
+        np.ones((4, 1)),
+        np.array([[0.3, 0.7], [0.7, 0.3], [0.2, 0.8], [0.8, 0.2]]),
+    ]
+
+    assert multioutput_auroc_score(y_true, y_score) == 1.0
+
+
+def test_multioutput_auroc_handles_object_predict_proba_array() -> None:
+    y_true = np.array(
+        [
+            [0, 0, 1],
+            [1, 0, 0],
+            [0, 0, 1],
+            [1, 0, 0],
+        ],
+        dtype=float,
+    )
+    y_score = np.array(
+        [
+            [[0.9, 0.1], [0.2, 0.8], [0.8, 0.2], [0.1, 0.9]],
+            [[1.0], [1.0], [1.0], [1.0]],
+            [[0.3, 0.7], [0.7, 0.3], [0.2, 0.8], [0.8, 0.2]],
+        ],
+        dtype=object,
+    )
+
+    assert y_score.shape == (3, 4)
+    assert multioutput_auroc_score(y_true, y_score) == 1.0
+
+
+def test_multioutput_auroc_handles_transposed_score_matrix() -> None:
+    y_true = np.array(
+        [
+            [0, 1],
+            [1, 0],
+            [0, 1],
+            [1, 0],
+        ],
+        dtype=float,
+    )
+    compressed_scores = np.array(
+        [
+            [0.1, 0.9],
+            [0.8, 0.2],
+            [0.2, 0.8],
+            [0.9, 0.1],
+        ]
+    )
+
+    assert multioutput_auroc_score(y_true, compressed_scores.T) == 1.0
+
+
 def test_model_version_hash_is_stable_digest() -> None:
     digest = get_model_version_hash()
 

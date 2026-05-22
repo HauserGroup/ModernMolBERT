@@ -714,8 +714,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--subsample-seed",
         type=int,
-        default=None,
-        help="Random seed for scoring-time subsampling. Defaults to 13.",
+        default=42,
+        help="Random seed for scoring-time subsampling. Defaults to 42.",
     )
 
     parser.add_argument(

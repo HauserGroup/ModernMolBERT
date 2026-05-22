@@ -62,6 +62,10 @@ eval-transformers = [
     "torch>=2.11.0",
     "transformers>=5.8.0",
 ]
+plotting = [
+    "colorcet>=3.2.1",
+    "datashader>=0.19.1",
+]
 
 [project.optional-dependencies]
 cuda = [

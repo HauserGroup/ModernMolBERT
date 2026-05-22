@@ -89,6 +89,11 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Only rank runs that reached max_steps.",
     )
+    parser.add_argument(
+        "--masking_strategy",
+        default=None,
+        help="Only rank runs with this masking_strategy (e.g. standard, span).",
+    )
     return parser.parse_args()
 
 
@@ -381,6 +386,9 @@ def main() -> None:
     ]
 
     df = pd.DataFrame(rows)
+
+    if args.masking_strategy:
+        df = df[df["masking_strategy"] == args.masking_strategy]
 
     if args.require_complete:
         df = df[df["completed_max_steps"]]

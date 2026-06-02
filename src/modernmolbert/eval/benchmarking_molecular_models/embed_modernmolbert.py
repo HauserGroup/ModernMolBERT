@@ -1,3 +1,11 @@
+"""Embed molecules using a ModernMolBERT checkpoint.
+
+Note: loading a checkpoint saved from ModernBertForMaskedLM into ModernBertModel
+(encoder-only, no prediction head) will log UNEXPECTED keys for
+``decoder.bias``, ``head.norm.weight``, and ``head.dense.weight``. These are
+the MLM head weights and are intentionally discarded — this is expected and safe.
+"""
+
 import argparse
 import gc
 import os

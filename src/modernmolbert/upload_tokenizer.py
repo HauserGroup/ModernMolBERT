@@ -3,9 +3,12 @@
 import argparse
 import hashlib
 import json
+import os
 import shutil
+import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
 from huggingface_hub import HfApi
 from transformers import AutoTokenizer
 
@@ -27,7 +30,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--staging_dir", type=Path, default=DEFAULT_TMP)
     parser.add_argument("--model_max_length", type=int, default=DEFAULT_MODEL_MAX_LENGTH)
     parser.add_argument("--commit_message")
-    parser.add_argument("--public", action="store_true", help="Create the repo as public.")
+    parser.add_argument(
+        "--private",
+        action="store_true",
+        help="Create or update the HuggingFace repo as private.",
+    )
+    parser.add_argument(
+        "--hf_login",
+        action="store_true",
+        help="Call huggingface_hub.login() before uploading. Reads HF_TOKEN_ORG or HF_TOKEN from env or .env.",
+    )
     parser.add_argument(
         "--dry_run",
         action="store_true",
@@ -197,6 +209,23 @@ def verify_saved_tokenizer(
     print(f"Verified example length={len(encoded['input_ids'])}")
 
 
+def _write_readme(staging_dir: Path, repo_id: str) -> None:
+    """Write README.md using the canonical card generator in write_model_cards.py."""
+    root = Path(__file__).resolve().parents[2]
+    write_model_cards = root / "scripts" / "write_model_cards.py"
+    if not write_model_cards.exists():
+        print(f"WARNING: {write_model_cards} not found; skipping README.md", file=sys.stderr)
+        return
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("write_model_cards", write_model_cards)
+    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    (staging_dir / "README.md").write_text(mod.tokenizer_card(), encoding="utf-8")
+    print(f"wrote README.md to {staging_dir}")
+
+
 def upload_tokenizer_to_hub(
     *,
     repo_id: str,
@@ -204,8 +233,9 @@ def upload_tokenizer_to_hub(
     metadata_path: Path | None = None,
     staging_dir: Path = DEFAULT_TMP,
     model_max_length: int = DEFAULT_MODEL_MAX_LENGTH,
-    private: bool = True,
+    private: bool = False,
     commit_message: str | None = None,
+    token: str | None = None,
     dry_run: bool = False,
     keep_staging_dir: bool = False,
 ) -> None:
@@ -228,6 +258,9 @@ def upload_tokenizer_to_hub(
     # Keep your training metadata in the HF repo as documentation.
     shutil.copy(metadata_path, staging_dir / "metadata.json")
 
+    # Write the model card using the canonical generator in write_model_cards.py.
+    _write_readme(staging_dir, repo_id)
+
     verify_saved_tokenizer(
         staging_dir,
         representation=representation,
@@ -239,7 +272,7 @@ def upload_tokenizer_to_hub(
         print(f"Dry run staged tokenizer at {staging_dir}")
         return
 
-    api = HfApi()
+    api = HfApi(token=token)
 
     api.create_repo(
         repo_id=repo_id,
@@ -262,15 +295,26 @@ def upload_tokenizer_to_hub(
 
 
 def main() -> None:
+    load_dotenv()
     args = parse_args()
+
+    token = os.environ.get("HF_TOKEN_ORG") or os.environ.get("HF_TOKEN") or None
+
+    if args.hf_login:
+        from huggingface_hub import login
+
+        login(token=token)
+        token = None
+
     upload_tokenizer_to_hub(
         repo_id=args.repo_id,
         vocab_path=args.vocab_path,
         metadata_path=args.metadata_path,
         staging_dir=args.staging_dir,
         model_max_length=args.model_max_length,
-        private=not args.public,
+        private=args.private,
         commit_message=args.commit_message,
+        token=token,
         dry_run=args.dry_run,
         keep_staging_dir=args.keep_staging_dir,
     )

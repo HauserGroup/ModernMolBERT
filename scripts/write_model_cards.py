@@ -242,6 +242,126 @@ tokenization for enhanced chemical language modeling*, Sci. Rep. 14, 25016 (2024
 """
 
 
+TOKENIZER_REPO = "HauserGroup/ApeTokenizer-SELFIES"
+TOKENIZER_VOCAB_SIZE = 631
+TOKENIZER_MAX_LENGTH = 256
+TOKENIZER_TRAIN_SIZE = "2M"
+TOKENIZER_STAGING = ROOT / "tmp-hf-tokenizer"
+
+
+def tokenizer_card() -> str:
+    example_selfies = EXAMPLE_SELFIES
+    repo = TOKENIZER_REPO
+    return f"""---
+license: mit
+library_name: transformers
+tags:
+- chemistry
+- molecules
+- selfies
+- ape-tokenizer
+- tokenizer
+---
+
+# ApeTokenizer-SELFIES
+
+ApeTokenizer-SELFIES is the **Atom Pair Encoding (APE)** tokenizer used by
+[ModernMolBERT](https://github.com/HauserGroup/ModernMolBERT) — a family of
+compact encoder-only transformer models for small-molecule representation
+learning pre-trained on SELFIES strings from ChEMBL 36.
+
+APE is a byte-pair-style merging scheme applied directly to SELFIES bracket
+tokens, so every token boundary aligns with a chemically valid SELFIES
+primitive. The vocabulary is derived from ~{TOKENIZER_TRAIN_SIZE} unique
+SELFIES strings from ChEMBL 36.
+
+## Tokenizer Details
+
+- **Developed by:** Hauser Group, Department of Drug Design and Pharmacology, University of Copenhagen
+- **Input representation:** SELFIES (convert SMILES first; see below)
+- **Algorithm:** Atom Pair Encoding (APE) — pair merging over SELFIES bracket tokens
+- **Vocabulary size:** {TOKENIZER_VOCAB_SIZE}
+- **Max merge pieces:** 2
+- **Min merge frequency:** 3000
+- **Training corpus size:** {TOKENIZER_TRAIN_SIZE} unique SELFIES (ChEMBL 36)
+- **License:** MIT
+- **Repository:** https://github.com/HauserGroup/ModernMolBERT
+
+| special token | id |
+|---------------|----|
+| `<s>` (BOS) | 0 |
+| `<pad>` | 1 |
+| `</s>` (EOS) | 2 |
+| `<unk>` | 3 |
+| `<mask>` | 4 |
+
+## How to Get Started
+
+```python
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained(
+    "{repo}",
+    trust_remote_code=True,
+    use_fast=False,
+)
+
+# A SELFIES string — here aspirin.
+selfies = "{example_selfies}"
+
+tokens = tokenizer.tokenize(selfies)
+print(tokens)
+# ['[C][C]', '[=Branch1][C]', '[=O][O]', '[C][=C]', '[C][=C]', '[C][=C]', '[Ring1][=Branch1]', '[C][=Branch1]', '[C][=O]', '[O]']
+
+inputs = tokenizer(selfies, return_tensors="pt")
+print(inputs["input_ids"])
+# tensor([[  0, 334, 335, 370, 333, 333, 333, 338, 377, 511,   6,   2]])
+```
+
+If you start from SMILES, convert first:
+
+```python
+import selfies
+smi = "CC(=O)Oc1ccccc1C(=O)O"
+sf = selfies.encoder(smi)   # '[C][C][=Branch1][C][=O][O][C]...'
+inputs = tokenizer(sf, return_tensors="pt")
+```
+
+### Using with ModernMolBERT models
+
+This tokenizer is shared by all four ModernMolBERT checkpoints. Load it from
+the model repo using `subfolder="ape_tokenizer"` to avoid routing
+`AutoTokenizer` to the built-in fast ModernBERT tokenizer:
+
+```python
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained(
+    "HauserGroup/ModernMolBERT-small",
+    subfolder="ape_tokenizer",
+    trust_remote_code=True,
+    use_fast=False,
+)
+```
+
+Or load this standalone repo directly as shown above — both produce identical
+tokenizations.
+
+## Citation
+
+```bibtex
+@article{{madsen_modernmolbert,
+  title  = {{ModernMolBERT: A ModernBERT Encoder Family for SELFIES Molecular Language Modeling}},
+  author = {{Madsen, Jakob S. and Angelucci, Sara and Hauser, Alexander S.}},
+  year   = {{2026}}
+}}
+```
+
+The APE algorithm follows Leon et al., *Comparing SMILES and SELFIES
+tokenization for enhanced chemical language modeling*, Sci. Rep. 14, 25016 (2024).
+"""
+
+
 def main() -> None:
     for v in VARIANTS:
         p: Path = v["path"]
@@ -250,6 +370,13 @@ def main() -> None:
             continue
         p.write_text(card(v))
         print(f"wrote {p.relative_to(ROOT)}")
+
+    tok_readme = TOKENIZER_STAGING / "README.md"
+    if not TOKENIZER_STAGING.exists():
+        print(f"SKIP (missing dir): {tok_readme}")
+    else:
+        tok_readme.write_text(tokenizer_card())
+        print(f"wrote {tok_readme.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

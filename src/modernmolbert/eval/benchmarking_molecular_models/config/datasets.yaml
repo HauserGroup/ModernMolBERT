@@ -257,14 +257,6 @@ datasets:
     memory_weight: 4
     source:
       name: OGB
-  clf_ogbg-moltoxcast:
-    name: ogbg-moltoxcast
-    metric: roc_auc
-    task: classification
-    memory_weight: 16
-    source:
-      name: OGB
-
 # ── Contributed (local) datasets ──────────────────────────────────────────────
 # Add your own dataset by creating a directory with train.csv + test.csv
 # (valid.csv optional). Each CSV needs a SMILES column and label column(s).

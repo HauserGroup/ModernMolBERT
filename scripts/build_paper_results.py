@@ -13,8 +13,6 @@ Produces:
   outputs/eval/paper/stats.txt                   (Wilcoxon tests + prose counts)
 
 No model runs, no new benchmarking. Pure wrangling of existing eval output.
-ogbg-moltoxcast is excluded: it has ModernMolBERT results but no Praski
-baselines, so it is outside the official 25-task benchmark.
 """
 
 from pathlib import Path
@@ -29,7 +27,7 @@ SRC = ROOT / "outputs/eval/best_metric_by_dataset_embedder.csv"
 OUT = ROOT / "outputs/eval/paper"
 OUT.mkdir(parents=True, exist_ok=True)
 
-# ---- Task -> group map (18 TDC + 7 MoleculeNet = 25; ToxCast excluded) ----
+# ---- Task -> group map (18 TDC + 7 MoleculeNet = 25) ----
 TDC_ADME = [
     "Bioavailability_Ma",
     "HIA_Hou",

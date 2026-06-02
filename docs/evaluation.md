@@ -187,9 +187,9 @@ AMES, Bioavailability_Ma, CYP1A2_Veith, CYP2C19_Veith, CYP2C9_Substrate_CarbonMa
 
 ### OGB classification (roc_auc)
 
-ogbg-molbace, ogbg-molbbbp, ogbg-molclintox, ogbg-molhiv, ogbg-molmuv, ogbg-molsider, ogbg-moltox21, ogbg-moltoxcast
+ogbg-molbace, ogbg-molbbbp, ogbg-molclintox, ogbg-molhiv, ogbg-molmuv, ogbg-molsider, ogbg-moltox21
 
-Large datasets (`ogbg-molmuv`, `ogbg-moltoxcast`, `ogbg-moltox21`) carry a `memory_weight` field that the runner uses to scale memory limits.
+Large datasets (`ogbg-molmuv`, `ogbg-moltox21`) carry a `memory_weight` field that the runner uses to scale memory limits.
 
 ### Adding a custom dataset
 

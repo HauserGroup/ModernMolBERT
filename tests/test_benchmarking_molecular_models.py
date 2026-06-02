@@ -86,7 +86,6 @@ def test_dataset_registry_is_single_yaml() -> None:
         "clf_ogbg-molmuv",
         "clf_ogbg-molsider",
         "clf_ogbg-moltox21",
-        "clf_ogbg-moltoxcast",
     ]
     assert load_dataset_config(config_dir, "clf_AMES").name == "AMES"
 

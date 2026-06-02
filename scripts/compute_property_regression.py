@@ -48,8 +48,6 @@ Usage
     python scripts/compute_property_regression.py --test_size 0.3 --alpha 10
 """
 
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 

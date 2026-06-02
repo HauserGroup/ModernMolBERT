@@ -8,8 +8,6 @@ Usage:
     .venv/bin/python scripts/arrange_panes.py --input pacmap_qed --out pacmap_qed/overview.png
 """
 
-from __future__ import annotations
-
 import argparse
 import re
 from dataclasses import dataclass

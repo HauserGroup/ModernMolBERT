@@ -8,9 +8,13 @@ Outputs (PDF) into the manuscript figures directory:
   Fig_2.pdf            four-model internal comparison (paired scatter, 3 panels)
   Fig_baselines.pdf    best model vs four baselines (paired scatter, 4 panels)
   Fig_groupbars.pdf    per-task-group mean ROC-AUC grouped bar chart
+
+Main-analysis exclusions:
+- ogbg-moltox21
+- ogbg-molmuv
+- ogbg-moltoxcast
 """
 
-from __future__ import annotations
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -23,6 +27,7 @@ from matplotlib.lines import Line2D
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
 FIGDIR = Path("/Users/skn506/Documents/Claude/Projects/ModernMolBERT pre-print manuscript/figures")
+EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}
 
 GROUP_COLORS = {
     "TDC-ADME": "#4C72B0",
@@ -56,12 +61,11 @@ SHORT = {
     "ogbg-molbbbp": "BBBP",
     "ogbg-molclintox": "ClinTox",
     "ogbg-molhiv": "HIV",
-    "ogbg-molmuv": "MUV",
     "ogbg-molsider": "SIDER",
-    "ogbg-moltox21": "Tox21",
 }
 
 df = pd.read_csv(MATRIX, index_col=0)
+df = df.loc[~df.index.isin(EXCLUDED_DATASETS)].copy()
 
 
 def paired_panel(ax, xcol, ycol, gap=0.05, lim=(0.45, 1.0)):
@@ -89,7 +93,7 @@ def paired_panel(ax, xcol, ycol, gap=0.05, lim=(0.45, 1.0)):
     for t, r in sub.iterrows():
         if abs(r[ycol] - r[xcol]) > gap:
             ax.annotate(
-                SHORT.get(t, t),
+                SHORT.get(t, t),  # type: ignore
                 (r[xcol], r[ycol]),
                 fontsize=6.5,
                 xytext=(3, 3),

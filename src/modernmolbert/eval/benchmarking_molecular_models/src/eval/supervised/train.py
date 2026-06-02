@@ -2,7 +2,10 @@ import gc
 import numpy as np
 import logging as log
 
+from sklearn.base import clone
 from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import KFold, ParameterGrid, StratifiedKFold
+from sklearn.metrics import roc_auc_score
 from sklearn.metrics import make_scorer
 
 from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
@@ -22,6 +25,7 @@ from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_m
     multioutput_auroc_score,
 )
 from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+    FiniteLabelMultiOutputClassifier,
     get_clf_models,
     get_reg_models,
 )
@@ -46,6 +50,17 @@ def fit_model(
 ):
     y_arr = np.asarray(y)
     is_multioutput = y_arr.ndim == 2 and y_arr.shape[1] > 1
+    has_missing_labels = bool(np.isnan(y_arr).any()) if y_arr.dtype.kind in {"f", "c"} else False
+
+    if task == "classification" and is_multioutput and has_missing_labels:
+        models = get_clf_models(1, X.dtype)
+        return fit_multioutput_finite_label_model(
+            X=X,
+            y=y_arr,
+            models=models,
+            model_head=model_head,
+            memory_weight=memory_weight,
+        )
 
     if task == "classification":
         no_outputs = y_arr.shape[1] if is_multioutput else 1
@@ -58,10 +73,10 @@ def fit_model(
     if is_multioutput:
         log.info("Using multioutput AUROC scorer")
         scorer = make_scorer(multioutput_auroc_score, response_method="predict_proba")
-        y_model = np.nan_to_num(y_arr, nan=0)
+        y_model = y_arr
     else:
         scorer = get_sklearn_scorer("roc_auc")
-        y_model = np.nan_to_num(y_arr, nan=0).ravel()
+        y_model = y_arr.ravel()
     del y_arr
 
     log.info(f"Shapes: X={X.shape}, y={y_model.shape}")
@@ -124,6 +139,95 @@ def fit_model(
 
     # f = max if greater_is_better else min
     # return f(res, key=lambda x: x["best_score"])
+
+
+def finite_label_multioutput_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
+    """Mean endpoint AUROC over finite labels only."""
+    y_true = np.asarray(y_true, dtype=float)
+    y_score = np.asarray(y_score, dtype=float)
+
+    if y_true.shape != y_score.shape:
+        raise ValueError(f"Shape mismatch: y_true={y_true.shape}, y_score={y_score.shape}")
+
+    scores = []
+    for col in range(y_true.shape[1]):
+        mask = np.isfinite(y_true[:, col])
+        if mask.sum() == 0:
+            continue
+        y_col = y_true[mask, col]
+        s_col = y_score[mask, col]
+        if np.unique(y_col).size < 2:
+            continue
+        scores.append(roc_auc_score(y_col, s_col))
+
+    if not scores:
+        return np.nan
+    return float(np.mean(scores))
+
+
+def fit_multioutput_finite_label_model(
+    X: np.ndarray,
+    y: np.ndarray,
+    models: dict,
+    model_head: str,
+    memory_weight: int,
+):
+    """Manual CV for sparse multi-output classification without NaN imputation."""
+    model_spec = models[model_head]
+    base_pipeline = model_spec["model"]
+
+    param_grid = list(ParameterGrid(model_spec["params"]))
+    if not param_grid:
+        param_grid = [{}]
+
+    y = np.asarray(y, dtype=float)
+    finite = np.isfinite(y)
+    any_positive = np.nansum(np.where(finite, y, 0.0), axis=1) > 0
+
+    def make_splits():
+        if np.unique(any_positive).size >= 2:
+            cv = StratifiedKFold(n_splits=CV_SPLITS, shuffle=True, random_state=0)
+            return cv.split(X, any_positive.astype(int))
+        cv = KFold(n_splits=CV_SPLITS, shuffle=True, random_state=0)
+        return cv.split(X)
+
+    best_score = -np.inf
+    best_params = None
+
+    for params in param_grid:
+        fold_scores = []
+        for train_idx, valid_idx in make_splits():
+            estimator = clone(base_pipeline)
+            estimator.set_params(**params)
+
+            wrapped = FiniteLabelMultiOutputClassifier(estimator)
+            wrapped.fit(X[train_idx], y[train_idx])
+            y_score = wrapped.predict_proba(X[valid_idx])
+
+            score = finite_label_multioutput_score(y[valid_idx], y_score)
+            if np.isfinite(score):
+                fold_scores.append(score)
+
+        mean_score = float(np.mean(fold_scores)) if fold_scores else np.nan
+        if np.isfinite(mean_score) and mean_score > best_score:
+            best_score = mean_score
+            best_params = params
+
+    if best_params is None:
+        best_params = {}
+        best_score = np.nan
+
+    final_estimator = clone(base_pipeline)
+    final_estimator.set_params(**best_params)
+    final_model = FiniteLabelMultiOutputClassifier(final_estimator)
+    final_model.fit(X, y)
+
+    return {
+        "model": model_head,
+        "model_obj": final_model,
+        "best_params": best_params,
+        "best_score": best_score,
+    }
 
 
 def fit_and_eval_embedding(

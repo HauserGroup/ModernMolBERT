@@ -23,8 +23,6 @@ Outputs:
 This script only wrangles data. It does not subset models for plotting.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 import re
 import pandas as pd

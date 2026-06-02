@@ -43,8 +43,6 @@ Usage
     uv run python scripts/make_ape_token_table.py --top 50
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 import re

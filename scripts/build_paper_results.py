@@ -7,12 +7,17 @@ Derive all paper-facing benchmark numbers from the already-built
 dataset x embedder, best downstream head already selected upstream).
 
 Produces:
-  outputs/eval/paper/results_matrix_25task.csv   (tasks x models, ROC-AUC)
+    outputs/eval/paper/results_matrix_25task.csv   (tasks x models, ROC-AUC; name kept for compatibility)
   outputs/eval/paper/group_means.csv             (model x task-group means + overall)
   outputs/eval/paper/table2.tex                  (main benchmark LaTeX table)
   outputs/eval/paper/stats.txt                   (Wilcoxon tests + prose counts)
 
 No model runs, no new benchmarking. Pure wrangling of existing eval output.
+
+Main-analysis dataset exclusions:
+- ogbg-moltox21
+- ogbg-molmuv
+- ogbg-moltoxcast
 """
 
 from pathlib import Path
@@ -27,7 +32,10 @@ SRC = ROOT / "outputs/eval/best_metric_by_dataset_embedder.csv"
 OUT = ROOT / "outputs/eval/paper"
 OUT.mkdir(parents=True, exist_ok=True)
 
-# ---- Task -> group map (18 TDC + 7 MoleculeNet = 25) ----
+# ---- Task -> group map for manuscript main analysis ----
+# Note: tox21/muv/toxcast are excluded from the main analysis by design.
+EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}
+
 TDC_ADME = [
     "Bioavailability_Ma",
     "HIA_Hou",
@@ -49,9 +57,7 @@ MOLNET = [
     "ogbg-molbbbp",
     "ogbg-molclintox",
     "ogbg-molhiv",
-    "ogbg-molmuv",
     "ogbg-molsider",
-    "ogbg-moltox21",
 ]
 GROUPS = {
     **{t: "TDC-ADME" for t in TDC_ADME},
@@ -59,8 +65,8 @@ GROUPS = {
     **{t: "TDC-HTS" for t in TDC_HTS},
     **{t: "MoleculeNet" for t in MOLNET},
 }
-TASKS_25 = TDC_ADME + TDC_TOX + TDC_HTS + MOLNET
-assert len(TASKS_25) == 25
+TASKS_MAIN = TDC_ADME + TDC_TOX + TDC_HTS + MOLNET
+N_TASKS_MAIN = len(TASKS_MAIN)
 
 # ---- Model name map: paper label -> embedder key in source CSV ----
 MODELS = {
@@ -76,13 +82,14 @@ MODELS = {
 
 df = pd.read_csv(SRC)
 df = df[df["test_metric_name"] == "roc_auc"]
+df = df.loc[~df["dataset"].isin(EXCLUDED_DATASETS)].copy()
 
 # pivot: rows tasks, cols embedder
 pivot = df.pivot_table(index="dataset", columns="embedder", values="test_metric", aggfunc="first")
-matrix = pd.DataFrame(index=TASKS_25)
+matrix = pd.DataFrame(index=TASKS_MAIN)
 for label, key in MODELS.items():
-    matrix[label] = pivot[key].reindex(TASKS_25) if key in pivot.columns else np.nan
-matrix.insert(0, "group", [GROUPS[t] for t in TASKS_25])
+    matrix[label] = pivot[key].reindex(TASKS_MAIN) if key in pivot.columns else np.nan
+matrix.insert(0, "group", [GROUPS[t] for t in TASKS_MAIN])
 matrix.to_csv(OUT / "results_matrix_25task.csv")
 
 # ---- Missing cells ----
@@ -158,11 +165,11 @@ lines += [
     r"    \bottomrule",
     r"  \end{tabularx}",
     r"  \caption{%",
-    r"    Mean ROC-AUC ($\times100$) on the 25-task benchmark of "
+    rf"    Mean ROC-AUC ($\times100$) on the {N_TASKS_MAIN}-task benchmark of "
     r"\citet{praskiBenchmarkingPretrainedMolecular2025}, broken down by task",
     r"    group. Each entry averages per-task ROC-AUC using the best "
     r"cross-validated downstream head (ridge / random forest / $k$NN) per task.",
-    r"    \emph{Overall} is the unweighted mean across all 25 tasks. "
+    rf"    \emph{{Overall}} is the unweighted mean across all {N_TASKS_MAIN} tasks. "
     r"\textbf{Bold} marks the best value per column.",
     r"  }%",
     r"  \label{tab:main-results}",
@@ -244,7 +251,7 @@ for m, ts in missing.items():
 # best-head distribution for released models
 out.append("\nBest downstream head distribution (released models):\n")
 for key in ["modernmolbert_best_standard", "modernmolbert_best_base"]:
-    sub = df[(df["embedder"] == key) & (df["dataset"].isin(TASKS_25))]
+    sub = df[(df["embedder"] == key) & (df["dataset"].isin(TASKS_MAIN))]
     out.append(f"  {key}: {sub['model'].value_counts().to_dict()}\n")
 
 (OUT / "stats.txt").write_text("".join(out))

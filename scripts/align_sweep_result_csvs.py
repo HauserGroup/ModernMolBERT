@@ -10,8 +10,6 @@ Usage:
     python scripts/align_sweep_result_csvs.py --out results/sweep_results_aligned.csv
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 from pathlib import Path

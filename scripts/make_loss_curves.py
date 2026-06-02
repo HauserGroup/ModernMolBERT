@@ -12,7 +12,6 @@ results/sweep_results_base.csv); base curves cannot be reconstructed here.
 Output: Supplementary_2.pdf (Appendix A).
 """
 
-from __future__ import annotations
 from pathlib import Path
 import json
 import matplotlib

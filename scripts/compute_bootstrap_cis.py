@@ -42,8 +42,6 @@ Usage
     python scripts/compute_bootstrap_cis.py --n_boot 5000 --seed 99
 """
 
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 

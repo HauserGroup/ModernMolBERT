@@ -4,8 +4,6 @@ All tests are self-contained (no large files, no network). They use small
 in-memory fixtures.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 import numpy as np

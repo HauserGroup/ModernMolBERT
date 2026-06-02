@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""Per-task full ROC-AUC table (Appendix C / S3) from the 25-task matrix."""
+"""Per-task full ROC-AUC table (Appendix C / S3) from the main-analysis matrix.
 
-from __future__ import annotations
+Main-analysis exclusions:
+- ogbg-moltox21
+- ogbg-molmuv
+- ogbg-moltoxcast
+"""
+
 from pathlib import Path
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
 OUT = ROOT / "outputs/eval/paper/table_pertask.tex"
+EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}
 
 PRETTY = {
     "Bioavailability_Ma": "Bioavailability",
@@ -32,9 +38,7 @@ PRETTY = {
     "ogbg-molbbbp": "BBBP",
     "ogbg-molclintox": "ClinTox",
     "ogbg-molhiv": "HIV",
-    "ogbg-molmuv": "MUV",
     "ogbg-molsider": "SIDER",
-    "ogbg-moltox21": "Tox21",
 }
 GROUP_LABEL = {
     "TDC-ADME": "TDC -- ADME",
@@ -55,6 +59,7 @@ COLS = [
 HEAD = ["ECFP4", "ChBa-2", "SELF.", "MoLF.", "MMB-s", "MMB-b", "MMB-sp", "MMB-h"]
 
 df = pd.read_csv(MATRIX, index_col=0)
+df = df.loc[~df.index.isin(EXCLUDED_DATASETS)].copy()
 
 
 def cell(v):
@@ -84,7 +89,7 @@ for g in ["TDC-ADME", "TDC-Tox", "TDC-HTS", "MoleculeNet"]:
     )
     for t in df.index[df["group"] == g]:
         row = " & ".join(cell(df.loc[t, c]) for c in COLS)
-        lines.append("  " + PRETTY.get(t, t) + " & " + row + r" \\")
+        lines.append("  " + PRETTY.get(t, t) + " & " + row + r" \\")  # type: ignore
     lines.append(r"  \addlinespace")
 lines += [r"  \bottomrule", r"\end{longtable}", r"}"]
 OUT.write_text("\n".join(lines) + "\n")

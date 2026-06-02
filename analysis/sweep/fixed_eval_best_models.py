@@ -76,8 +76,6 @@ REQUIREMENTS
   verifies this before evaluating.
 """
 
-from __future__ import annotations
-
 import argparse
 import csv
 import hashlib

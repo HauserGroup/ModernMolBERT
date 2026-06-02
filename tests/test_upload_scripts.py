@@ -218,9 +218,11 @@ def test_upload_tokenizer_to_hub_dry_run_stages_without_network(
     assert called["verify_saved"] is True
     assert sorted(path.name for path in staging_dir.iterdir()) == [
         "README.md",
+        "ape_tokenizer_metadata.json",
         "metadata.json",
         "special_tokens_map.json",
         "tokenization_ape.py",
         "tokenizer_config.json",
+        "tokenizer_metadata.json",
         "vocab.json",
     ]

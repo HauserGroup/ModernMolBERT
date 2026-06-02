@@ -187,6 +187,9 @@ class EmbeddedDataset:
             "X": self.X,
             "y": self.y,
             "metadata": self.metadata,
+            "pooling": "mean",
+            "special_tokens_excluded": True,
+            "max_seq_length": 128,
         }
         with open(path, "w") as f:
             json.dump(obj, f, cls=NumpyEncoder)

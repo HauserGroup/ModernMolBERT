@@ -22,7 +22,7 @@ from typing import Any
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
 
-from modernmolbert.utils import repo_root
+from modernmolbert.utils import copy_tokenizer_metadata_from_anywhere, repo_root
 
 
 MODEL_MAX_LENGTH = 128
@@ -438,23 +438,14 @@ def stage_tokenizer_files(
     tokenization_code = find_tokenization_code(source_dir, run_dir)
     shutil.copy(tokenization_code, tmp / "tokenization_ape.py")
 
-    for metadata_name in (
-        "tokenizer_metadata.json",
-        "ape_tokenizer_metadata.json",
-        "metadata.json",
-    ):
-        candidates = [
-            source_dir / "ape_tokenizer" / metadata_name,
-            source_dir / metadata_name,
-            run_dir / "final_model" / "ape_tokenizer" / metadata_name,
-            run_dir / "final_model" / metadata_name,
-            run_dir / metadata_name,
-        ]
-
-        for candidate in candidates:
-            if candidate.exists():
-                shutil.copy(candidate, tmp / metadata_name)
-                break
+    source_dirs = [
+        source_dir / "ape_tokenizer",
+        source_dir,
+        run_dir / "final_model" / "ape_tokenizer",
+        run_dir / "final_model",
+        run_dir,
+    ]
+    copy_tokenizer_metadata_from_anywhere(source_dirs=source_dirs, target_dir=tmp)
 
 
 def build_readme(source_dir: Path, run_dir: Path, repo_id: str, vocab_size: int) -> str:

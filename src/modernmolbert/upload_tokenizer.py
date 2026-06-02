@@ -257,6 +257,8 @@ def upload_tokenizer_to_hub(
 
     # Keep your training metadata in the HF repo as documentation.
     shutil.copy(metadata_path, staging_dir / "metadata.json")
+    shutil.copy(metadata_path, staging_dir / "tokenizer_metadata.json")
+    shutil.copy(metadata_path, staging_dir / "ape_tokenizer_metadata.json")
 
     # Write the model card using the canonical generator in write_model_cards.py.
     _write_readme(staging_dir, repo_id)

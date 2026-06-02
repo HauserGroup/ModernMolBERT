@@ -35,6 +35,10 @@ SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
 SMILES_REPRESENTATION = "SMILES"
 SMILES_TOKENIZER_FILENAME = "smiles_ape_tokenizer.json"
 SMILES_TOKENIZER_METADATA_FILENAME = "smiles_ape_tokenizer.metadata.json"
+TOKENIZER_METADATA_FILENAMES = (
+    "tokenizer_metadata.json",
+    "ape_tokenizer_metadata.json",
+)
 PUBCHEM10M_DATASET = "mikemayuare/PubChem10M_SMILES_SELFIES"
 ZINC20_DATASET = "haydn-jones/ZINC20"
 ZINC20_CHEMBL36_DATASET = "alessandronascimento/zinc20_chembl36"
@@ -361,8 +365,51 @@ def copy_tokenizer_artifacts(
         if active_vocab.exists():
             shutil.copy2(active_vocab, tokenizer_dir / alias_name)
 
-    shutil.copy2(metadata_path, output_dir / "tokenizer_metadata.json")
-    shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")
+    # Preserve legacy metadata path while standardizing metadata aliases.
+    if metadata_path.exists():
+        shutil.copy2(metadata_path, output_dir / "tokenizer_metadata.json")
+        shutil.copy2(metadata_path, final_model_dir / "tokenizer_metadata.json")
+
+    source_dirs = [
+        metadata_path.parent,
+        output_dir,
+        output_dir / "ape_tokenizer",
+        final_model_dir,
+        final_model_dir / "ape_tokenizer",
+    ]
+
+    for target_dir in [
+        final_model_dir,
+        final_model_dir / "ape_tokenizer",
+        output_dir,
+        output_dir / "ape_tokenizer",
+    ]:
+        copy_tokenizer_metadata_from_anywhere(source_dirs=source_dirs, target_dir=target_dir)
+
+
+def copy_tokenizer_metadata_from_anywhere(source_dirs: list[Path], target_dir: Path) -> None:
+    """Copy tokenizer metadata aliases into target_dir if available in source_dirs."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    copied_any = False
+
+    for filename in TOKENIZER_METADATA_FILENAMES:
+        for source_dir in source_dirs:
+            source = source_dir / filename
+            if source.exists():
+                target = target_dir / filename
+                if source.resolve() == target.resolve():
+                    copied_any = True
+                    break
+                shutil.copy2(source, target)
+                copied_any = True
+                break
+
+    if not copied_any:
+        print(
+            "WARNING: no tokenizer metadata file found in any source directory "
+            f"for target {target_dir}"
+        )
 
 
 def assert_metadata_representation(metadata: dict[str, Any], expected_representation: str) -> None:

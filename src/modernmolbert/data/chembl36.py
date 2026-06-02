@@ -219,7 +219,7 @@ def prepare_chembl36_frame(
                 out = dict(row)
                 try:
                     converted = canonicalize_and_selfies(row.get(config.smiles_column))
-                except BaseException:
+                except Exception:
                     continue
                 out.update(converted)
                 if converted["is_valid"]:
@@ -301,7 +301,7 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
 
     try:
         mol = Chem.MolFromSmiles(text, sanitize=False)
-    except BaseException as exc:
+    except Exception as exc:
         return {
             "smiles_canonical_clean": None,
             "selfies": None,
@@ -324,7 +324,7 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
     _san_ops = Chem.SanitizeFlags.SANITIZE_SYMMRINGS | Chem.SanitizeFlags.SANITIZE_SETAROMATICITY
     try:
         san_result = Chem.SanitizeMol(mol, _san_ops, catchErrors=True)
-    except BaseException as exc:
+    except Exception as exc:
         return {
             "smiles_canonical_clean": None,
             "selfies": None,
@@ -346,7 +346,7 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
             canonical=True,
             isomericSmiles=True,
         )
-    except BaseException as exc:
+    except Exception as exc:
         return {
             "smiles_canonical_clean": None,
             "selfies": None,
@@ -356,7 +356,7 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
 
     try:
         selfies = sf.encoder(canonical)
-    except BaseException as exc:
+    except Exception as exc:
         return {
             "smiles_canonical_clean": canonical,
             "selfies": None,

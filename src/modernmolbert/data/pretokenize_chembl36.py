@@ -59,9 +59,21 @@ def _init_worker(vocab_path: str) -> None:
     _unk_id = _vocab.get("<unk>", 3)
 
 
+def _split_selfies_strict(selfies: str) -> list[str]:
+    pieces = SELFIES_RE.findall(selfies)
+
+    if "".join(pieces) != selfies:
+        raise ValueError(
+            "Malformed SELFIES string contains unmatched text outside "
+            f"bracketed SELFIES tokens: {selfies!r}"
+        )
+
+    return pieces
+
+
 def _tokenize_one(selfies: str) -> list[int]:
     """Greedy longest-match APE tokenize, identical logic to ape_tokenize()."""
-    pieces = SELFIES_RE.findall(selfies)
+    pieces = _split_selfies_strict(selfies)
     if not pieces:
         return [_bos_id, _unk_id, _eos_id]
 

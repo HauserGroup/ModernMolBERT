@@ -82,20 +82,42 @@ def _select_vocab_file(
     return vocab_file
 
 
-def pre_tokenize_molecule(molecule: str, representation: str) -> list[str]:
+def _pre_tokenize_selfies(molecule: str, *, strict: bool = True) -> list[str]:
+    pieces = SELFIES_RE.findall(molecule)
+
+    if strict and "".join(pieces) != molecule:
+        raise ValueError(
+            "Malformed SELFIES string contains unmatched text outside "
+            f"bracketed SELFIES tokens: {molecule!r}"
+        )
+
+    return pieces
+
+
+def pre_tokenize_molecule(
+    molecule: str,
+    representation: str,
+    *,
+    strict_selfies: bool = True,
+) -> list[str]:
     active_representation = _normalize_representation(representation)
+
     if active_representation == "SELFIES":
-        return SELFIES_RE.findall(molecule)
+        return _pre_tokenize_selfies(molecule, strict=strict_selfies)
 
     tokens: list[str] = []
     cursor = 0
+
     for match in SMILES_RE.finditer(molecule):
         if match.start() > cursor:
             tokens.extend(molecule[cursor : match.start()])
+
         tokens.append(match.group(0))
         cursor = match.end()
+
     if cursor < len(molecule):
         tokens.extend(molecule[cursor:])
+
     return [token for token in tokens if token and not token.isspace()]
 
 

@@ -1,5 +1,5 @@
 from pathlib import Path
-from types import SimpleNamespace
+from argparse import Namespace
 
 import torch
 from transformers import AutoModelForMaskedLM, AutoTokenizer, ModernBertConfig
@@ -7,6 +7,7 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer, ModernBertConfig
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.train_selfies_ape_modernbert import write_run_metadata
 from modernmolbert.utils import (
+    copy_tokenizer_metadata_from_anywhere,
     copy_tokenizer_artifacts,
     file_sha256,
     write_tokenizer_metadata,
@@ -85,11 +86,23 @@ def test_end_to_end_save_and_reload_with_tokenizer_artifacts(tmp_path: Path):
         "tokenization_ape.py",
         "ape_tokenizer/vocab.json",
         "ape_tokenizer/selfies_vocab.json",
+        "ape_tokenizer/tokenizer_metadata.json",
         "ape_tokenizer/tokenizer_config.json",
         "ape_tokenizer/special_tokens_map.json",
         "ape_tokenizer/tokenization_ape.py",
     ]:
         assert (final_model_dir / expected).exists()
+
+    root_metadata = [
+        final_model_dir / "tokenizer_metadata.json",
+        final_model_dir / "ape_tokenizer_metadata.json",
+    ]
+    nested_metadata = [
+        final_model_dir / "ape_tokenizer" / "tokenizer_metadata.json",
+        final_model_dir / "ape_tokenizer" / "ape_tokenizer_metadata.json",
+    ]
+    assert any(path.exists() for path in root_metadata)
+    assert any(path.exists() for path in nested_metadata)
     assert not (final_model_dir / "tokenizer.json").exists()
 
     reloaded_model = AutoModelForMaskedLM.from_pretrained(str(final_model_dir))
@@ -125,7 +138,7 @@ def test_write_run_metadata_writes_hub_model_card(tmp_path: Path):
         },
     )
     output_dir = tmp_path / "run"
-    args = SimpleNamespace(
+    args = Namespace(
         output_dir=str(output_dir),
         dataset_name="data/pretrain/chembl36_selfies",
         selfies_column="selfies",
@@ -171,3 +184,42 @@ def test_write_run_metadata_writes_hub_model_card(tmp_path: Path):
     assert "AutoTokenizer.from_pretrained" in text
     assert 'subfolder="ape_tokenizer"' in text
     assert "trust_remote_code=True" in text
+
+
+def test_copy_tokenizer_metadata_from_anywhere_with_tokenizer_metadata_only(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    target_root = tmp_path / "final_model"
+    target_nested = target_root / "ape_tokenizer"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "tokenizer_metadata.json").write_text('{"representation": "SELFIES"}\n')
+
+    copy_tokenizer_metadata_from_anywhere([source], target_root)
+    copy_tokenizer_metadata_from_anywhere([source], target_nested)
+
+    assert (target_root / "tokenizer_metadata.json").exists()
+    assert (target_nested / "tokenizer_metadata.json").exists()
+
+
+def test_copy_tokenizer_metadata_from_anywhere_with_ape_metadata_only(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    target_root = tmp_path / "final_model"
+    target_nested = target_root / "ape_tokenizer"
+    source.mkdir(parents=True, exist_ok=True)
+    (source / "ape_tokenizer_metadata.json").write_text('{"representation": "SELFIES"}\n')
+
+    copy_tokenizer_metadata_from_anywhere([source], target_root)
+    copy_tokenizer_metadata_from_anywhere([source], target_nested)
+
+    assert (target_root / "ape_tokenizer_metadata.json").exists()
+    assert (target_nested / "ape_tokenizer_metadata.json").exists()
+
+
+def test_copy_tokenizer_metadata_from_anywhere_warns_when_missing(tmp_path: Path, capsys) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir(parents=True, exist_ok=True)
+
+    copy_tokenizer_metadata_from_anywhere([source], target)
+
+    captured = capsys.readouterr()
+    assert "WARNING: no tokenizer metadata file found in any source directory" in captured.out

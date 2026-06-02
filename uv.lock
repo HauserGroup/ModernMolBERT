@@ -1665,6 +1665,7 @@ cuda = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "iprogress" },
     { name = "pre-commit" },
     { name = "pyright" },
     { name = "pytest" },
@@ -1731,6 +1732,7 @@ provides-extras = ["cuda"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "iprogress", specifier = ">=0.4" },
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pyright", specifier = ">=1.1.409" },
     { name = "pytest", specifier = ">=9.0.3" },

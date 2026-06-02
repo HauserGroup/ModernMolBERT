@@ -26,7 +26,6 @@ uv run python -m modernmolbert.upload_model \
 | `--hf_login` | false | Call `huggingface_hub.login()` using `HF_TOKEN_ORG` or `HF_TOKEN` from env |
 | `--dry_run` | false | Stage and validate without uploading |
 | `--keep_staging_dir` | — | Keep staged files at this path for inspection |
-| `--tokenizer_repo_id` | `HauserGroup/ApeTokenizer-SELFIES` | Tokenizer repo used in the generated README |
 
 ### Checkpoint resolution
 
@@ -47,8 +46,8 @@ Fails if `model.safetensors` or `config.json` is absent in the resolved director
   tokenizer_config.json        # patched: auto_map, model_max_length, use_fast=false
   special_tokens_map.json
   tokenization_ape.py
-  README.md                    # auto-generated from run_args.json + trainer_state.json
-  ape_tokenizer/               # same tokenizer files, nested subfolder
+  README.md                    # auto-generated model card
+  ape_tokenizer/               # compatibility copy of the same tokenizer files
     vocab.json
     selfies_vocab.json
     tokenizer_config.json
@@ -66,7 +65,7 @@ Fails if `model.safetensors` or `config.json` is absent in the resolved director
 
 1. All required files present in staging dir.
 2. `tokenizer_config.json` has no `tokenizer_class`, correct `auto_map`, `model_max_length=256`, `use_fast=false`.
-3. Config and tokenizer load cleanly via `AutoConfig` / `APEPreTrainedTokenizer`.
+3. Config and tokenizer load cleanly via `AutoConfig`, `AutoTokenizer` from `ape_tokenizer/`, and `APEPreTrainedTokenizer`.
 4. Tokenizer and model vocab sizes match.
 5. Forward pass on an example SELFIES string produces finite logits.
 

@@ -7,9 +7,9 @@ import pandas as pd
 # Configuration
 # =============================================================================
 
-INPUT_CSV = Path("../data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv")
-OWN_RESULTS_CSV = Path("../data/modernmolbert_benchmark_results.csv")
-OUTPUT_DIR = Path("../outputs")
+INPUT_CSV = Path("../../data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv")
+OWN_RESULTS_CSV = Path("../../data/modernmolbert_benchmark_results.csv")
+OUTPUT_DIR = Path("../../outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
@@ -37,8 +37,11 @@ def load_own_results(path: Path) -> pd.DataFrame:
 
 
 praski = pd.read_csv(INPUT_CSV)
-own = load_own_results(OWN_RESULTS_CSV)
-df = pd.concat([praski, own], ignore_index=True)
+if OWN_RESULTS_CSV.exists():
+    own = load_own_results(OWN_RESULTS_CSV)
+    df = pd.concat([praski, own], ignore_index=True)
+else:
+    df = praski.copy()
 
 
 # =============================================================================

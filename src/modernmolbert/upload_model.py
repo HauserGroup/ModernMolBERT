@@ -4,7 +4,6 @@
 uv run python -m modernmolbert.upload_model \
   --run_dir runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_span \
   --repo_id HauserGroup/ModernMolBERT-small-chembl36 \
-  --tokenizer_repo_id HauserGroup/ApeTokenizer-SELFIES \
   --checkpoint final \
   --private \
   --dry_run \
@@ -34,6 +33,11 @@ EXPECTED_SPECIAL_IDS = {
     "unk_token_id": 3,
     "mask_token_id": 4,
 }
+EXAMPLE_SELFIES = (
+    "[C][N][Branch1][C][C][C][C][C][=C][NH1][C][=C][C][=C][C]"
+    "[Branch1][#Branch2][O][P][=Branch1][C][=O][Branch1][C][O][O]"
+    "[=C][Ring1][=C][Ring1][O]"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -86,18 +90,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Keep staged upload files in this directory for debugging.",
     )
-    parser.add_argument(
-        "--tokenizer_repo_id",
-        type=str,
-        default="HauserGroup/ApeTokenizer-SELFIES",
-        help=(
-            "Separate HuggingFace tokenizer repo for the README usage example. "
-            "AutoTokenizer.from_pretrained does not currently work reliably from the "
-            "model repo because model_type=modernbert can route through a backend "
-            "tokenizer path. Defaults to HauserGroup/ApeTokenizer-SELFIES."
-        ),
-    )
-
     return parser.parse_args()
 
 
@@ -240,6 +232,73 @@ def validate_direct_ape_tokenizer(tmp: Path, expected_vocab_size: int) -> None:
     )
 
 
+def build_quickstart_output(source_dir: Path, example_selfies: str, hidden_size: Any) -> str:
+    def fallback_output() -> str:
+        return (
+            "Output:\n\n"
+            "```text\n"
+            "Token IDs:\n[computed when generating the model card]\n\n"
+            "Tokens:\n[computed when generating the model card]\n\n"
+            f"Embedding shape: (1, {hidden_size})\n"
+            "Embedding first 5 values:\n[computed when generating the model card]\n"
+            "```\n\n"
+        )
+
+    if (
+        not (source_dir / "model.safetensors").exists()
+        or not (source_dir / "tokenization_ape.py").exists()
+    ):
+        return fallback_output()
+
+    try:
+        import contextlib
+        import io
+
+        import torch
+        from transformers import AutoModelForMaskedLM
+
+        tokenizer = load_direct_ape_tokenizer(source_dir)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            model = AutoModelForMaskedLM.from_pretrained(
+                source_dir,
+                local_files_only=True,
+            ).eval()
+
+        inputs = tokenizer(example_selfies, return_tensors="pt")
+        with torch.no_grad():
+            outputs = model(**inputs, output_hidden_states=True)
+            embedding = outputs.hidden_states[-1][:, 0]
+
+        token_ids = inputs["input_ids"][0].tolist()
+        tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
+        embedding_shape = tuple(embedding.shape)
+        embedding_head = [round(value, 4) for value in embedding[0, :5].tolist()]
+
+    except Exception:
+        return fallback_output()
+
+    return (
+        "Output:\n\n"
+        "```text\n"
+        f"Token IDs:\n{token_ids}\n\n"
+        f"Tokens:\n{tokens}\n\n"
+        f"Embedding shape: {embedding_shape}\n"
+        f"Embedding first 5 values:\n{embedding_head}\n"
+        "```\n\n"
+    )
+
+
+def get_example_sequence_length(source_dir: Path, example_selfies: str) -> int | str:
+    try:
+        if not (source_dir / "tokenization_ape.py").exists():
+            return "sequence_length"
+        tokenizer = load_direct_ape_tokenizer(source_dir)
+        inputs = tokenizer(example_selfies, return_tensors="pt")
+        return int(inputs["input_ids"].shape[1])
+    except Exception:
+        return "sequence_length"
+
+
 def find_tokenizer_vocab(source_dir: Path, run_dir: Path) -> Path:
     candidates = [
         source_dir / "ape_tokenizer" / "vocab.json",
@@ -356,94 +415,128 @@ def build_readme(source_dir: Path, run_dir: Path, repo_id: str, vocab_size: int)
         run_dir,
         vocab_size=vocab_size,
     )
-    run_args = load_json_if_exists(run_dir / "run_args.json")
-    state = load_json_if_exists(run_dir / "trainer_state.json")
-
     frontmatter = (
         "---\n"
+        "license: mit\n"
         "library_name: transformers\n"
+        "pipeline_tag: fill-mask\n"
         "tags:\n"
-        "  - chemistry\n"
-        "  - selfies\n"
-        "  - modernbert\n"
-        "  - masked-language-modeling\n"
+        "- chemistry\n"
+        "- molecules\n"
+        "- selfies\n"
+        "- ape-tokenizer\n"
+        "- modernbert\n"
+        "- masked-language-modeling\n"
         "---\n"
     )
 
+    hidden = config.get("hidden_size", "-")
+    sequence_length = get_example_sequence_length(source_dir, EXAMPLE_SELFIES)
+
     model_details = (
-        "## Model details\n\n"
+        "## Model Details\n\n"
+        "- **Developed by:** Hauser Group, Department of Drug Design and "
+        "Pharmacology, University of Copenhagen\n"
+        "- **Model type:** ModernBERT encoder &mdash; molecular embedding model "
+        "trained with masked language modeling\n"
+        "- **Input representation:** SELFIES (convert SMILES first; see below)\n"
+        "- **Tokenizer:** Atom Pair Encoding (APE) over SELFIES primitives\n"
+        "- **Pre-training data:** ChEMBL 36 (~2.4M unique small molecules)\n"
+        "- **License:** MIT\n"
+        "- **Repository:** https://github.com/HauserGroup/ModernMolBERT\n\n"
         "| field | value |\n"
         "|-------|-------|\n"
         f"| model_type | {config.get('model_type', 'modernbert')} |\n"
         f"| vocab_size | {config.get('vocab_size', '-')} |\n"
-        f"| hidden_size | {config.get('hidden_size', '-')} |\n"
+        f"| hidden_size | {hidden} |\n"
         f"| num_hidden_layers | {config.get('num_hidden_layers', '-')} |\n"
         f"| num_attention_heads | {config.get('num_attention_heads', '-')} |\n"
         f"| intermediate_size | {config.get('intermediate_size', '-')} |\n"
         f"| max_position_embeddings | {config.get('max_position_embeddings', '-')} |\n"
     )
 
-    training_rows = []
-    for key in (
-        "dataset_name",
-        "model_size",
-        "mlm_probability",
-        "masking_strategy",
-        "max_steps",
-        "learning_rate",
-        "per_device_train_batch_size",
-        "gradient_accumulation_steps",
-        "warmup_steps",
-        "weight_decay",
-        "max_seq_length",
-        "seed",
-    ):
-        if key in run_args:
-            training_rows.append(f"| {key} | {run_args[key]} |")
+    quickstart_output = build_quickstart_output(source_dir, EXAMPLE_SELFIES, hidden)
 
-    best_metric = state.get("best_metric")
-    best_step = state.get("best_global_step")
-
-    if best_metric is not None:
-        try:
-            training_rows.append(f"| best_eval_loss | {float(best_metric):.6f} |")
-        except TypeError:
-            training_rows.append(f"| best_eval_loss | {best_metric} |")
-
-    if best_step is not None:
-        training_rows.append(f"| best_global_step | {best_step} |")
-
-    training_section = (
-        "## Training\n\n| field | value |\n|-------|-------|\n" + "\n".join(training_rows) + "\n"
-    )
-
-    usage = (
-        "## Usage\n\n"
+    # Minimal SELFIES tokenize + embedding example. No SMILES->SELFIES conversion step.
+    quickstart = (
+        "## How to Get Started with the Model\n\n"
+        "The model consumes **SELFIES** strings tokenized with the APE "
+        "tokenizer. The main output for molecular representation learning is the "
+        "first-token embedding:\n\n"
         "```python\n"
-        "from transformers import AutoModelForMaskedLM, AutoTokenizer\n\n"
-        f"model = AutoModelForMaskedLM.from_pretrained('{repo_id}')\n"
+        "# pip install transformers torch\n"
+        "import torch\n"
+        "from transformers import AutoModel, AutoTokenizer\n\n"
+        f"repo = '{repo_id}'\n"
+        "model = AutoModel.from_pretrained(repo).eval()\n"
         "tokenizer = AutoTokenizer.from_pretrained(\n"
-        f"    '{repo_id}',\n"
+        "    repo,\n"
         "    subfolder='ape_tokenizer',\n"
         "    trust_remote_code=True,\n"
         "    use_fast=False,\n"
-        ")\n"
+        ")\n\n"
+        "# A SELFIES string (one bracketed token per primitive); here psilocybin.\n"
+        f"selfies = '{EXAMPLE_SELFIES}'\n\n"
+        "inputs = tokenizer(selfies, return_tensors='pt')\n"
+        "with torch.no_grad():\n"
+        "    outputs = model(**inputs)\n"
+        "    embedding = outputs.last_hidden_state[:, 0]\n\n"
+        "tokens = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])\n"
+        "embedding_preview = [round(x, 4) for x in embedding[0, :5].tolist()]\n"
+        "print(f\"Token IDs:\\n{inputs['input_ids'][0].tolist()}\\n\")\n"
+        'print(f"Tokens:\\n{tokens}\\n")\n'
+        'print(f"Embedding shape: {tuple(embedding.shape)}")\n'
+        'print(f"Embedding first 5 values:\\n{embedding_preview}")\n'
         "```\n\n"
-        "This model expects SELFIES strings. Convert SMILES before tokenization. "
-        "Load the tokenizer from `ape_tokenizer/`; root ModernBERT configs can "
-        "route `AutoTokenizer` to the built-in fast ModernBERT tokenizer instead "
-        "of this custom slow tokenizer.\n"
+        + quickstart_output
+        + "If you start from SMILES, convert it to SELFIES first (e.g. the "
+        "[`selfies`](https://github.com/aspuru-guzik-group/selfies) package: "
+        '`selfies.encoder("CC(=O)Oc1ccccc1C(=O)O")`).\n\n'
+        "For masked-token predictions, load the same checkpoint with "
+        "`AutoModelForMaskedLM`:\n\n"
+        "```python\n"
+        "from transformers import AutoModelForMaskedLM\n\n"
+        "mlm = AutoModelForMaskedLM.from_pretrained(repo)\n"
+        "logits = mlm(**inputs).logits\n"
+        'print(f"Logits shape: {tuple(logits.shape)}")\n'
+        "```\n\n"
+        "Output:\n\n"
+        "```text\n"
+        f"Logits shape: (1, {sequence_length}, {config.get('vocab_size', '-')})\n"
+        "```\n\n"
+        "> Current Transformers releases disable custom root tokenizers for "
+        "`model_type='modernbert'` before loading `auto_map`, so the tokenizer "
+        "must be loaded from `ape_tokenizer/`. The root tokenizer files are also "
+        "shipped for forward compatibility.\n"
+    )
+
+    uses = (
+        "## Uses\n\n"
+        "- **Direct use:** molecular embeddings for property prediction, "
+        "similarity search, clustering, and retrieval; masked-token fill-in.\n"
+        "- **Downstream use:** fine-tuning for molecular classification or "
+        "regression on SELFIES inputs.\n"
+        "- **Out of scope:** natural-language text; generating valid SMILES; "
+        "3D/conformer-dependent tasks.\n\n"
+        "## Bias, Risks, and Limitations\n\n"
+        "Pre-trained only on drug-like ChEMBL 36 chemistry; may not generalize to "
+        "natural products, agrochemicals, fragments, or other under-represented "
+        "chemical space. Performance depends on the downstream task and "
+        "adaptation strategy. No access to 3D/conformer information.\n"
     )
 
     return (
         frontmatter
         + f"\n# {repo_id}\n\n"
-        + "ModernBERT pre-trained on SELFIES for masked language modeling.\n\n"
+        + "ModernMolBERT is a compact ModernBERT encoder pre-trained from scratch "
+        "with masked language modeling on ~2.4M SELFIES strings from ChEMBL 36, "
+        "using a chemically aware Atom Pair Encoding (APE) tokenizer. It expects "
+        "SELFIES input and produces general-purpose molecular embeddings.\n\n"
         + model_details
         + "\n"
-        + training_section
+        + quickstart
         + "\n"
-        + usage
+        + uses
     )
 
 
@@ -479,13 +572,14 @@ def build_staging_dir(source_dir: Path, run_dir: Path, repo_id: str, tmp: Path) 
 
     (tmp / "README.md").write_text(
         build_readme(
-            source_dir,
+            tmp,
             run_dir,
             repo_id,
             vocab_size=vocab_size,
         ),
         encoding="utf-8",
     )
+    remove_pycache_dirs(tmp)
 
 
 def validate_staged_files(tmp: Path) -> None:
@@ -502,6 +596,11 @@ def validate_staged_files(tmp: Path) -> None:
     missing = [name for name in required if not (tmp / name).exists()]
     if missing:
         raise FileNotFoundError(f"Staging directory is missing files: {missing}")
+
+
+def remove_pycache_dirs(path: Path) -> None:
+    for pycache in path.rglob("__pycache__"):
+        shutil.rmtree(pycache, ignore_errors=True)
 
 
 def validate_tokenizer_config(tmp: Path) -> None:
@@ -535,13 +634,27 @@ def validate_tokenizer_config(tmp: Path) -> None:
 
 def validate_staged_model(tmp: Path) -> None:
     import torch
-    from transformers import AutoConfig, AutoModelForMaskedLM
+    from transformers import AutoConfig, AutoModelForMaskedLM, AutoTokenizer
 
     print("[validate] loading config", flush=True)
     config = AutoConfig.from_pretrained(tmp, local_files_only=True)
 
     print("[validate] loading direct APE tokenizer", flush=True)
     tokenizer = load_direct_ape_tokenizer(tmp)
+
+    print("[validate] loading ape_tokenizer AutoTokenizer", flush=True)
+    auto_tokenizer = AutoTokenizer.from_pretrained(
+        tmp / "ape_tokenizer",
+        local_files_only=True,
+        trust_remote_code=True,
+        use_fast=False,
+    )
+
+    if auto_tokenizer.__class__.__name__ != "APEPreTrainedTokenizer":
+        raise TypeError(
+            f"Expected ape_tokenizer AutoTokenizer to load APEPreTrainedTokenizer, got "
+            f"{type(auto_tokenizer)!r}"
+        )
 
     if tokenizer.model_max_length != MODEL_MAX_LENGTH:
         raise ValueError(
@@ -572,6 +685,12 @@ def validate_staged_model(tmp: Path) -> None:
         raise ValueError(
             f"Tokenizer/model vocab mismatch: tokenizer={tokenizer.vocab_size}, "
             f"config={config.vocab_size}"
+        )
+
+    if auto_tokenizer.vocab_size != tokenizer.vocab_size:
+        raise ValueError(
+            f"ape_tokenizer AutoTokenizer vocab mismatch: auto={auto_tokenizer.vocab_size}, "
+            f"direct={tokenizer.vocab_size}"
         )
 
     if tokenizer.pad_token_id != config.pad_token_id:
@@ -644,7 +763,6 @@ def upload_model_to_hub(
     dry_run: bool = False,
     keep_staging_dir: Path | None = None,
     api: HfApi | None = None,
-    tokenizer_repo_id: str = "HauserGroup/ApeTokenizer-SELFIES",
 ) -> dict[str, Any]:
     if not run_dir.is_absolute():
         run_dir = repo_root() / run_dir
@@ -661,10 +779,12 @@ def upload_model_to_hub(
         build_staging_dir(source_dir, run_dir, repo_id, tmp)
         validate_staged_files(tmp)
 
+        validate_staged_model(tmp)
+        remove_pycache_dirs(tmp)
+
         staged = sorted(tmp.iterdir())
         staged_names = [path.name for path in staged]
         print(f"[upload] staged {len(staged)} files: {staged_names}", flush=True)
-        validate_staged_model(tmp)
 
         if dry_run:
             print(f"Dry run: skipped upload to https://huggingface.co/{repo_id}", flush=True)
@@ -696,7 +816,6 @@ def upload_model_to_hub(
         "uploaded": not dry_run,
         "staged_files": staged_names,
         "staging_dir": str(tmp) if keep_staging_dir is not None else None,
-        "tokenizer_repo_id": tokenizer_repo_id,
     }
 
 
@@ -721,7 +840,6 @@ def main() -> None:
         token=token,
         dry_run=args.dry_run,
         keep_staging_dir=args.keep_staging_dir,
-        tokenizer_repo_id=args.tokenizer_repo_id,
     )
 
     print(f"Done — {result['url']}", flush=True)

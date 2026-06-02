@@ -60,7 +60,7 @@ from sklearn.preprocessing import StandardScaler
 from tqdm.auto import tqdm
 from transformers import AutoModel, AutoTokenizer
 
-from modernmolbert.paths import find_project_root, data_path, outputs_path
+from modernmolbert.common.paths import find_project_root, data_path, outputs_path
 
 
 PROJECT_ROOT = find_project_root()

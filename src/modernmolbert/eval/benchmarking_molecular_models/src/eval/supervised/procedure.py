@@ -179,10 +179,6 @@ def eval_procedure(
             output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
         )
 
-    if model_head == "knn" and "muv" in dataset_info.name:
-        log.error("Skipping KNN evaluation for MUV datasets, not supported")
-        return
-
     owns_data = preloaded is None
     if owns_data:
         embedded_data = load_embedded_dataset(embedded_dir, dataset_info, model_name)

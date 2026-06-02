@@ -1006,7 +1006,7 @@ def main() -> None:
     # Resolve max_seq_length from the official model config when not explicitly set.
     if args.max_seq_length is None:
         if args.model_size in LOCAL_MODERNBERT_PRESETS:
-            args.max_seq_length = 256
+            args.max_seq_length = 128
         else:
             _tmp = AutoConfig.from_pretrained(_MODERNBERT_CONFIG_TEMPLATES[args.model_size])
             args.max_seq_length = _tmp.max_position_embeddings

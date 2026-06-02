@@ -64,7 +64,7 @@ Fails if `model.safetensors` or `config.json` is absent in the resolved director
 ### Validation before upload
 
 1. All required files present in staging dir.
-2. `tokenizer_config.json` has no `tokenizer_class`, correct `auto_map`, `model_max_length=256`, `use_fast=false`.
+2. `tokenizer_config.json` has no `tokenizer_class`, correct `auto_map`, `model_max_length=128`, `use_fast=false`.
 3. Config and tokenizer load cleanly via `AutoConfig`, `AutoTokenizer` from `ape_tokenizer/`, and `APEPreTrainedTokenizer`.
 4. Tokenizer and model vocab sizes match.
 5. Forward pass on an example SELFIES string produces finite logits.
@@ -111,14 +111,14 @@ No CLI flags. Edit the constants at the top of [upload_tokenizer.py](../src/mode
 | `VOCAB_PATH` | `tokenizer/chembl36_selfies_2m_ape_max2_min3000.json` |
 | `METADATA_PATH` | `tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json` |
 | `TOKENIZER_CODE` | `src/modernmolbert/tokenization_ape.py` |
-| `MODEL_MAX_LENGTH` | `256` |
+| `MODEL_MAX_LENGTH` | `128` |
 
 ### What it does
 
 1. Verifies metadata against expected values: `vocab_size=631`, `representation=SELFIES`, `max_merge_pieces=2`, `min_freq_for_merge=3000`, `tokenizer_train_size=2_000_000`, and special token IDs `bos=0 pad=1 eos=2 unk=3 mask=4`.
 2. Instantiates `APEPreTrainedTokenizer` and saves it to `./tmp-hf-tokenizer/`.
 3. Copies `tokenization_ape.py` and `metadata.json` into the staging directory.
-4. Reloads the tokenizer via `AutoTokenizer` and verifies `model_max_length=256`, `vocab_size=631`, and that an example SELFIES fits within max length.
+4. Reloads the tokenizer via `AutoTokenizer` and verifies `model_max_length=128`, `vocab_size=631`, and that an example SELFIES fits within max length.
 5. Creates the HF repo (private, `exist_ok=True`) and uploads.
 6. Deletes `./tmp-hf-tokenizer/`.
 

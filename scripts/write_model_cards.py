@@ -259,7 +259,7 @@ tokenization for enhanced chemical language modeling*, Sci. Rep. 14, 25016 (2024
 
 TOKENIZER_REPO = "HauserGroup/ApeTokenizer-SELFIES"
 TOKENIZER_VOCAB_SIZE = 631
-TOKENIZER_MAX_LENGTH = 256
+TOKENIZER_MAX_LENGTH = 128
 TOKENIZER_TRAIN_SIZE = "2M"
 TOKENIZER_STAGING = ROOT / "tmp-hf-tokenizer"
 

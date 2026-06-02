@@ -25,7 +25,7 @@ from huggingface_hub import HfApi
 from modernmolbert.utils import repo_root
 
 
-MODEL_MAX_LENGTH = 256
+MODEL_MAX_LENGTH = 128
 
 # Default collator parameters per masking strategy.
 # mlm_probability and span params match training runs documented in write_model_cards.py.

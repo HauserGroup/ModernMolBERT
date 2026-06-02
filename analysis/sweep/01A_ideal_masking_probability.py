@@ -112,7 +112,7 @@ for mask_prob, grp in df_sweep.groupby("mask_prob"):
         grp["best_eval_loss"],
         marker="o",
         label=f"mask={mask_prob}",
-        color=mask_colors[mask_prob],
+        color=mask_colors[mask_prob],  # type: ignore
     )
 
 ax.set_xlabel("Learning rate")

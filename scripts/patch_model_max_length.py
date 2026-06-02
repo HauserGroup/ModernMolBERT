@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import json
+
+from pathlib import Path
+
+PATHS = [
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_standard/final_model/tokenizer_config.json",
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_standard/final_model/ape_tokenizer/tokenizer_config.json",
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_span/final_model/tokenizer_config.json",
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_span/final_model/ape_tokenizer/tokenizer_config.json",
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_base/final_model/tokenizer_config.json",
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_base/final_model/ape_tokenizer/tokenizer_config.json",
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_hetero_span/tokenizer_config.json",
+    "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_hetero_span/ape_tokenizer/tokenizer_config.json",
+    "tmp-hf-model/tokenizer_config.json",
+    "tmp-hf-model/ape_tokenizer/tokenizer_config.json",
+    "tmp-hf-tokenizer/tokenizer_config.json",
+]
+
+for path_str in PATHS:
+    path = Path(path_str)
+
+    if not path.exists():
+        print(f"missing: {path}")
+
+        continue
+
+    data = json.loads(path.read_text())
+
+    old = data.get("model_max_length")
+
+    data["model_max_length"] = 128
+
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+
+    print(f"patched: {path} model_max_length {old} -> 128")

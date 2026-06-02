@@ -19,7 +19,7 @@ DEFAULT_REPO_ID = "HauserGroup/ApeTokenizer-SELFIES"
 DEFAULT_TMP = Path("./tmp-hf-tokenizer")
 DEFAULT_VOCAB_PATH = Path("tokenizer/chembl36_selfies_2m_ape_max2_min3000.json")
 TOKENIZER_CODE = Path("src/modernmolbert/tokenization_ape.py")
-DEFAULT_MODEL_MAX_LENGTH = 256
+DEFAULT_MODEL_MAX_LENGTH = 128
 
 
 def parse_args() -> argparse.Namespace:

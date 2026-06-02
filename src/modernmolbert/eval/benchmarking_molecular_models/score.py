@@ -1,7 +1,9 @@
 import argparse
 import gc
+import json
 import logging as log
 from dataclasses import dataclass
+from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,9 @@ from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models
 from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.procedure import (
     eval_procedure,
     load_embedded_dataset,
+)
+from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+    get_model_version_hash,
 )
 
 
@@ -120,6 +125,155 @@ def normalize_name(name: str | Path) -> str:
 def safe_file_component(value: str) -> str:
     """Make a conservative filename component."""
     return str(value).replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
+
+
+def _safe_name(value: str) -> str:
+    """Return a path-safe, deterministic checkpoint path component."""
+    return str(value).replace("/", "__").replace("\\", "__").replace(" ", "_")
+
+
+def head_checkpoint_path(
+    checkpoint_dir: Path,
+    dataset: str,
+    embedder: str,
+    head: str,
+) -> Path:
+    """Return path for one dataset/embedder/head checkpoint payload."""
+    return checkpoint_dir / _safe_name(dataset) / _safe_name(embedder) / f"{_safe_name(head)}.json"
+
+
+def write_head_checkpoint(
+    checkpoint_dir: Path,
+    dataset: str,
+    embedder: str,
+    head: str,
+    status: str,
+    version_hash: str | None = None,
+    error: BaseException | None = None,
+    extra: dict[str, Any] | None = None,
+) -> None:
+    """Write head checkpoint with lifecycle status and optional failure metadata."""
+    if status not in {"success", "failed", "disabled"}:
+        raise ValueError(f"Unknown checkpoint status: {status!r}")
+
+    payload: dict[str, Any] = {
+        "dataset": dataset,
+        "embedder": embedder,
+        "head": head,
+        "status": status,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "version_hash": version_hash,
+    }
+
+    if error is not None:
+        payload["error_type"] = type(error).__name__
+        payload["error_message"] = str(error)
+
+    if extra:
+        payload.update(extra)
+
+    path = head_checkpoint_path(checkpoint_dir, dataset, embedder, head)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def read_head_checkpoint(
+    checkpoint_dir: Path,
+    dataset: str,
+    embedder: str,
+    head: str,
+) -> dict[str, Any] | None:
+    """Read a head checkpoint JSON payload, returning None if missing/corrupt."""
+    path = head_checkpoint_path(checkpoint_dir, dataset, embedder, head)
+    if not path.exists():
+        return None
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+    return data if isinstance(data, dict) else None
+
+
+def head_checkpoint_is_success(
+    checkpoint_dir: Path,
+    dataset: str,
+    embedder: str,
+    head: str,
+    version_hash: str | None = None,
+) -> bool:
+    """Return True when checkpoint says this head succeeded for current version."""
+    payload = read_head_checkpoint(checkpoint_dir, dataset, embedder, head)
+    if not payload:
+        return False
+
+    if payload.get("status") != "success":
+        return False
+
+    return not (version_hash is not None and payload.get("version_hash") != version_hash)
+
+
+def head_checkpoint_is_disabled(
+    checkpoint_dir: Path,
+    dataset: str,
+    embedder: str,
+    head: str,
+    version_hash: str | None = None,
+) -> bool:
+    """Return True when checkpoint says this head is explicitly disabled."""
+    payload = read_head_checkpoint(checkpoint_dir, dataset, embedder, head)
+    if not payload:
+        return False
+
+    if payload.get("status") != "disabled":
+        return False
+
+    return not (version_hash is not None and payload.get("version_hash") != version_hash)
+
+
+def dataset_is_complete(
+    checkpoint_dir: Path | None,
+    dataset: str,
+    embedder: str,
+    required_heads: list[str],
+    version_hash: str | None,
+) -> bool:
+    """Return True only when every required head is success or explicitly disabled."""
+    if checkpoint_dir is None:
+        return False
+
+    for head in required_heads:
+        if head_checkpoint_is_success(
+            checkpoint_dir,
+            dataset,
+            embedder,
+            head,
+            version_hash,
+        ):
+            continue
+
+        if head_checkpoint_is_disabled(
+            checkpoint_dir,
+            dataset,
+            embedder,
+            head,
+            version_hash,
+        ):
+            continue
+
+        return False
+
+    return True
+
+
+def get_disabled_reason(dataset_info: Any, head: str) -> str | None:
+    """Return explicit disable reason for dataset/head, otherwise None."""
+    dataset_name = str(getattr(dataset_info, "name", ""))
+    if head == "knn" and "muv" in dataset_name.lower():
+        return "KNN disabled for MUV"
+
+    return None
 
 
 def dataset_checkpoint_path(
@@ -442,8 +596,8 @@ def build_run_plan(
 ) -> tuple[list[DatasetItem], list[SkippedItem]]:
     """Apply all pre-run decisions once.
 
-    This is the only place where requested skips and checkpoint-resume skips are
-    applied. The scoring loop should only iterate over the returned run_items.
+    This is the only place where requested skip rules are applied.
+    Resume is evaluated per-head inside scoring loop.
     """
     run_items: list[DatasetItem] = []
     skipped_items: list[SkippedItem] = []
@@ -451,14 +605,6 @@ def build_run_plan(
     for item in items:
         if should_skip_item(item, skip_set):
             skipped_items.append(SkippedItem(item.name, "requested skip"))
-            continue
-
-        if resume and checkpoint_exists(
-            checkpoint_dir=checkpoint_dir,
-            dataset=item.name,
-            embedder=embedder,
-        ):
-            skipped_items.append(SkippedItem(item.name, "checkpoint exists"))
             continue
 
         run_items.append(item)
@@ -576,15 +722,22 @@ def write_checkpoint_if_successful(
     checkpoint_dir: Path | None,
     dataset: str,
     embedder: str,
-    dataset_success: bool,
+    required_heads: list[str],
+    version_hash: str | None,
 ) -> None:
-    """Write a per-dataset checkpoint if at least one head succeeded."""
+    """Write a dataset-level checkpoint only when all required heads are complete."""
     if checkpoint_dir is None:
         return
 
-    if not dataset_success:
+    if not dataset_is_complete(
+        checkpoint_dir=checkpoint_dir,
+        dataset=dataset,
+        embedder=embedder,
+        required_heads=required_heads,
+        version_hash=version_hash,
+    ):
         print(
-            f"[score] {dataset}: no successful heads; not writing checkpoint",
+            f"[score] {dataset}: required heads incomplete; not writing dataset checkpoint",
             flush=True,
         )
         return
@@ -669,7 +822,10 @@ def parse_args() -> argparse.Namespace:
         "--resume",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Skip dataset/embedder combinations with existing checkpoint CSVs.",
+        help=(
+            "Skip only dataset/embedder/head checkpoints that already succeeded "
+            "for current version hash."
+        ),
     )
 
     parser.add_argument(
@@ -798,6 +954,7 @@ def main() -> int:
     for idx, item in enumerate(run_items, start=1):
         attempted += 1
         dataset_success = False
+        model_version_hash = get_model_version_hash()
 
         embedded_data = load_embedded_dataset(
             embedded_dir=embed_config.embedded_directory,
@@ -822,24 +979,105 @@ def main() -> int:
             )
 
         for model_head in args.heads:
+            disabled_reason = get_disabled_reason(item.info, model_head)
+            if disabled_reason is not None:
+                if (
+                    args.checkpoint_dir is not None
+                    and args.resume
+                    and head_checkpoint_is_disabled(
+                        args.checkpoint_dir,
+                        item.name,
+                        scoring_model_name,
+                        model_head,
+                        model_version_hash,
+                    )
+                ):
+                    print(
+                        f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}  skip=disabled-checkpoint",
+                        flush=True,
+                    )
+                    continue
+
+                if args.checkpoint_dir is not None:
+                    write_head_checkpoint(
+                        checkpoint_dir=args.checkpoint_dir,
+                        dataset=item.name,
+                        embedder=scoring_model_name,
+                        head=model_head,
+                        status="disabled",
+                        version_hash=model_version_hash,
+                        extra={"reason": disabled_reason},
+                    )
+
+                print(
+                    f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}  skip=disabled ({disabled_reason})",
+                    flush=True,
+                )
+                continue
+
+            if (
+                args.checkpoint_dir is not None
+                and args.resume
+                and head_checkpoint_is_success(
+                    args.checkpoint_dir,
+                    item.name,
+                    scoring_model_name,
+                    model_head,
+                    model_version_hash,
+                )
+            ):
+                print(
+                    f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}  skip=checkpoint-success",
+                    flush=True,
+                )
+                continue
+
             print(
                 f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}",
                 flush=True,
             )
 
-            success = run_eval(
-                safe=safe,
-                embed_config=embed_config,
-                full_model_name=model_name,
-                short_model_name=scoring_model_name,
-                dataset_info=item.info,
-                model_head=model_head,
-                output_csv=args.output_csv,
-                override=override,
-                preloaded=embedded_data,
-            )
+            error: BaseException | None = None
+            try:
+                success = run_eval(
+                    safe=safe,
+                    embed_config=embed_config,
+                    full_model_name=model_name,
+                    short_model_name=scoring_model_name,
+                    dataset_info=item.info,
+                    model_head=model_head,
+                    output_csv=args.output_csv,
+                    override=override,
+                    preloaded=embedded_data,
+                )
+            except Exception as exc:
+                success = False
+                error = exc
+
+            if success and args.checkpoint_dir is not None:
+                write_head_checkpoint(
+                    checkpoint_dir=args.checkpoint_dir,
+                    dataset=item.name,
+                    embedder=scoring_model_name,
+                    head=model_head,
+                    status="success",
+                    version_hash=model_version_hash,
+                )
+
             if success is False:
                 failures.append(f"{item.name}/{model_head}: evaluation failed")
+                if args.checkpoint_dir is not None:
+                    write_head_checkpoint(
+                        checkpoint_dir=args.checkpoint_dir,
+                        dataset=item.name,
+                        embedder=scoring_model_name,
+                        head=model_head,
+                        status="failed",
+                        version_hash=model_version_hash,
+                        error=error,
+                    )
+                if error is not None and not safe:
+                    raise error
             else:
                 dataset_success = True
 
@@ -851,7 +1089,8 @@ def main() -> int:
             checkpoint_dir=args.checkpoint_dir,
             dataset=item.name,
             embedder=scoring_model_name,
-            dataset_success=dataset_success,
+            required_heads=list(args.heads),
+            version_hash=model_version_hash,
         )
 
         if dataset_success:

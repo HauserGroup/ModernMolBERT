@@ -17,8 +17,9 @@ ogbg-moltoxcast is excluded: it has ModernMolBERT results but no Praski
 baselines, so it is outside the official 25-task benchmark.
 """
 
-from __future__ import annotations
 from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from scipy.stats import wilcoxon
@@ -93,13 +94,13 @@ missing = {m: matrix.index[matrix[m].isna()].tolist() for m in MODELS if matrix[
 group_order = ["TDC-ADME", "TDC-Tox", "TDC-HTS", "MoleculeNet"]
 rows = []
 for label in MODELS:
-    rec = {"model": label}
+    rec: dict[str, Any] = {"model": label}
     for g in group_order:
         sub = matrix.loc[matrix["group"] == g, label]
-        rec[g] = sub.mean()
-        rec[g + "_n"] = sub.notna().sum()
-    rec["Overall"] = matrix[label].mean()
-    rec["Overall_n"] = matrix[label].notna().sum()
+        rec[g] = float(sub.mean())
+        rec[g + "_n"] = int(sub.notna().sum())
+    rec["Overall"] = float(matrix[label].mean())
+    rec["Overall_n"] = int(matrix[label].notna().sum())
     rows.append(rec)
 gm = pd.DataFrame(rows).set_index("model")
 gm.to_csv(OUT / "group_means.csv")
@@ -118,8 +119,16 @@ cols = group_order + ["Overall"]
 best = {c: gm.loc[table_models, c].max() for c in cols}
 
 
+def scalar_float(value: object) -> float:
+    return float(np.asarray(pd.to_numeric([value], errors="raise"), dtype=np.float64)[0])
+
+
+def scalar_int(value: object) -> int:
+    return int(np.asarray(pd.to_numeric([value], errors="raise"), dtype=np.int64)[0])
+
+
 def fmt(label, c):
-    v = gm.loc[label, c]
+    v = scalar_float(gm.loc[label, c])
     if pd.isna(v):
         return "--"
     s = f"{v * 100:.1f}"
@@ -167,11 +176,9 @@ lines += [
 # ---- Stats: Wilcoxon best-MMB vs ECFP4 and vs SELFormer; ECFP4 counts ----
 def headline():
     # headline = best overall among the two released models
-    return (
-        "MMB-base"
-        if gm.loc["MMB-base", "Overall"] >= gm.loc["MMB-small", "Overall"]
-        else "MMB-small"
-    )
+    base_overall = scalar_float(gm.loc["MMB-base", "Overall"])
+    small_overall = scalar_float(gm.loc["MMB-small", "Overall"])
+    return "MMB-base" if base_overall >= small_overall else "MMB-small"
 
 
 out = []
@@ -179,9 +186,9 @@ hl = headline()
 out.append(f"Headline released model (higher overall): {hl}\n")
 out.append("Overall mean ROC-AUC (x100), n tasks:\n")
 for label in MODELS:
-    out.append(
-        f"  {label:18s} {gm.loc[label, 'Overall'] * 100:5.1f}  (n={int(gm.loc[label, 'Overall_n'])})\n"
-    )
+    overall = scalar_float(gm.loc[label, "Overall"])
+    overall_n = scalar_int(gm.loc[label, "Overall_n"])
+    out.append(f"  {label:18s} {overall * 100:5.1f}  (n={overall_n})\n")
 out.append("\nGroup means (x100):\n")
 out.append(gm[[*group_order, "Overall"]].mul(100).round(1).to_string() + "\n")
 
@@ -189,7 +196,11 @@ out.append(gm[[*group_order, "Overall"]].mul(100).round(1).to_string() + "\n")
 # paired comparisons on common tasks
 def paired(a, b):
     s = matrix[[a, b]].dropna()
-    return s[a].values, s[b].values, s.index.tolist()
+    return (
+        np.asarray(s[a].to_numpy(), dtype=np.float64),
+        np.asarray(s[b].to_numpy(), dtype=np.float64),
+        s.index.tolist(),
+    )
 
 
 for comp in ["ECFP4", "SELFormer"]:

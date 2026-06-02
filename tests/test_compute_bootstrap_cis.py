@@ -15,6 +15,7 @@ import pytest
 from compute_bootstrap_cis import (
     build_cis,
     comparison_row,
+    emit_ci_forest_plot,
     emit_latex,
     paired_bootstrap,
     run_comparisons,
@@ -229,6 +230,17 @@ def test_emit_latex_ci_values_present(tmp_path: Path):
     assert "3.5" in content
 
 
+# ── emit_ci_forest_plot ──────────────────────────────────────────────────────
+
+
+def test_emit_ci_forest_plot_creates_pdf_and_png(tmp_path: Path):
+    emit_ci_forest_plot(_make_ci_df(), tmp_path)
+    pdf = tmp_path / "bootstrap_ci_forest.pdf"
+    png = tmp_path / "bootstrap_ci_forest.png"
+    assert pdf.exists() and pdf.stat().st_size > 0
+    assert png.exists() and png.stat().st_size > 0
+
+
 # ── integration: build_cis ────────────────────────────────────────────────────
 
 
@@ -238,9 +250,18 @@ def test_build_cis_end_to_end(tmp_path: Path):
     matrix.to_csv(matrix_path)
     out_dir = tmp_path / "out"
     comps = [("MMB-base", "SELFormer"), ("MMB-base", "ECFP4")]
-    df = build_cis(matrix_path, out_dir, n_boot=200, seed=0, comparisons=comps)
+    df = build_cis(
+        matrix_path,
+        out_dir,
+        n_boot=200,
+        seed=0,
+        comparisons=comps,
+        figure_dir=out_dir / "figures",
+    )
     assert (out_dir / "bootstrap_cis.csv").exists()
     assert (out_dir / "table_bootstrap.tex").exists()
+    assert (out_dir / "figures" / "bootstrap_ci_forest.pdf").exists()
+    assert (out_dir / "figures" / "bootstrap_ci_forest.png").exists()
     assert len(df) == 2
     # SELFormer comparison: all tasks won, CI should be positive
     sel_row = df[df["model_b"] == "SELFormer"].iloc[0]

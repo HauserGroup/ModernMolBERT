@@ -53,10 +53,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,6 +69,11 @@ EMBED_PATH = ROOT / "outputs/visualize/best_span_100k/embeddings.npy"
 META_PATH = ROOT / "outputs/visualize/best_span_100k/metadata.parquet"
 TRAIN_PARQUET = ROOT / "data/pretrain/chembl36_selfies/train.parquet"
 OUT_DIR = ROOT / "outputs/eval/paper"
+FIGURE_DIR = OUT_DIR / "figures"
+
+BREWER_BLUES = ["#EFF3FF", "#BDD7E7", "#6BAED6", "#3182BD", "#08519C"]
+TEXT_COLOR = "#2B2B2B"
+GRID_COLOR = "#D9D9D9"
 
 DESCRIPTORS: list[tuple[str, str]] = [
     ("alogp", "AlogP (lipophilicity)"),
@@ -98,7 +108,6 @@ def load_embeddings_and_descriptors(
     meta = pd.read_parquet(meta_path, columns=["chembl_id", "embedding_row"])
 
     # Join with training parquet to get all descriptor columns
-    # desc_needed = [c for c in descriptor_cols if c != "alogp"]  unused for now
     train_cols = ["chembl_id"] + descriptor_cols
     train_df = pd.read_parquet(train_parquet, columns=train_cols)
 
@@ -181,6 +190,84 @@ def emit_latex(df: pd.DataFrame, out_path: Path) -> None:
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _apply_paper_style() -> None:
+    plt.rcParams.update(
+        {
+            "font.family": "DejaVu Sans",
+            "font.size": 9,
+            "axes.labelsize": 9,
+            "axes.titlesize": 10,
+            "axes.titleweight": "semibold",
+            "xtick.labelsize": 8.5,
+            "ytick.labelsize": 9,
+            "axes.edgecolor": TEXT_COLOR,
+            "axes.labelcolor": TEXT_COLOR,
+            "xtick.color": TEXT_COLOR,
+            "ytick.color": TEXT_COLOR,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
+
+
+def emit_property_r2_plot(df: pd.DataFrame, out_dir: Path) -> None:
+    """Write a horizontal bar plot of descriptor prediction R2 values."""
+    _apply_paper_style()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    plot_df = df.sort_values("r2", ascending=True).reset_index(drop=True)
+    y = np.arange(len(plot_df))
+
+    fig_height = max(3.2, 0.38 * len(plot_df) + 1.0)
+    fig, ax = plt.subplots(figsize=(6.4, fig_height), constrained_layout=True)
+    cmap = LinearSegmentedColormap.from_list("brewer_blues", BREWER_BLUES)
+    r2_span = float(plot_df["r2"].max() - plot_df["r2"].min()) if len(plot_df) else 0.0
+    if len(plot_df) > 1 and r2_span > 0:
+        norm = (plot_df["r2"] - plot_df["r2"].min()) / (plot_df["r2"].max() - plot_df["r2"].min())
+    else:
+        norm = pd.Series([0.7] * len(plot_df), index=plot_df.index)
+    colors = [cmap(0.35 + 0.55 * value) for value in norm]
+    for i in y:
+        if i % 2 == 0:
+            ax.axhspan(i - 0.5, i + 0.5, color="#F7F7F7", zorder=0)
+    bars = ax.barh(y, plot_df["r2"], color=colors, edgecolor="white", linewidth=0.7, zorder=3)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(plot_df["label"].tolist())
+    ax.set_xlabel(r"Test $R^2$")
+    ax.set_title("Linear predictability of ChEMBL descriptors from frozen embeddings")
+    ax.grid(axis="x", color=GRID_COLOR, lw=0.7)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.axvline(0, color="#525252", lw=0.8)
+
+    max_r2 = max(float(plot_df["r2"].max()), 0.0)
+    min_r2 = min(float(plot_df["r2"].min()), 0.0)
+    label_pad = max(0.02, (max_r2 - min_r2) * 0.03)
+    for bar, value in zip(bars, plot_df["r2"], strict=False):
+        value = float(value)
+        if value >= 0:
+            x = value + label_pad
+            ha = "left"
+        else:
+            x = value - label_pad
+            ha = "right"
+        ax.text(
+            x,
+            bar.get_y() + bar.get_height() / 2,
+            f"{value:.2f}",
+            va="center",
+            ha=ha,
+            fontsize=8,
+            color=TEXT_COLOR,
+        )
+
+    ax.set_xlim(min(min_r2 - 0.08, 0.0), max_r2 + 0.12)
+    fig.savefig(out_dir / "property_r2_bars.pdf", bbox_inches="tight")
+    fig.savefig(out_dir / "property_r2_bars.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 
@@ -193,6 +280,8 @@ def build_regression(
     test_size: float = 0.2,
     alpha: float = 1.0,
     random_state: int = 42,
+    make_figures: bool = True,
+    figure_dir: Path = FIGURE_DIR,
 ) -> pd.DataFrame:
     """Full pipeline: load → regress → save CSV and LaTeX."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -209,6 +298,8 @@ def build_regression(
 
     df.to_csv(out_dir / "embedding_property_r2.csv", index=False)
     emit_latex(df, out_dir / "table_property_r2.tex")
+    if make_figures:
+        emit_property_r2_plot(df, figure_dir)
 
     print(df.to_string(index=False))
     print(f"\nWrote outputs to {out_dir}")
@@ -216,7 +307,9 @@ def build_regression(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1].strip())
+    parser = argparse.ArgumentParser(
+        description="Compute Ridge regression R² from frozen embeddings to ChEMBL descriptors."
+    )
     parser.add_argument("--embed", type=Path, default=EMBED_PATH)
     parser.add_argument("--meta", type=Path, default=META_PATH)
     parser.add_argument("--train_parquet", type=Path, default=TRAIN_PARQUET)
@@ -224,6 +317,8 @@ def main() -> None:
     parser.add_argument("--test_size", type=float, default=0.2)
     parser.add_argument("--alpha", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--figure_dir", type=Path, default=FIGURE_DIR)
+    parser.add_argument("--no_figures", action="store_true")
     args = parser.parse_args()
     build_regression(
         args.embed,
@@ -233,6 +328,8 @@ def main() -> None:
         test_size=args.test_size,
         alpha=args.alpha,
         random_state=args.seed,
+        make_figures=not args.no_figures,
+        figure_dir=args.figure_dir,
     )
 
 

@@ -46,12 +46,26 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import pandas as pd
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 ROOT = Path(__file__).resolve().parents[1]
 MATRIX_PATH = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
 OUT_DIR = ROOT / "outputs/eval/paper"
+FIGURE_DIR = OUT_DIR / "figures"
+
+BREWER_DARK2 = {
+    "mmb": "#1B9E77",
+    "baseline": "#D95F02",
+    "overlap": "#7570B3",
+}
+TEXT_COLOR = "#2B2B2B"
+GRID_COLOR = "#D9D9D9"
 
 # Comparisons: (model_a, model_b) — CI is for mean(a − b).
 COMPARISONS: list[tuple[str, str]] = [
@@ -188,6 +202,123 @@ def emit_latex(df: pd.DataFrame, out_path: Path) -> None:
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _ci_color(row: pd.Series) -> str:
+    if row["ci_low_95"] > 0:
+        return BREWER_DARK2["mmb"]
+    if row["ci_high_95"] < 0:
+        return BREWER_DARK2["baseline"]
+    return BREWER_DARK2["overlap"]
+
+
+def _apply_paper_style() -> None:
+    plt.rcParams.update(
+        {
+            "font.family": "DejaVu Sans",
+            "font.size": 9,
+            "axes.labelsize": 9,
+            "axes.titlesize": 10,
+            "axes.titleweight": "semibold",
+            "xtick.labelsize": 8.5,
+            "ytick.labelsize": 9,
+            "legend.fontsize": 8,
+            "axes.edgecolor": TEXT_COLOR,
+            "axes.labelcolor": TEXT_COLOR,
+            "xtick.color": TEXT_COLOR,
+            "ytick.color": TEXT_COLOR,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
+
+
+def emit_ci_forest_plot(df: pd.DataFrame, out_dir: Path) -> None:
+    """Write a horizontal forest plot of mean delta ROC-AUC with 95% CIs."""
+    _apply_paper_style()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    plot_df = df.copy().iloc[::-1].reset_index(drop=True)
+    y = np.arange(len(plot_df))
+
+    x_min = min(float(plot_df["ci_low_95"].min()), 0.0) - 1.0
+    x_max = max(float(plot_df["ci_high_95"].max()), 0.0) + 3.0
+    annotation_x = x_max - 0.25
+
+    fig, ax = plt.subplots(figsize=(6.7, 3.1), constrained_layout=True)
+    for i in y:
+        if i % 2 == 0:
+            ax.axhspan(i - 0.5, i + 0.5, color="#F7F7F7", zorder=0)
+    ax.axvline(0, color="#525252", lw=1.0, ls=(0, (4, 3)), zorder=1)
+
+    ax.set_xlim(x_min, x_max)
+    for i, (_, row) in enumerate(plot_df.iterrows()):
+        yi = float(i)
+        mean = float(row["mean_delta_roc_auc"])
+        lo = float(row["ci_low_95"])
+        hi = float(row["ci_high_95"])
+        color = _ci_color(row)
+        ax.errorbar(
+            mean,
+            yi,
+            xerr=[[mean - lo], [hi - mean]],
+            fmt="o",
+            color=color,
+            ecolor=color,
+            elinewidth=2.0,
+            capsize=3.5,
+            capthick=1.2,
+            markersize=5.5,
+            markeredgecolor="white",
+            markeredgewidth=0.7,
+            zorder=3,
+        )
+        ax.text(
+            annotation_x,
+            yi,
+            f"{int(row['wins'])} − {int(row['losses'])}",
+            va="center",
+            ha="right",
+            fontsize=8,
+            color=TEXT_COLOR,
+        )
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(plot_df["model_b"].tolist())
+    ax.set_xlabel(r"Mean $\Delta$ ROC-AUC (MMB-base - baseline, x100)")
+    ax.set_ylabel("Baseline embedder")
+    ax.set_title("Paired bootstrap confidence intervals")
+    ax.grid(axis="x", color=GRID_COLOR, lw=0.7)
+    ax.set_axisbelow(True)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.text(
+        annotation_x,
+        len(plot_df) - 0.18,
+        "wins-losses / n",
+        ha="right",
+        va="bottom",
+        fontsize=7.5,
+        color="#525252",
+    )
+    handles = [
+        Line2D([0], [0], marker="o", color=BREWER_DARK2["mmb"], lw=2, label="MMB-base advantage"),
+        Line2D(
+            [0],
+            [0],
+            marker="o",
+            color=BREWER_DARK2["baseline"],
+            lw=2,
+            label="Baseline advantage",
+        ),
+        Line2D([0], [0], marker="o", color=BREWER_DARK2["overlap"], lw=2, label="CI crosses 0"),
+    ]
+    ax.legend(
+        handles=handles, frameon=False, ncol=3, loc="lower center", bbox_to_anchor=(0.5, -0.34)
+    )
+
+    fig.savefig(out_dir / "bootstrap_ci_forest.pdf", bbox_inches="tight")
+    fig.savefig(out_dir / "bootstrap_ci_forest.png", bbox_inches="tight", dpi=300)
+    plt.close(fig)
+
+
 # ── main ────────────────────────────────────────────────────────────────────
 
 
@@ -197,6 +328,8 @@ def build_cis(
     n_boot: int = 10_000,
     seed: int = 42,
     comparisons: list[tuple[str, str]] = COMPARISONS,
+    make_figures: bool = True,
+    figure_dir: Path = FIGURE_DIR,
 ) -> pd.DataFrame:
     """Full pipeline: load matrix → bootstrap → save CSV and LaTeX."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -206,6 +339,8 @@ def build_cis(
 
     df.to_csv(out_dir / "bootstrap_cis.csv", index=False)
     emit_latex(df, out_dir / "table_bootstrap.tex")
+    if make_figures:
+        emit_ci_forest_plot(df, figure_dir)
 
     print(df.to_string(index=False))
     print(f"\nWrote outputs to {out_dir}")
@@ -213,13 +348,24 @@ def build_cis(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[1].strip())
+    parser = argparse.ArgumentParser(
+        description="Compute paired-bootstrap confidence intervals for benchmark ROC-AUC deltas.",
+    )
     parser.add_argument("--n_boot", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--matrix", type=Path, default=MATRIX_PATH)
     parser.add_argument("--out_dir", type=Path, default=OUT_DIR)
+    parser.add_argument("--figure_dir", type=Path, default=FIGURE_DIR)
+    parser.add_argument("--no_figures", action="store_true")
     args = parser.parse_args()
-    build_cis(args.matrix, args.out_dir, args.n_boot, args.seed)
+    build_cis(
+        args.matrix,
+        args.out_dir,
+        args.n_boot,
+        args.seed,
+        make_figures=not args.no_figures,
+        figure_dir=args.figure_dir,
+    )
 
 
 if __name__ == "__main__":

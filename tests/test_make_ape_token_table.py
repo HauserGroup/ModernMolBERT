@@ -12,6 +12,7 @@ import pandas as pd
 from make_ape_token_table import (
     build_table,
     count_primitives,
+    emit_ape_token_frequency_plot,
     count_token_frequencies,
     emit_latex,
     load_merged_tokens,
@@ -224,6 +225,17 @@ def test_emit_latex_uses_provided_annotations(tmp_path: Path):
     assert r"\emph{(to annotate)}" not in content
 
 
+# ── emit_ape_token_frequency_plot ────────────────────────────────────────────
+
+
+def test_emit_ape_token_frequency_plot_creates_pdf_and_png(tmp_path: Path):
+    emit_ape_token_frequency_plot(_make_freq_df(), tmp_path, top=3)
+    pdf = tmp_path / "ape_token_frequency_top20.pdf"
+    png = tmp_path / "ape_token_frequency_top20.png"
+    assert pdf.exists() and pdf.stat().st_size > 0
+    assert png.exists() and png.stat().st_size > 0
+
+
 # ── integration: build_table (no real files) ────────────────────────────────
 
 
@@ -236,10 +248,19 @@ def test_build_table_end_to_end(tmp_path: Path):
     _tiny_selfies().to_frame(name="selfies").to_parquet(parquet_file, index=False)
 
     out_dir = tmp_path / "out"
-    df = build_table(vocab_path=vocab_file, parquet_path=parquet_file, out_dir=out_dir, top=3)
+    df = build_table(
+        vocab_path=vocab_file,
+        parquet_path=parquet_file,
+        out_dir=out_dir,
+        top=3,
+        figure_dir=out_dir / "figures",
+        figure_top=3,
+    )
 
     assert (out_dir / "ape_token_freq.csv").exists()
     assert (out_dir / "table_ape_tokens.tex").exists()
+    assert (out_dir / "figures" / "ape_token_frequency_top20.pdf").exists()
+    assert (out_dir / "figures" / "ape_token_frequency_top20.png").exists()
     # DataFrame has all merged tokens
     assert len(df) == 4
     # Sorted descending

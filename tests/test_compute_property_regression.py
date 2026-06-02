@@ -11,6 +11,7 @@ import pandas as pd
 from compute_property_regression import (
     build_regression,
     emit_latex,
+    emit_property_r2_plot,
     fit_ridge_r2,
     load_embeddings_and_descriptors,
     run_regression,
@@ -265,6 +266,17 @@ def test_emit_latex_descriptor_labels_present(tmp_path: Path):
     assert "Heavy atom count" in content
 
 
+# ── emit_property_r2_plot ────────────────────────────────────────────────────
+
+
+def test_emit_property_r2_plot_creates_pdf_and_png(tmp_path: Path):
+    emit_property_r2_plot(_r2_df(), tmp_path)
+    pdf = tmp_path / "property_r2_bars.pdf"
+    png = tmp_path / "property_r2_bars.png"
+    assert pdf.exists() and pdf.stat().st_size > 0
+    assert png.exists() and png.stat().st_size > 0
+
+
 # ── integration: build_regression ────────────────────────────────────────────
 
 
@@ -283,8 +295,11 @@ def test_build_regression_end_to_end(tmp_path: Path):
         test_size=0.2,
         alpha=1.0,
         random_state=SEED,
+        figure_dir=out_dir / "figures",
     )
     assert (out_dir / "embedding_property_r2.csv").exists()
     assert (out_dir / "table_property_r2.tex").exists()
+    assert (out_dir / "figures" / "property_r2_bars.pdf").exists()
+    assert (out_dir / "figures" / "property_r2_bars.png").exists()
     assert len(df) == 2
     assert "r2" in df.columns

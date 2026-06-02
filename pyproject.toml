@@ -137,5 +137,6 @@ venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
 ignore = ["notebooks", "scratch"]
+extraPaths = ["src", "scripts"]
 reportMissingImports = true
 reportMissingTypeStubs = false

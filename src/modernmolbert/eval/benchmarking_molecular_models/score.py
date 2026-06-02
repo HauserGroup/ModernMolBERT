@@ -727,7 +727,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
+def main() -> int:
     log.basicConfig(level=log.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
     args = parse_args()
@@ -792,6 +792,7 @@ def main() -> None:
     attempted = 0
     successful_datasets = 0
     failed_datasets = 0
+    failures: list[str] = []
 
     for idx, item in enumerate(run_items, start=1):
         attempted += 1
@@ -809,6 +810,7 @@ def main() -> None:
                 short_model_name,
             )
             failed_datasets += 1
+            failures.append(f"{item.name}: missing embedding")
             continue
 
         if subsample_config is not None:
@@ -835,7 +837,10 @@ def main() -> None:
                 override=override,
                 preloaded=embedded_data,
             )
-            dataset_success = dataset_success or success
+            if success is False:
+                failures.append(f"{item.name}/{model_head}: evaluation failed")
+            else:
+                dataset_success = True
 
         del embedded_data
         gc.collect()
@@ -865,7 +870,16 @@ def main() -> None:
         flush=True,
     )
 
+    if failures:
+        print("[score] failures:", flush=True)
+        for failure in failures:
+            print(f"  - {failure}", flush=True)
+
+    return len(failures)
+
 
 if __name__ == "__main__":
-    main()
+    failures = main()
+    if failures:
+        raise SystemExit(1)
     print("All done", flush=True)

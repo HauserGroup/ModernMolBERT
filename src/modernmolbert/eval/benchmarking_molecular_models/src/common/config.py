@@ -23,6 +23,16 @@ def as_config(value: Any) -> Any:
     return value
 
 
+def as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
 def load_yaml_config(path: str | Path) -> Config:
     with Path(path).open() as f:
         return as_config(yaml.safe_load(f) or {})
@@ -54,13 +64,13 @@ def _strip_task_prefix(name: str) -> str:
     return name
 
 
-def expand_dataset_selection(config_dir: str | Path, selections: list[str]) -> list[str]:
+def expand_dataset_selection(config_dir: str | Path, selections: list[str] | str) -> list[str]:
     registry = load_dataset_registry(config_dir)
     available = sorted(registry.keys())
     by_bare_name = {_strip_task_prefix(k): k for k in available}
     selected: list[str] = []
 
-    for selection in selections:
+    for selection in as_list(selections):
         if selection == "all":
             selected.extend(available)
         elif any(ch in selection for ch in "*?[]"):

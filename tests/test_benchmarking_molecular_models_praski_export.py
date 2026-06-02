@@ -77,6 +77,11 @@ def test_csv_result_store_appends_counts_and_deletes_rows(tmp_path) -> None:
         "model": "rf",
         "hyperparams": '{"clf__n_estimators": 500}',
         "library_hash": "abc123",
+        "pooling": "mean",
+        "pooling_special_tokens_excluded": True,
+        "embedding_model_dir": "runs/model/final_model",
+        "embedding_tokenizer_path": "runs/model/final_model",
+        "embedding_max_seq_length": 256,
         "cv_metric_name": "roc_auc",
         "cv_metric": 0.75,
         "test_metric_name": "roc_auc",
@@ -89,6 +94,9 @@ def test_csv_result_store_appends_counts_and_deletes_rows(tmp_path) -> None:
     assert output_csv.exists()
     assert frame.loc[0, "id"] == 1
     assert frame.loc[0, "key"] == "bbbp_modernmolbert_rf"
+    assert frame.loc[0, "pooling"] == "mean"
+    assert bool(frame.loc[0, "pooling_special_tokens_excluded"]) is True
+    assert frame.loc[0, "embedding_max_seq_length"] == 256
     assert (
         count_result_rows(
             output_csv,

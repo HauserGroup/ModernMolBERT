@@ -150,6 +150,7 @@ class ModernMolBERTSelfiesFeaturizer:
             "model_dir": str(self.model_dir),
             "tokenizer_path": str(self.tokenizer_path),
             "pooling": self.pooling,
+            "pooling_special_tokens_excluded": self.pooling == "mean",
             "max_seq_length": self.max_seq_length,
             "device": str(self._device),
             "hidden_size": int(getattr(self.model.config, "hidden_size", 0)),

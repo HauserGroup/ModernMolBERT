@@ -59,6 +59,7 @@ def expand_to_nan_matrix(X_valid: np.ndarray, valid_mask: np.ndarray, n_inputs: 
 def embed_dataset(dataset: Dataset, *, featurizer: Any, embedder_name: str, batch_size: int):
     smiles = dataset.data["smiles"].astype(str).tolist()
     feature_batch = featurizer.featurize_smiles(smiles, batch_size=batch_size)
+    metadata = dict(feature_batch.metadata)
 
     # Expand to full matrix then immediately free the compact batch
     X = expand_to_nan_matrix(feature_batch.X, feature_batch.valid_mask, n_inputs=len(smiles))
@@ -72,6 +73,7 @@ def embed_dataset(dataset: Dataset, *, featurizer: Any, embedder_name: str, batc
         splits=dataset.splits,
         X=X,
         y=dataset.labels.copy(),
+        metadata=metadata,
     )
     embedded.remove_failed_embeddings()
     return embedded

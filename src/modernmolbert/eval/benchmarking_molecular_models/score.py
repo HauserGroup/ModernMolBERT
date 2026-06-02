@@ -375,6 +375,7 @@ def subsample_embedded_dataset(
         splits=remapped_splits,
         X=dataset.X[selected],
         y=y,
+        metadata=dict(dataset.metadata),
     )
 
     log.info(

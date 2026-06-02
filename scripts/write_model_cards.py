@@ -182,8 +182,8 @@ If you start from SMILES, convert it to SELFIES first (e.g. the
 
 ### Frozen molecular embedding (intended use)
 
-Use the model as a frozen embedder by taking the first-token (`<s>` / `[CLS]`)
-hidden state as a fixed molecular vector:
+Use the model as a molecular embedder by mean-pooling the final hidden states
+over non-special SELFIES tokens:
 
 ```python
 import torch
@@ -198,7 +198,22 @@ tokenizer = AutoTokenizer.from_pretrained(
 selfies = "{example_selfies}"
 inputs = tokenizer(selfies, return_tensors="pt")
 with torch.no_grad():
-    embedding = encoder(**inputs).last_hidden_state[:, 0]   # first-token vector
+    hidden = encoder(**inputs).last_hidden_state
+    content_mask = inputs["attention_mask"].bool()
+    for token_id in [
+        tokenizer.bos_token_id,
+        tokenizer.eos_token_id,
+        tokenizer.pad_token_id,
+        tokenizer.unk_token_id,
+        tokenizer.mask_token_id,
+    ]:
+        if token_id is not None:
+            content_mask = content_mask & inputs["input_ids"].ne(token_id)
+    empty_rows = content_mask.sum(dim=1).eq(0)
+    if empty_rows.any():
+        content_mask[empty_rows] = inputs["attention_mask"].bool()[empty_rows]
+    mask = content_mask.unsqueeze(-1).to(hidden.dtype)
+    embedding = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
 
 print(embedding.shape)
 # torch.Size([1, {v["hidden"]}])   # (batch, hidden_size)

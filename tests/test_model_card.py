@@ -90,7 +90,10 @@ def test_build_readme_structure_and_quickstart(tmp_path: Path) -> None:
     assert "tokens = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])" in card
     assert "embedding_preview = [round(x, 4) for x in embedding[0, :5].tolist()]" in card
     assert 'print(f"Tokens:\\n{tokens}\\n")' in card
-    assert "embedding = outputs.last_hidden_state[:, 0]" in card
+    assert "hidden = outputs.last_hidden_state" in card
+    assert "content_mask = inputs['attention_mask'].bool()" in card
+    assert "tokenizer.bos_token_id" in card
+    assert "embedding = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)" in card
     assert 'print(f"Embedding shape: {tuple(embedding.shape)}")' in card
     assert 'print(f"Embedding first 5 values:\\n{embedding_preview}")' in card
     assert 'print(f"Logits shape: {tuple(logits.shape)}")' in card
@@ -98,8 +101,9 @@ def test_build_readme_structure_and_quickstart(tmp_path: Path) -> None:
     assert "Embedding first 5 values:" in card
     assert "Logits shape: (1, sequence_length, 631)" in card
 
-    # Embedding example uses the [CLS]/first-token state.
-    assert "last_hidden_state[:, 0]" in card
+    # Embedding example uses mean pooling over non-special SELFIES tokens.
+    assert "last_hidden_state[:, 0]" not in card
+    assert "mean-pool the final hidden states over non-special SELFIES tokens" in card
 
     # No evaluation metrics anywhere on the card
     assert "best_eval_loss" not in card

@@ -3,8 +3,8 @@
 compute_property_regression.py
 ===============================
 
-Quantify how well frozen ModernMolBERT-small (span masking) CLS embeddings
-predict nine ChEMBL physicochemical descriptors via Ridge regression.
+Quantify how well mean-pooled ModernMolBERT-small (span masking) token
+embeddings predict nine ChEMBL physicochemical descriptors via Ridge regression.
 
 Overview
 --------
@@ -23,7 +23,7 @@ used.
 
 Method
 ------
-1. Load 100 000 frozen CLS embeddings (512-dim, float32).
+1. Load 100 000 mean-pooled token embeddings (512-dim, float32).
 2. Join metadata with ``data/pretrain/chembl36_selfies/train.parquet`` to
    obtain all nine descriptor columns.
 3. Drop rows with missing descriptor values.
@@ -96,7 +96,7 @@ def load_embeddings_and_descriptors(
     train_parquet: Path,
     descriptor_cols: list[str],
 ) -> tuple[np.ndarray, pd.DataFrame]:
-    """Return (X, desc_df) where X[i] is the CLS embedding for row i of desc_df.
+    """Return (X, desc_df) where X[i] is the embedding for row i of desc_df.
 
     Rows with any missing descriptor value are dropped; the returned arrays are
     aligned (same row order).
@@ -177,7 +177,7 @@ def emit_latex(df: pd.DataFrame, out_path: Path) -> None:
         r"  \end{tabular}",
         r"  \caption{%",
         r"    Ridge regression test $R^2$ from frozen \model{}-small (span masking)",
-        r"    CLS embeddings to nine ChEMBL physicochemical descriptors, evaluated on",
+        r"    mean-pooled token embeddings to nine ChEMBL physicochemical descriptors, evaluated on",
         r"    a held-out 20\,\% split of 100\,000 ChEMBL~36 molecules.",
         r"    $\alpha = 1.0$; random state 42.",
         r"    A higher $R^2$ indicates that the embedding space encodes the corresponding",

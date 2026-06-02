@@ -554,6 +554,40 @@ def test_score_writes_dataset_checkpoint(monkeypatch, tmp_path) -> None:
     assert checkpoint.loc[0, "embedder"] == "fake_embedder"
 
 
+def test_embed_dataset_preserves_pooling_metadata() -> None:
+    dataset = Dataset(
+        name="tiny",
+        task="classification",
+        data=pd.DataFrame({"smiles": ["C", "CC"], "label": [0, 1]}),
+        splits={"train": [0], "valid": [], "test": [1]},
+    )
+
+    class FakeFeaturizer:
+        def featurize_smiles(self, smiles, batch_size):
+            return FeatureBatch(
+                X=np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
+                valid_mask=np.array([True, True]),
+                metadata={
+                    "pooling": "mean",
+                    "pooling_special_tokens_excluded": True,
+                    "model_dir": "runs/model/final_model",
+                    "tokenizer_path": "runs/model/final_model",
+                    "max_seq_length": 256,
+                },
+            )
+
+    embedded = embed_dataset(
+        dataset,
+        featurizer=FakeFeaturizer(),
+        embedder_name="modernmolbert",
+        batch_size=2,
+    )
+
+    assert embedded.metadata["pooling"] == "mean"
+    assert embedded.metadata["pooling_special_tokens_excluded"] is True
+    assert embedded.metadata["max_seq_length"] == 256
+
+
 def test_local_tanimoto_count_distance_matches_count_vector_formula() -> None:
     x = np.array([1, 2, 0, 4])
     y = np.array([1, 1, 3, 0])

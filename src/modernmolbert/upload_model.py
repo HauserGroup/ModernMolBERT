@@ -301,7 +301,22 @@ def build_quickstart_output(source_dir: Path, example_selfies: str, hidden_size:
         inputs = tokenizer(example_selfies, return_tensors="pt")
         with torch.no_grad():
             outputs = model(**inputs, output_hidden_states=True)
-            embedding = outputs.hidden_states[-1][:, 0]
+            hidden = outputs.hidden_states[-1]
+            content_mask = inputs["attention_mask"].bool()
+            for token_id in [
+                tokenizer.bos_token_id,
+                tokenizer.eos_token_id,
+                tokenizer.pad_token_id,
+                tokenizer.unk_token_id,
+                tokenizer.mask_token_id,
+            ]:
+                if token_id is not None:
+                    content_mask = content_mask & inputs["input_ids"].ne(token_id)
+            empty_rows = content_mask.sum(dim=1).eq(0)
+            if empty_rows.any():
+                content_mask[empty_rows] = inputs["attention_mask"].bool()[empty_rows]
+            mask = content_mask.unsqueeze(-1).to(hidden.dtype)
+            embedding = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)
 
         token_ids = inputs["input_ids"][0].tolist()
         tokens = tokenizer.convert_ids_to_tokens(inputs["input_ids"][0])
@@ -495,8 +510,8 @@ def build_readme(source_dir: Path, run_dir: Path, repo_id: str, vocab_size: int)
     quickstart = (
         "## How to Get Started with the Model\n\n"
         "The model consumes **SELFIES** strings tokenized with the APE "
-        "tokenizer. The main output for molecular representation learning is the "
-        "first-token embedding:\n\n"
+        "tokenizer. For molecular representation learning, mean-pool the final "
+        "hidden states over non-special SELFIES tokens:\n\n"
         "```python\n"
         "# pip install transformers torch\n"
         "import torch\n"
@@ -514,7 +529,22 @@ def build_readme(source_dir: Path, run_dir: Path, repo_id: str, vocab_size: int)
         "inputs = tokenizer(selfies, return_tensors='pt')\n"
         "with torch.no_grad():\n"
         "    outputs = model(**inputs)\n"
-        "    embedding = outputs.last_hidden_state[:, 0]\n\n"
+        "    hidden = outputs.last_hidden_state\n"
+        "    content_mask = inputs['attention_mask'].bool()\n"
+        "    for token_id in [\n"
+        "        tokenizer.bos_token_id,\n"
+        "        tokenizer.eos_token_id,\n"
+        "        tokenizer.pad_token_id,\n"
+        "        tokenizer.unk_token_id,\n"
+        "        tokenizer.mask_token_id,\n"
+        "    ]:\n"
+        "        if token_id is not None:\n"
+        "            content_mask = content_mask & inputs['input_ids'].ne(token_id)\n"
+        "    empty_rows = content_mask.sum(dim=1).eq(0)\n"
+        "    if empty_rows.any():\n"
+        "        content_mask[empty_rows] = inputs['attention_mask'].bool()[empty_rows]\n"
+        "    mask = content_mask.unsqueeze(-1).to(hidden.dtype)\n"
+        "    embedding = (hidden * mask).sum(dim=1) / mask.sum(dim=1).clamp(min=1)\n\n"
         "tokens = tokenizer.convert_ids_to_tokens(inputs['input_ids'][0])\n"
         "embedding_preview = [round(x, 4) for x in embedding[0, :5].tolist()]\n"
         "print(f\"Token IDs:\\n{inputs['input_ids'][0].tolist()}\\n\")\n"

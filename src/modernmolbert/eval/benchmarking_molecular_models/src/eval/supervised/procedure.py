@@ -202,6 +202,7 @@ def eval_procedure(
 
     dataset_name = embedded_data.name
     task = embedded_data.task
+    metadata = getattr(embedded_data, "metadata", {}) or {}
     if owns_data:
         del embedded_data
         gc.collect()
@@ -212,6 +213,11 @@ def eval_procedure(
             "dataset": dataset_name,
             "task": task,
             "embedder": model_name,
+            "pooling": metadata.get("pooling"),
+            "pooling_special_tokens_excluded": metadata.get("pooling_special_tokens_excluded"),
+            "embedding_model_dir": metadata.get("model_dir"),
+            "embedding_tokenizer_path": metadata.get("tokenizer_path"),
+            "embedding_max_seq_length": metadata.get("max_seq_length"),
             "model": result.model,
             "hyperparams": dump_hyperparams(result.hyperparams),
             "library_hash": model_version_hash,

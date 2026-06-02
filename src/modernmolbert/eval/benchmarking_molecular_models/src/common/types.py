@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
 from abc import ABC, abstractmethod
@@ -136,6 +136,7 @@ class EmbeddedDataset:
     splits: Any
     X: np.ndarray
     y: pd.DataFrame
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def remove_failed_embeddings(self) -> int:
         """Performs validation of missing values, drop failed molecules and return number of invalid samples.
@@ -185,6 +186,7 @@ class EmbeddedDataset:
             "splits": self.splits,
             "X": self.X,
             "y": self.y,
+            "metadata": self.metadata,
         }
         with open(path, "w") as f:
             json.dump(obj, f, cls=NumpyEncoder)

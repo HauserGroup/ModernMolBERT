@@ -8,8 +8,9 @@ four key pairwise comparisons between ModernMolBERT and baseline embedders.
 
 Overview
 --------
-The benchmark evaluates frozen CLS embeddings on 25 molecular property-
-prediction tasks.  For each pair (MMB-base vs baseline), a Wilcoxon signed-rank
+The benchmark evaluates mean-pooled frozen token embeddings on 25 molecular
+property-prediction tasks.  For ModernMolBERT, pooling is over non-special
+SELFIES tokens.  For each pair (MMB-base vs baseline), a Wilcoxon signed-rank
 test already appears in the main paper.  This supplementary analysis adds
 bootstrap confidence intervals to quantify the uncertainty on the *mean*
 difference without assuming a parametric distribution.

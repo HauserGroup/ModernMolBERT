@@ -156,8 +156,8 @@ uv run python analysis/examples/ecfp4_moleculenet_example.py
 
 ### `pilot_moleculenet_example.py`
 End-to-end ModernMolBERT embedding example. Converts SMILES to SELFIES,
-tokenises, extracts frozen CLS embeddings, trains a sklearn model on them,
-and evaluates on a MoleculeNet dataset. The canonical worked example for
+tokenises, extracts mean-pooled token embeddings, trains a sklearn model on
+them, and evaluates on a MoleculeNet dataset. The canonical worked example for
 using ModernMolBERT embeddings in a downstream task.
 
 **Run:**

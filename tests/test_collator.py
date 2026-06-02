@@ -188,3 +188,68 @@ def test_standard_masking_replacement_runs_without_special_tokens():
     labels = batch["labels"]
     for sid in [0, 1, 2, 3, 4]:
         assert not (labels == sid).any()
+
+
+class TestHeteroatomRegex:
+    """Verify _HETEROATOM_IN_BRACKET does not produce false positives or
+    false negatives on SELFIES control symbols, standard atom tokens,
+    and APE merged tokens."""
+
+    pattern = MolecularMLMCollator._HETEROATOM_IN_BRACKET
+
+    # --- true heteroatom tokens -------------------------------------------
+    @pytest.mark.parametrize(
+        "token",
+        [
+            "[N]",
+            "[O]",
+            "[S]",
+            "[P]",
+            "[F]",
+            "[Cl]",
+            "[Br]",
+            "[I]",
+            "[Se]",
+            "[Si]",
+            "[NH2]",  # N followed by uppercase H — should match
+            "[NH1]",
+            "[=O]",  # bond-prefix variant
+            "[#N]",
+            "[15N]",  # isotope prefix
+            "[/123I]",  # stereo + isotope prefix
+            "[SiH4]",  # two-char element with trailing chars
+            "[C][N]",  # APE merged token — re.search finds [N]
+            "[C][=O]",  # APE merged token — re.search finds [=O]
+            "[Branch1][N]",  # APE merged token where heteroatom is in second primitive
+        ],
+    )
+    def test_should_match(self, token):
+        assert self.pattern.search(token), (
+            f"Expected {token!r} to match as heteroatom-containing, but it did not."
+        )
+
+    # --- SELFIES control symbols and non-heteroatom atoms ------------------
+    @pytest.mark.parametrize(
+        "token",
+        [
+            "[Branch1]",  # contains "Br" substring — must NOT match
+            "[Branch2]",
+            "[Branch3]",
+            "[=Branch1]",  # bond-prefixed branch
+            "[Ring1]",  # contains no heteroatom symbol
+            "[Ring2]",
+            "[=Ring1]",
+            "[Na]",  # N followed by lowercase a — must NOT match
+            "[Fe]",  # F followed by lowercase e — must NOT match
+            "[Sn]",  # S followed by lowercase n — must NOT match
+            "[Sc]",  # S followed by lowercase c — must NOT match
+            "[As]",  # intentionally not in covered set
+            "[B]",  # boron — intentionally not covered
+            "[C]",  # carbon — not a heteroatom
+            "[=C]",
+            "[#C]",
+            "[C][C]",  # APE merged carbon-carbon token — no heteroatom
+        ],
+    )
+    def test_should_not_match(self, token):
+        assert not self.pattern.search(token), f"Expected {token!r} NOT to match, but it did."

@@ -56,10 +56,35 @@ class MolecularMLMCollator(DataCollatorMixin):
     ids_to_tokens: dict[int, str] = field(default_factory=dict)
     return_tensors: str = "pt"
 
-    # ClassVar: excluded from __init__ by dataclass machinery.
-    # Match bracketed SELFIES atoms, including optional bond/stereo prefixes and
-    # isotope numbers. The element boundary prevents "[Na]" from matching "N",
-    # "[Fe]" from matching "F", or "[Branch1]" from matching "Br".
+    # Bracket-aware SELFIES primitive regex for heteroatom detection.
+    #
+    # Matches a bracketed SELFIES symbol that contains one of the common
+    # medicinal-chemistry heteroatoms: N, O, S, P, F, Cl, Br, I, Se, Si.
+    #
+    # Pattern anatomy:
+    #   \[                     — literal opening bracket
+    #   [=#/\\@+\-]*           — optional bond/stereo/charge prefix (=, #, /, \, @, +, -)
+    #   \d*                    — optional isotope number
+    #   (?:(?:Cl|Br|Se|Si)|[NOSPFI])
+    #                          — the heteroatom element symbol (two-char alternatives
+    #                            listed first so the alternation is unambiguous)
+    #   (?![a-z])              — element-boundary guard: the symbol must NOT be
+    #                            followed by a lowercase letter.  This is what
+    #                            prevents false positives:
+    #                              [Branch1]  — "Br" is followed by "a"  → no match
+    #                              [Ring1]    — no heteroatom symbol present  → no match
+    #                              [Na]       — "N" is followed by "a"  → no match
+    #                              [Fe]       — "F" is followed by "e"  → no match
+    #                            Genuine heteroatom tokens do pass:
+    #                              [Br]       — "Br" followed by "]"    → match
+    #                              [NH2]      — "N" followed by "H"     → match
+    #                              [C][N]     — re.search finds "[N]"   → match
+    #   [^\]]*                 — any remaining characters up to the closing bracket
+    #   \]                     — literal closing bracket
+    #
+    # Elements intentionally outside the covered set (e.g. [B], [As], [Sn], [Ge],
+    # metal atoms) receive the default span-start weight of 1.0.  If coverage of
+    # additional elements is needed, extend the alternation group above.
     _HETEROATOM_IN_BRACKET: ClassVar[re.Pattern] = re.compile(
         r"\["
         r"[=#/\\@+\-]*"

@@ -26,6 +26,29 @@ from modernmolbert.utils import repo_root
 
 
 MODEL_MAX_LENGTH = 256
+
+# Default collator parameters per masking strategy.
+# mlm_probability and span params match training runs documented in write_model_cards.py.
+MASKING_DEFAULTS: dict[str, dict[str, Any]] = {
+    "standard": {
+        "masking_strategy": "standard",
+        "mlm_probability": 0.15,
+    },
+    "span": {
+        "masking_strategy": "span",
+        "mlm_probability": 0.20,
+        "span_p_geom": 0.4,
+        "span_max_length": 6,
+    },
+    "hetero_span": {
+        "masking_strategy": "hetero_span",
+        "mlm_probability": 0.20,
+        "span_p_geom": 0.4,
+        "span_max_length": 6,
+        "heteroatom_start_weight": 2.0,
+    },
+}
+
 EXPECTED_SPECIAL_IDS = {
     "bos_token_id": 0,
     "pad_token_id": 1,
@@ -78,6 +101,17 @@ def parse_args() -> argparse.Namespace:
         "--hf_login",
         action="store_true",
         help="Call huggingface_hub.login() before uploading. Reads HF_TOKEN_ORG or HF_TOKEN from env or .env.",
+    )
+    parser.add_argument(
+        "--masking_strategy",
+        type=str,
+        default="standard",
+        choices=["standard", "span", "hetero_span"],
+        help=(
+            "Masking strategy used during pre-training (default: standard). "
+            "Written to collator_config.json in the staged upload so users "
+            "know what was used and can switch strategies when fine-tuning."
+        ),
     )
     parser.add_argument(
         "--dry_run",
@@ -540,7 +574,9 @@ def build_readme(source_dir: Path, run_dir: Path, repo_id: str, vocab_size: int)
     )
 
 
-def build_staging_dir(source_dir: Path, run_dir: Path, repo_id: str, tmp: Path) -> None:
+def build_staging_dir(
+    source_dir: Path, run_dir: Path, repo_id: str, tmp: Path, masking_strategy: str = "standard"
+) -> None:
     shutil.copy(source_dir / "model.safetensors", tmp / "model.safetensors")
 
     vocab_path = find_tokenizer_vocab(source_dir, run_dir)
@@ -570,6 +606,8 @@ def build_staging_dir(source_dir: Path, run_dir: Path, repo_id: str, tmp: Path) 
         if src.exists():
             shutil.copy(src, tmp / name)
 
+    write_collator_config(tmp, masking_strategy)
+
     (tmp / "README.md").write_text(
         build_readme(
             tmp,
@@ -596,6 +634,20 @@ def validate_staged_files(tmp: Path) -> None:
     missing = [name for name in required if not (tmp / name).exists()]
     if missing:
         raise FileNotFoundError(f"Staging directory is missing files: {missing}")
+
+
+def write_collator_config(tmp: Path, masking_strategy: str) -> None:
+    """Write collator_config.json with the training-time defaults for this strategy."""
+    config = dict(MASKING_DEFAULTS[masking_strategy])
+    config["_note"] = (
+        "Collator parameters used during pre-training. "
+        "Change masking_strategy to 'standard', 'span', or 'hetero_span' "
+        "and adjust the corresponding parameters when fine-tuning."
+    )
+    (tmp / "collator_config.json").write_text(
+        json.dumps(config, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def remove_pycache_dirs(path: Path) -> None:
@@ -763,6 +815,7 @@ def upload_model_to_hub(
     dry_run: bool = False,
     keep_staging_dir: Path | None = None,
     api: HfApi | None = None,
+    masking_strategy: str = "standard",
 ) -> dict[str, Any]:
     if not run_dir.is_absolute():
         run_dir = repo_root() / run_dir
@@ -776,7 +829,7 @@ def upload_model_to_hub(
     try:
         print(f"[upload] staging directory: {tmp}", flush=True)
 
-        build_staging_dir(source_dir, run_dir, repo_id, tmp)
+        build_staging_dir(source_dir, run_dir, repo_id, tmp, masking_strategy=masking_strategy)
         validate_staged_files(tmp)
 
         validate_staged_model(tmp)
@@ -840,6 +893,7 @@ def main() -> None:
         token=token,
         dry_run=args.dry_run,
         keep_staging_dir=args.keep_staging_dir,
+        masking_strategy=args.masking_strategy,
     )
 
     print(f"Done — {result['url']}", flush=True)

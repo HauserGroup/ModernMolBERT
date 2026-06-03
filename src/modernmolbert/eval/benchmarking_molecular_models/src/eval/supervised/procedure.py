@@ -81,6 +81,7 @@ def eval_embedding(
     dataset_config,
     metric_name: str,
     model_head: str,
+    n_jobs: int | None = None,
 ) -> EvaluationResult:
     log.info("Training model")
     head_result = fit_and_eval_embedding(
@@ -88,6 +89,7 @@ def eval_embedding(
         metric_name=metric_name,
         model_head=model_head,
         memory_weight=dataset_config.get("memory_weight", DEFAULT_MEMORY_WEIGHT),
+        n_jobs=n_jobs,
     )
     log.info(f"Training complete, best CV result: {head_result.cv_score}")
     return evaluate(head_result, dataset_config, pred_directory)
@@ -159,6 +161,7 @@ def eval_procedure(
     output_csv: str | Path,
     override: bool = False,
     preloaded: "EmbeddedDataset | None" = None,
+    n_jobs: int | None = None,
 ):
     model_version_hash = get_model_version_hash()
 
@@ -193,6 +196,7 @@ def eval_procedure(
         dataset_info,
         dataset_info.metric,
         model_head,
+        n_jobs=n_jobs,
     )
     log.info(f"Evaluation complete, test result: {result.metric_value}")
 

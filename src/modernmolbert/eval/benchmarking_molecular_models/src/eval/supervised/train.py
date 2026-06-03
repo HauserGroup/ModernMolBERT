@@ -1,4 +1,5 @@
 import gc
+import os
 import numpy as np
 import logging as log
 
@@ -46,14 +47,27 @@ def _grid_n_jobs(pipeline, outer_n_jobs: int) -> int:
 
 
 def fit_model(
-    X: np.ndarray, y: np.ndarray, task: str, metric_name: str, model_head: str, memory_weight: int
+    X: np.ndarray,
+    y: np.ndarray,
+    task: str,
+    metric_name: str,
+    model_head: str,
+    memory_weight: int,
+    n_jobs: int | None = None,
 ):
+    # n_jobs controls both the estimator's own parallelism (RF tree building,
+    # KNN search) and the GridSearchCV fold-level parallelism.
+    # Passing a small value (e.g. 4) is the simplest way to cut peak memory when
+    # the process swaps: RF with n_jobs=4 uses ~4× the training matrix in RAM
+    # rather than all-cores× .
+    effective_n_jobs = n_jobs if n_jobs is not None else (os.cpu_count() or 1)
+
     y_arr = np.asarray(y)
     is_multioutput = y_arr.ndim == 2 and y_arr.shape[1] > 1
     has_missing_labels = bool(np.isnan(y_arr).any()) if y_arr.dtype.kind in {"f", "c"} else False
 
     if task == "classification" and is_multioutput and has_missing_labels:
-        models = get_clf_models(1, X.dtype)
+        models = get_clf_models(1, X.dtype, n_jobs=effective_n_jobs)
         return fit_multioutput_finite_label_model(
             X=X,
             y=y_arr,
@@ -64,9 +78,9 @@ def fit_model(
 
     if task == "classification":
         no_outputs = y_arr.shape[1] if is_multioutput else 1
-        models = get_clf_models(no_outputs, X.dtype)
+        models = get_clf_models(no_outputs, X.dtype, n_jobs=effective_n_jobs)
     elif task == "regression":
-        models = get_reg_models(X.dtype)
+        models = get_reg_models(X.dtype, n_jobs=effective_n_jobs)
     else:
         raise ValueError(f"Unknown task: {task}")
 
@@ -231,7 +245,11 @@ def fit_multioutput_finite_label_model(
 
 
 def fit_and_eval_embedding(
-    dataset: EmbeddedDataset, metric_name: str, model_head: str, memory_weight: int
+    dataset: EmbeddedDataset,
+    metric_name: str,
+    model_head: str,
+    memory_weight: int,
+    n_jobs: int | None = None,
 ) -> HeadResult:
     X_train, y_train = get_train_data(dataset)
     best_model = fit_model(
@@ -241,6 +259,7 @@ def fit_and_eval_embedding(
         metric_name=metric_name,
         model_head=model_head,
         memory_weight=memory_weight,
+        n_jobs=n_jobs,
     )
     del X_train, y_train
     X_test, y_test = get_test_data(dataset)

@@ -149,7 +149,7 @@ def write_head_checkpoint(
     head: str,
     status: str,
     version_hash: str | None = None,
-    error: BaseException | None = None,
+    error: Exception | None = None,
     extra: dict[str, Any] | None = None,
 ) -> None:
     """Write head checkpoint with lifecycle status and optional failure metadata."""
@@ -668,6 +668,7 @@ def run_eval(
     output_csv: Path,
     override: bool,
     preloaded: Any = None,
+    n_jobs: int | None = None,
 ) -> bool:
     """Run one dataset/head evaluation.
 
@@ -697,6 +698,7 @@ def run_eval(
             output_csv=output_csv,
             override=override,
             preloaded=preloaded,
+            n_jobs=n_jobs,
         )
     except Exception as exc:
         if not safe:
@@ -876,6 +878,19 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=None,
+        dest="n_jobs",
+        help=(
+            "Number of parallel jobs for RF tree-building and KNN search. "
+            "Defaults to all available cores (n_jobs=-1 on the estimator). "
+            "Pass a small integer (e.g. 4) to cap per-estimator parallelism "
+            "and reduce peak memory when the process swaps on large datasets."
+        ),
+    )
+
+    parser.add_argument(
         "overrides",
         nargs="*",
         help="Compatibility support for key=value overrides such as model_name=my_embedder.",
@@ -1037,7 +1052,7 @@ def main() -> int:
                 flush=True,
             )
 
-            error: BaseException | None = None
+            error: Exception | None = None
             try:
                 success = run_eval(
                     safe=safe,
@@ -1049,6 +1064,7 @@ def main() -> int:
                     output_csv=args.output_csv,
                     override=override,
                     preloaded=embedded_data,
+                    n_jobs=args.n_jobs,
                 )
             except Exception as exc:
                 success = False

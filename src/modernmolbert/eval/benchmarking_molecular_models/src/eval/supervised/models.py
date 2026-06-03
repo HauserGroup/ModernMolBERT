@@ -144,7 +144,7 @@ def tanimoto_count_distance(x: np.ndarray, y: np.ndarray) -> float:
     return float(1.0 - np.minimum(x, y).sum() / denominator)
 
 
-def get_clf_models(no_output: int, embeddings_dtype):
+def get_clf_models(no_output: int, embeddings_dtype, n_jobs: int = -1):
     if no_output == 1:
         lr_clf = LogisticRegression()
         lr_params = RIDGE_CLF
@@ -154,7 +154,7 @@ def get_clf_models(no_output: int, embeddings_dtype):
 
     return {
         "rf": {
-            "model": Pipeline([("clf", RandomForestClassifier(n_jobs=-1))]),
+            "model": Pipeline([("clf", RandomForestClassifier(n_jobs=n_jobs))]),
             "params": RF_CLF.copy(),
         },
         "ridge": {
@@ -172,7 +172,9 @@ def get_clf_models(no_output: int, embeddings_dtype):
                     ("scaler", StandardScaler()),
                     (
                         "clf",
-                        KNeighborsClassifier(n_jobs=-1, metric=get_knn_distance(embeddings_dtype)),
+                        KNeighborsClassifier(
+                            n_jobs=n_jobs, metric=get_knn_distance(embeddings_dtype)
+                        ),
                     ),
                 ]
             ),
@@ -181,10 +183,10 @@ def get_clf_models(no_output: int, embeddings_dtype):
     }
 
 
-def get_reg_models(embeddings_dtype):
+def get_reg_models(embeddings_dtype, n_jobs: int = -1):
     return {
         "rf": {
-            "model": Pipeline([("clf", RandomForestRegressor(n_jobs=-1))]),
+            "model": Pipeline([("clf", RandomForestRegressor(n_jobs=n_jobs))]),
             "params": RF_REG.copy(),
         },
         "ridge": {
@@ -202,7 +204,9 @@ def get_reg_models(embeddings_dtype):
                     ("scaler", StandardScaler()),
                     (
                         "clf",
-                        KNeighborsRegressor(n_jobs=-1, metric=get_knn_distance(embeddings_dtype)),
+                        KNeighborsRegressor(
+                            n_jobs=n_jobs, metric=get_knn_distance(embeddings_dtype)
+                        ),
                     ),
                 ]
             ),

@@ -1,3 +1,5 @@
+> **Deprecated.** The `eval.cli.run_benchmark_suite` / `report_benchmark_results` suite runners referenced below have moved to `eval/deprecated/` and are no longer the supported path. Use the download/embed/score pipeline in [../../docs/evaluation.md](../../docs/evaluation.md) instead. This file is kept for reference.
+
 ## Contributed datasets
 
 Reusable datasets are contributed through Python code, not by adding standalone dataset YAML files.

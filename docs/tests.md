@@ -139,15 +139,14 @@ uv run ruff check .
 uv run pytest
 ```
 
-Before treating benchmark numbers as meaningful:
+Before treating benchmark numbers as meaningful, run the benchmark pipeline on a single dataset as a smoke test:
 
 ```bash
-uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
-  --suite configs/eval_suites/pilot_core.yaml \
-  --output_dir outputs/eval/pilot_core \
-  --overwrite
-
-uv run python -m modernmolbert.eval.cli.report_benchmark_results \
-  --results_csv outputs/eval/pilot_core/results.csv \
-  --output_dir outputs/eval/pilot_core/report
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py --datasets clf_AMES
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernmolbert.py \
+  --datasets clf_AMES --model-dir runs/<run>/final_model --embedder my_model
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
+  --datasets clf_AMES --embedder my_model --output-csv outputs/eval/smoke/results.csv
 ```
+
+See [evaluation.md](evaluation.md) for the full pipeline.

@@ -72,8 +72,10 @@ data/eval/moleculenet_sanitized/<dataset>/
 
 Prepare the core suite:
 
+> **Note:** `prepare_moleculenet` belongs to the deprecated suite workflow and now lives at `modernmolbert.eval.deprecated.cli.prepare_moleculenet`. The supported benchmark pipeline downloads TDC/OGB datasets directly — see [evaluation.md](evaluation.md).
+
 ```bash
-uv run python -m modernmolbert.eval.cli.prepare_moleculenet \
+uv run python -m modernmolbert.eval.deprecated.cli.prepare_moleculenet \
   --split scaffold \
   --seed 13 \
   --frac_train 0.8 \
@@ -87,7 +89,7 @@ uv run python -m modernmolbert.eval.cli.prepare_moleculenet \
 List available datasets:
 
 ```bash
-uv run python -m modernmolbert.eval.cli.prepare_moleculenet --list_datasets
+uv run python -m modernmolbert.eval.deprecated.cli.prepare_moleculenet --list_datasets
 ```
 
 ## Current core datasets
@@ -187,14 +189,6 @@ Most benchmark runs use only rows valid after sanitization. Featurizers still re
 
 1. Prepare MoleculeNet data.
 2. Inspect `example.tsv` for a few datasets.
-3. Run `pilot_core.yaml`.
-4. Only run `core_moleculenet.yaml` after the pilot suite succeeds.
+3. Run the benchmark pipeline on one dataset as a smoke test, then expand to `--datasets all`.
 
-Example:
-
-```bash
-uv run python -m modernmolbert.eval.cli.run_benchmark_suite \
-  --suite configs/eval_suites/pilot_core.yaml \
-  --output_dir outputs/eval/pilot_core \
-  --overwrite
-```
+The benchmark download/embed/score pipeline is documented in [evaluation.md](evaluation.md).

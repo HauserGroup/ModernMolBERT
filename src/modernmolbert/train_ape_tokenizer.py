@@ -49,7 +49,7 @@ uv run python -m modernmolbert.validate_tokenizer \
   --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
   --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json \
   --n 10000 \
-  --max_seq_length 256
+  --max_seq_length 128
 
 # Ideally
 mean_len: 25–60

@@ -17,14 +17,10 @@ Run fast evaluation tests:
 uv run pytest tests/test_eval_*.py -q
 ```
 
-Run suite/config/reporting tests:
+Run the benchmark-pipeline tests:
 
 ```bash
-uv run pytest \
-  tests/test_eval_suite.py \
-  tests/test_eval_suite_configs.py \
-  tests/test_eval_reporting.py \
-  -q
+uv run pytest tests/test_benchmarking_molecular_models*.py -q
 ```
 
 ## Readiness gate before long training
@@ -112,17 +108,10 @@ PYTHONPATH="$PWD/src" MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 \
 
 The evaluation tests should cover:
 
-- dataset loaders and `EvalDataset` validation,
-- `FeatureBatch` contract,
-- featurizer registry config loading,
-- feature cache hashing and reuse,
-- downstream model factories,
-- task-level label/feature alignment,
-- single-run runner outputs,
-- suite runner smoke tests,
-- CLI output-directory validation,
-- checked-in suite config parsing,
-- reporting summaries and plots.
+- the `ModernMolBERTSelfiesFeaturizer` and `FeatureBatch` contract,
+- the benchmark download/embed/score pipeline,
+- per-dataset checkpoint resume and output schema,
+- prediction export and result aggregation.
 
 ## When to run what
 

@@ -141,32 +141,6 @@ failures.
 
 ---
 
-## examples/
-
-### `ecfp4_moleculenet_example.py`
-Self-contained ECFP4 fingerprint baseline. Loads a prepared MoleculeNet
-dataset, featurises with ECFP4 (radius 2, 2048 bits), trains a sklearn
-classifier or regressor, and evaluates on the test split. Useful as a
-reference for what the fingerprint baseline achieves on any given dataset.
-
-**Run:**
-```bash
-uv run python analysis/examples/ecfp4_moleculenet_example.py
-```
-
-### `pilot_moleculenet_example.py`
-End-to-end ModernMolBERT embedding example. Converts SMILES to SELFIES,
-tokenises, extracts mean-pooled token embeddings, trains a sklearn model on
-them, and evaluates on a MoleculeNet dataset. The canonical worked example for
-using ModernMolBERT embeddings in a downstream task.
-
-**Run:**
-```bash
-uv run python analysis/examples/pilot_moleculenet_example.py
-```
-
----
-
 ## pxr/
 
 PXR Challenge 2025 (activity track) submission code. Both scripts predict
@@ -192,5 +166,4 @@ variance. More complex; used to explore uncertainty-aware regression.
 | `scripts/train_chembl36_small_sweep.sh` | Launches the full hyperparameter sweep (span + hetero_span + standard, three MLM probs, three LRs) |
 | `scripts/train_chembl36_small_sweep_standard.sh` | Standard-masking-only sweep |
 | `scripts/train_chembl36_base_sweep_standard.sh` | Base-size model sweep |
-| `scripts/prepare_moleculenet_core.sh` | Prepares the core MoleculeNet datasets |
 | `exploratory/README.md` | Documents `--extra_vocab_symbols_path` / `--extra_vocab_selfies_path` arguments for tokenizer training |

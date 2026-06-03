@@ -1,0 +1,617 @@
+% references.bib — ModernMolBERT manuscript bibliography (merged)
+%
+% Merged from: references.bib + ModernmolBERT.bib (2026-05-22)
+% Key naming convention: authorTitleKeywordYear
+%   e.g.  warnerSmarterBetterFaster2024
+%
+% Entries marked [TODO] are incomplete stubs that need author verification.
+
+% ============================================================
+%  CORE REFERENCES (already cited in text)
+% ============================================================
+
+@misc{mayuareAPETokenizer,
+  title        = {{APE} Tokenizer: Atom Pair Encoding for Chemical Strings},
+  author       = {Mayuare, Mike},
+  year         = {2024},
+  howpublished = {GitHub repository},
+  url          = {https://github.com/mikemayuare/apetokenizer},
+}
+
+@misc{warnerModernBERTBlog2024,
+  title         = {Finally, a Replacement for {BERT}: Introducing {ModernBERT}},
+  author        = {Warner, Benjamin and Clavié, Benjamin and Chaffin, Antoine
+                   and Hallström, Oskar and others},
+  year          = {2024},
+  howpublished  = {Hugging Face Blog},
+  url           = {https://huggingface.co/blog/modernbert},
+  note          = {Published 19 December 2024},
+}
+
+@article{warnerSmarterBetterFaster2024,
+  title         = {Smarter, Better, Faster, Longer:
+                   A Modern Bidirectional Encoder for Fast,
+                   Memory Efficient, and Long Context Finetuning and Inference},
+  author        = {Warner, Benjamin and Chaffin, Antoine and Clavié, Benjamin
+                   and Weller, Orion and Hallström, Oskar and Taghadouini, Said
+                   and Gallagher, Alexis and Biswas, Raja and Ladhak, Faisal
+                   and Aarsen, Tom and Cooper, Nathan and Adams, Griffin
+                   and Howard, Jeremy and Poli, Iacopo},
+  journal       = {arXiv preprint arXiv:2412.13663},
+  year          = {2024},
+  url           = {https://arxiv.org/abs/2412.13663},
+}
+
+@article{leonComparingSMILESSELFIES2024,
+  title         = {Comparing {SMILES} and {SELFIES} Tokenization
+                   for Enhanced Chemical Language Modeling},
+  author        = {Leon, Miguelangel and Perezhohin, Yuriy and Peres, Fernando
+                   and Popovič, Aleš and Castelli, Mauro},
+  journal       = {Scientific Reports},
+  volume        = {14},
+  number        = {1},
+  pages         = {25016},
+  year          = {2024},
+  issn          = {2045-2322},
+  doi           = {10.1038/s41598-024-76440-8},
+  url           = {https://www.nature.com/articles/s41598-024-76440-8},
+}
+
+% ============================================================
+%  MOLECULAR REPRESENTATIONS
+% ============================================================
+
+@article{rogersExtendedConnectivityFingerprints2010,
+  title         = {Extended-Connectivity Fingerprints},
+  author        = {Rogers, David and Hahn, Mathew},
+  journal       = {Journal of Chemical Information and Modeling},
+  volume        = {50},
+  number        = {5},
+  pages         = {742--754},
+  year          = {2010},
+  publisher     = {ACS Publications},
+  doi           = {10.1021/ci100050t},
+}
+
+@article{weininger1988smiles,
+  title         = {{SMILES}, a Chemical Language and Information System.
+                   1. Introduction to Methodology and Encoding Rules},
+  author        = {Weininger, David},
+  journal       = {Journal of Chemical Information and Computer Sciences},
+  volume        = {28},
+  number        = {1},
+  pages         = {31--36},
+  year          = {1988},
+  publisher     = {ACS Publications},
+  doi           = {10.1021/ci00057a005},
+}
+
+@article{krennSELFIESSelfReferencingEmbedded2020,
+  title         = {{SELFIES}: A Robust Molecular String Representation},
+  author        = {Krenn, Mario and Häse, Florian and Nigam, AkshatKumar
+                   and Friederich, Pascal and Aspuru-Guzik, Alán},
+  journal       = {Machine Learning: Science and Technology},
+  volume        = {1},
+  number        = {4},
+  pages         = {045024},
+  year          = {2020},
+  publisher     = {IOP Publishing},
+  doi           = {10.1088/2632-2153/aba947},
+}
+
+@article{jaegerMol2vecUnsupervisedMachine2017,
+  title         = {Mol2vec: {Unsupervised Machine Learning Approach}
+                   with {Chemical Intuition}},
+  author        = {Jaeger, Sabrina and Fulle, Simone and Turk, Samo},
+  journal       = {Journal of Chemical Information and Modeling},
+  volume        = {58},
+  number        = {1},
+  pages         = {27--35},
+  year          = {2018},
+  doi           = {10.1021/acs.jcim.7b00616},
+  url           = {https://doi.org/10.1021/acs.jcim.7b00616},
+}
+
+% ============================================================
+%  MOLECULAR LANGUAGE MODELS
+% ============================================================
+
+@article{chithranandaChemBERTaLargeScaleSelf2020,
+  title         = {{ChemBERTa}: Large-Scale Self-Supervised Pretraining
+                   for Molecular Property Prediction},
+  author        = {Chithrananda, Seyone and Grand, Gabriel and Ramsundar, Bharath},
+  journal       = {arXiv preprint arXiv:2010.09885},
+  year          = {2020},
+  url           = {https://arxiv.org/abs/2010.09885},
+}
+
+@article{ahmadChemBERTa2TowardsChemical2022,
+  title         = {{ChemBERTa-2}: Towards Chemical Foundation Models},
+  author        = {Ahmad, Walid and Simon, Elana and Chithrananda, Seyone
+                   and Grand, Gabriel and Ramsundar, Bharath},
+  journal       = {arXiv preprint arXiv:2209.01712},
+  year          = {2022},
+  doi           = {10.48550/arXiv.2209.01712},
+  url           = {https://arxiv.org/abs/2209.01712},
+}
+
+@article{singhChemBERTa3OpenSource2025,
+  title         = {{ChemBERTa-3}: {An Open Source Training Framework}
+                   for {Chemical Foundation Models}},
+  author        = {Singh, Riya and Barsainyan, Aryan Amit and Irfan, Rida
+                   and Amorin, Connor Joseph and He, Stewart and Davis, Tony
+                   and Thiagarajan, Arun and Sankaran, Shiva and Chithrananda, Seyone
+                   and Ahmad, Walid and Jones, Derek and McLoughlin, Kevin
+                   and Kim, Hyojin and Bhutani, Anoushka and Sathyanarayana, Shreyas Vinaya
+                   and Viswanathan, Venkat and Allen, Jonathan E. and Ramsundar, Bharath},
+  journal       = {ChemRxiv},
+  year          = {2025},
+  doi           = {10.26434/chemrxiv-2025-4glrl-v2},
+  url           = {https://chemrxiv.org/doi/full/10.26434/chemrxiv-2025-4glrl-v2},
+}
+
+@article{fabianMolecularRepresentationLearning2020,
+  title         = {Molecular Representation Learning with Language Models
+                   and Domain-Relevant Auxiliary Tasks},
+  author        = {Fabian, Bernd and Edlich, Thomas and Gaspar, Héléna
+                   and Segler, Marwin and Meyers, Joshua and Fiscato, Marco
+                   and Ahmed, Mohamed},
+  journal       = {arXiv preprint arXiv:2011.13230},
+  year          = {2020},
+  url           = {https://arxiv.org/abs/2011.13230},
+  note          = {MolBERT},
+}
+
+@article{rossLargescaleChemicalLanguage2022,
+  title         = {Large-Scale Chemical Language Representations Capture
+                   Molecular Structure and Properties},
+  author        = {Ross, Jerret and Belgodere, Brian and Chenthamarakshan, Vijil
+                   and Padhi, Inkit and Mroueh, Youssef and Das, Payel},
+  journal       = {Nature Machine Intelligence},
+  volume        = {4},
+  number        = {12},
+  pages         = {1256--1264},
+  year          = {2022},
+  publisher     = {Nature Publishing Group},
+  doi           = {10.1038/s42256-022-00580-7},
+  note          = {MolFormer},
+}
+
+@article{irwinChemformerPretrainedTransformer2022,
+  title         = {Chemformer: A Pre-Trained Transformer for Computational Chemistry},
+  author        = {Irwin, Ross and Dimitriadis, Spyridon and He, Jiazhen
+                   and Bjerrum, Esben Jannik},
+  journal       = {Machine Learning: Science and Technology},
+  volume        = {3},
+  number        = {1},
+  pages         = {015022},
+  year          = {2022},
+  issn          = {2632-2153},
+  doi           = {10.1088/2632-2153/ac3ffb},
+  url           = {https://iopscience.iop.org/article/10.1088/2632-2153/ac3ffb},
+}
+
+@article{winterLearningContinuousDataDriven2019,
+  title         = {Learning Continuous and Data-Driven Molecular Descriptors
+                   by Translating Equivalent Chemical Representations},
+  author        = {Winter, Robin and Montanari, Floriane and No{\'e}, Frank
+                   and Clevert, Djork-Arn{\'e}},
+  journal       = {Chemical Science},
+  volume        = {10},
+  number        = {6},
+  pages         = {1692--1701},
+  year          = {2019},
+  publisher     = {Royal Society of Chemistry},
+  doi           = {10.1039/C8SC04175J},
+}
+
+@inproceedings{seidlEnhancingActivityPrediction2023,
+  title         = {Enhancing Activity Prediction Models in Drug Discovery
+                   with the Ability to Understand Human Language},
+  author        = {Seidl, Philipp and Vall, Andreu and Hochreiter, Sepp
+                   and Klambauer, G{\"u}nter},
+  booktitle     = {Proceedings of the 40th International Conference on
+                   Machine Learning},
+  year          = {2023},
+  note          = {CLAMP},
+  url           = {https://proceedings.mlr.press/v202/seidl23a.html},
+}
+
+@article{axelrodCOATIMultimodalContrastive2024,
+  title         = {{COATI}: Multi-Modal Contrastive Pre-Training for
+                   Representing and Traversing Chemical Space},
+  author        = {Axelrod, Simon and Gomez-Bombarelli, Rafael},
+  journal       = {Journal of Chemical Theory and Computation},
+  volume        = {20},
+  number        = {4},
+  pages         = {1457--1472},
+  year          = {2024},
+  publisher     = {ACS Publications},
+  doi           = {10.1021/acs.jctc.3c01015},
+}
+
+@inproceedings{rongGroverTransformerSelfsupervised2020,
+  title         = {{GROVER}: Transformers for Molecular Graph Self-supervised
+                   Learning},
+  author        = {Rong, Yu and Bian, Yatao and Xu, Tingyang
+                   and Xie, Weiyang and Wei, Ying and Huang, Wenbing
+                   and Huang, Junzhou},
+  booktitle     = {Advances in Neural Information Processing Systems},
+  volume        = {33},
+  pages         = {12559--12571},
+  year          = {2020},
+  url           = {https://proceedings.neurips.cc/paper/2020/hash/94aef38441efa3380a3bed3faf1f9d5d-Abstract.html},
+}
+
+@article{krugerMolEncoderOptimalMasked2025,
+  title         = {{MolEncoder}: Towards Optimal Masked Language Modeling
+                   for Molecules},
+  author        = {Krüger, Fabian P. and Österbacka, Nicklas and Kabeshov, Mikhail
+                   and Engkvist, Ola and Tetko, Igor},
+  journal       = {Digital Discovery},
+  volume        = {4},
+  number        = {12},
+  pages         = {3552--3566},
+  year          = {2025},
+  issn          = {2635-098X},
+  doi           = {10.1039/D5DD00369E},
+  url           = {https://xlink.rsc.org/?DOI=D5DD00369E},
+}
+
+@article{joshiSpanBERTImprovingPreTraining2020,
+  title         = {{SpanBERT}: Improving Pre-Training by Representing
+                   and Predicting Spans},
+  author        = {Joshi, Mandar and Chen, Danqi and Liu, Yinhan and
+                   Weld, Daniel S. and Zettlemoyer, Luke and Levy, Omer},
+  journal       = {Transactions of the Association for Computational
+                   Linguistics},
+  volume        = {8},
+  pages         = {64--77},
+  year          = {2020},
+  doi           = {10.1162/tacl_a_00300},
+}
+
+@article{pengPretrainedMolecularLanguage2025,
+  title         = {Pre-Trained Molecular Language Models with Random
+                   Functional Group Masking},
+  author        = {Peng, Tianhao and Li, Yuchen and Li, Xuhong and Bian, Jiang
+                   and Xie, Zeke and Sui, Ning and Mumtaz, Shahid and Xu, Yanwu
+                   and Kong, Linghe and Xiong, Haoyi},
+  journal       = {npj Artificial Intelligence},
+  volume        = {1},
+  number        = {1},
+  pages         = {28},
+  year          = {2025},
+  issn          = {3005-1460},
+  doi           = {10.1038/s44387-025-00029-3},
+  url           = {https://www.nature.com/articles/s44387-025-00029-3},
+}
+
+@article{kovacsSimSonSimpleContrastive2025,
+  title         = {{SimSon}: A Simple Contrastive Learning Approach
+                   for Molecular Encoders},
+  author        = {Kovacs, Mate and Schneider, Nadine and Stiefl, Nikolaus
+                   and Jimenez-Luna, Jose},
+  journal       = {Journal of Chemical Information and Modeling},
+  year          = {2025},
+  doi           = {10.1021/acs.jcim.4c02247},
+}
+
+% ============================================================
+%  BERT AND TRANSFORMER ARCHITECTURES
+% ============================================================
+
+@inproceedings{devlinBERTPreTrainingDeep2019,
+  title         = {{BERT}: Pre-training of Deep Bidirectional Transformers
+                   for Language Understanding},
+  author        = {Devlin, Jacob and Chang, Ming-Wei and Lee, Kenton
+                   and Toutanova, Kristina},
+  booktitle     = {Proceedings of NAACL-HLT 2019},
+  pages         = {4171--4186},
+  year          = {2019},
+  doi           = {10.18653/v1/N19-1423},
+}
+
+@article{liuRoBERTaRobustlyOptimized,
+  title         = {{RoBERTa}: A Robustly Optimized {BERT} Pretraining Approach},
+  author        = {Liu, Yinhan and Ott, Myle and Goyal, Naman and Du, Jingfei
+                   and Joshi, Mandar and Chen, Danqi and Levy, Omer
+                   and Lewis, Mike and Zettlemoyer, Luke and Stoyanov, Veselin},
+  journal       = {arXiv preprint arXiv:1907.11692},
+  year          = {2019},
+  url           = {https://arxiv.org/abs/1907.11692},
+}
+
+@article{suRoFormerEnhancedTransformer2023,
+  title         = {{RoFormer}: Enhanced Transformer with Rotary Position Embedding},
+  author        = {Su, Jianlin and Ahmed, Murtadha and Lu, Yu and Pan, Shengfeng
+                   and Bo, Wen and Liu, Yunfeng},
+  journal       = {Neurocomputing},
+  volume        = {568},
+  pages         = {127063},
+  year          = {2024},
+  publisher     = {Elsevier},
+  doi           = {10.1016/j.neucom.2023.127063},
+}
+
+@article{nussbaumNomicEmbedTraining2024,
+  title         = {Nomic {Embed}: Training a Reproducible Long Context
+                   Text Embedder},
+  author        = {Nussbaum, Zach and Morris, John X. and Duderstadt, Brandon
+                   and Mulyar, Andriy},
+  journal       = {arXiv preprint arXiv:2402.01613},
+  year          = {2024},
+  doi           = {10.48550/arXiv.2402.01613},
+  url           = {https://arxiv.org/abs/2402.01613},
+}
+
+% ============================================================
+%  DATA — CHEMBL, PUBCHEM, ZINC
+% ============================================================
+
+@article{mendez2019chembl,
+  title         = {{ChEMBL}: towards direct deposition of bioassay data},
+  author        = {Mendez, David and Gaulton, Anna and Bento, A Patrícia
+                   and others},
+  journal       = {Nucleic Acids Research},
+  volume        = {47},
+  number        = {D1},
+  pages         = {D930--D940},
+  year          = {2019},
+  publisher     = {Oxford University Press},
+  doi           = {10.1093/nar/gky1075},
+}
+
+@article{zdrazilChEMBLDatabase20232024,
+  title         = {The {ChEMBL} Database in 2023: A Drug Discovery Platform
+                   Spanning Multiple Bioactivity Data Types and Time Periods},
+  author        = {Zdrazil, Barbara and Felix, Eloy and Hunter, Fiona
+                   and Manners, Emma J and Blackshaw, James and Corbett, Sybilla
+                   and {de~Veij}, Marleen and Ioannidis, Harris and Lopez, David Mendez
+                   and Mosquera, Juan~F and Magarinos, Maria~Paula and Bosc, Nicolas
+                   and Arcila, Ricardo and Kizilören, Tevfik and Gaulton, Anna
+                   and Bento, A~Patrícia and Adasme, Melissa~F and Monecke, Peter
+                   and Landrum, Gregory~A and Leach, Andrew~R},
+  journal       = {Nucleic Acids Research},
+  volume        = {52},
+  number        = {D1},
+  pages         = {D1180--D1192},
+  year          = {2024},
+  issn          = {0305-1048},
+  doi           = {10.1093/nar/gkad1004},
+  url           = {https://academic.oup.com/nar/article/52/D1/D1180/7337608},
+}
+
+@article{kimPubChem2023Update2023,
+  title         = {{PubChem} 2023 Update},
+  author        = {Kim, Sunghwan and Chen, Jie and Cheng, Tiejun and Gindulyte, Asta
+                   and He, Jia and He, Siqian and Li, Qingliang and Shoemaker, Benjamin A.
+                   and Thiessen, Paul A. and Yu, Bo and Zaslavsky, Leonid
+                   and Zhang, Jian and Bolton, Evan E.},
+  journal       = {Nucleic Acids Research},
+  volume        = {51},
+  number        = {D1},
+  pages         = {D1373--D1380},
+  year          = {2023},
+  publisher     = {Oxford University Press},
+  doi           = {10.1093/nar/gkac956},
+}
+
+@article{irwinZINC20FreeUltralargeScale2020,
+  title         = {{ZINC20} --- A Free Ultralarge Chemical Database for
+                   Ligand Discovery},
+  author        = {Irwin, John J. and Tang, Khanh G. and Young, Jerome
+                   and Dandarchuluun, Chinzorig and Wong, Benjamin R.
+                   and Khurelbaatar, Munkhzul and Moroz, Yurii S.
+                   and Mayfield, John and Sayle, Roger A.},
+  journal       = {Journal of Chemical Information and Modeling},
+  volume        = {60},
+  number        = {12},
+  pages         = {6065--6073},
+  year          = {2020},
+  publisher     = {ACS Publications},
+  doi           = {10.1021/acs.jcim.0c00675},
+}
+
+@misc{landrumRDKitOpenSourceCheminformatics,
+  title         = {{RDKit}: Open-Source Cheminformatics},
+  author        = {Landrum, Greg},
+  howpublished  = {Software},
+  year          = {2023},
+  url           = {https://www.rdkit.org},
+  note          = {Version 2023.09},
+}
+
+% ============================================================
+%  BENCHMARKS
+% ============================================================
+
+@article{wuMoleculeNetBenchmarkMolecular2018,
+  title         = {{MoleculeNet}: A Benchmark for Molecular Machine Learning},
+  author        = {Wu, Zhenqin and Ramsundar, Bharath and Feinberg, Evan N.
+                   and Gomes, Joseph and Geniesse, Caleb and Pappu, Aneesh S.
+                   and Leswing, Karl and Pande, Vijay},
+  journal       = {Chemical Science},
+  volume        = {9},
+  number        = {2},
+  pages         = {513--530},
+  year          = {2018},
+  publisher     = {Royal Society of Chemistry},
+  doi           = {10.1039/C7SC02664A},
+}
+
+@article{huangTherapeuticsDataCommons,
+  title         = {Therapeutics {Data Commons}: {Machine Learning Datasets}
+                   and {Tasks} for {Drug Discovery} and {Development}},
+  author        = {Huang, Kexin and Fu, Tianfan and Gao, Wenhao and Zhao, Yue
+                   and Roohani, Yusuf and Leskovec, Jure and Coley, Connor W
+                   and Xiao, Cao and Sun, Jimeng and Zitnik, Marinka},
+  journal       = {arXiv preprint arXiv:2102.09548},
+  year          = {2021},
+  url           = {https://tdcommons.ai},
+}
+
+@article{praskiBenchmarkingPretrainedMolecular2025,
+  title         = {Benchmarking Pretrained Molecular Embedding Models
+                   for Molecular Representation Learning},
+  author        = {Praski, Mateusz and Adamczyk, Jakub and Czech, Wojciech},
+  journal       = {arXiv preprint arXiv:2508.06199},
+  year          = {2025},
+  doi           = {10.48550/arXiv.2508.06199},
+  url           = {https://arxiv.org/abs/2508.06199},
+}
+
+@inproceedings{gilmerNeuralMessagePassing2017,
+  title         = {Neural Message Passing for Quantum Chemistry},
+  author        = {Gilmer, Justin and Schütt, Kristof T. and Height, George E.
+                   and Zitnik, Marinka and Coley, Connor W. and Barzilay, Regina
+                   and Jaakkola, Tommi},
+  booktitle     = {Proceedings of the 34th International Conference on
+                   Machine Learning},
+  pages         = {1263--1272},
+  year          = {2017},
+  organization  = {PMLR},
+  url           = {https://proceedings.mlr.press/v70/gilmer17a.html},
+}
+
+@article{daoFlashAttentionFastMemoryEfficient2022,
+  title         = {{FlashAttention}: Fast and Memory-Efficient Exact Attention
+                   with {IO}-Awareness},
+  author        = {Dao, Tri and Fu, Daniel Y. and Ermon, Stefano and Rudra, Atri
+                   and Ré, Christopher},
+  journal       = {arXiv preprint arXiv:2205.14135},
+  year          = {2022},
+  url           = {https://arxiv.org/abs/2205.14135},
+}
+
+@article{yangAnalyzingLearnedMolecular2019,
+  title         = {Analyzing Learned Molecular Representations for
+                   Property Prediction},
+  author        = {Yang, Kevin and Swanson, Kyle and Jin, Wengong and Coley, Connor
+                   and Eiden, Philipp and Gao, Hua and Guzman-Perez, Angel
+                   and Hopper, Timothy and Kelley, Brian and Mathea, Miriam
+                   and Palmer, Andrew and Settels, Volker and Jaakkola, Tommi
+                   and Jensen, Klavs and Barzilay, Regina},
+  journal       = {Journal of Chemical Information and Modeling},
+  volume        = {59},
+  number        = {8},
+  pages         = {3370--3388},
+  year          = {2019},
+  issn          = {1549-9596},
+  doi           = {10.1021/acs.jcim.9b00237},
+}
+
+@article{dengSystematicStudyKey2023,
+  title         = {A Systematic Study of Key Elements Underlying
+                   Molecular Property Prediction},
+  author        = {Deng, Jianyuan and Yang, Zhibo and Wang, Hehe
+                   and Ojima, Iwao and Samaras, Dimitris and Wang, Fusheng},
+  journal       = {Nature Communications},
+  volume        = {14},
+  number        = {1},
+  pages         = {6395},
+  year          = {2023},
+  issn          = {2041-1723},
+  doi           = {10.1038/s41467-023-41948-6},
+  url           = {https://www.nature.com/articles/s41467-023-41948-6},
+}
+
+% ============================================================
+%  TOKENIZATION
+% ============================================================
+
+@article{sennrichNeuralMachineTranslation2016,
+  title         = {Neural Machine Translation of Rare Words with
+                   Subword Units},
+  author        = {Sennrich, Rico and Haddow, Barry and Birch, Alexandra},
+  journal       = {arXiv preprint arXiv:1508.07909},
+  year          = {2016},
+  url           = {https://arxiv.org/abs/1508.07909},
+  note          = {Byte Pair Encoding (BPE)},
+}
+
+% ============================================================
+%  GRAPH MOLECULAR MODELS
+% ============================================================
+
+@article{fangGeometryenhancedMolecularRepresentation2022,
+  title         = {Geometry-Enhanced Molecular Representation Learning
+                   for Property Prediction},
+  author        = {Fang, Xiaomin and Liu, Lihang and Lei, Jieqiong
+                   and He, Donglong and Zhang, Shanzhuo and Zhou, Jingbo
+                   and Wang, Fanzhong and Wu, Hua and Wang, Haifeng},
+  journal       = {Nature Machine Intelligence},
+  volume        = {4},
+  pages         = {127--134},
+  year          = {2022},
+  doi           = {10.1038/s42256-021-00438-4},
+}
+
+@inproceedings{huStrategiesPretrainingGraph2020,
+  title         = {Strategies for Pre-training Graph Neural Networks},
+  author        = {Hu, Weihua and Liu, Bowen and Gomes, Joseph and
+                   Zitnik, Marinka and Liang, Percy and Pande, Vijay
+                   and Leskovec, Jure},
+  booktitle     = {International Conference on Learning Representations},
+  year          = {2020},
+  url           = {https://arxiv.org/abs/1905.12265},
+}
+
+@inproceedings{liuPretrainingMolecularGraph2022,
+  title         = {Pre-Training Molecular Graph Representation with
+                   {3D} Geometry},
+  author        = {Liu, Shengchao and Wang, Hanchen and Liu, Weiyang
+                   and Lasenby, Jon and Guo, Hongyu and Tang, Jian},
+  booktitle     = {International Conference on Learning Representations},
+  year          = {2022},
+  url           = {https://arxiv.org/abs/2110.07728},
+}
+
+@inproceedings{zhouUniMolUniversal3D2023,
+  title         = {{Uni-Mol}: A Universal {3D} Molecular Representation
+                   Learning Framework},
+  author        = {Zhou, Gengmo and Gao, Zhifeng and Ding, Qiankun
+                   and Zheng, Hang and Xu, Hongteng and Wei, Zhewei
+                   and Zhang, Linfeng and Ke, Guolin},
+  booktitle     = {International Conference on Learning Representations},
+  year          = {2023},
+  url           = {https://arxiv.org/abs/2303.16982},
+}
+
+@article{yukselSELFormerMolecularRepresentation2023,
+  title         = {{SELFormer}: Molecular Representation Learning via
+                   {SELFIES} Language Models},
+  author        = {Y{\"u}ksel, Asu and Ulusoy, Erva and Erzincan,
+                   Abdulkadir and {\"O}zt{\"u}rk, Hakime},
+  journal       = {Machine Learning: Science and Technology},
+  volume        = {4},
+  number        = {2},
+  pages         = {025035},
+  year          = {2023},
+  doi           = {10.1088/2632-2153/acdb30},
+}
+
+% ============================================================
+%  ADDITIONAL — NOT YET CITED (retain for future use)
+% ============================================================
+
+% [TODO] Incomplete stub — verify full bibliographic details before citing.
+@article{darrinWhenEmbedderMore,
+  title         = {When Is an Embedder More Promising than Another?},
+  author        = {Darrin, Maxime and Formont, Philippe and Ayed, Ismail Ben
+                   and Cheung, Jackie Chi Kit and Piantanida, Pablo},
+  journal       = {arXiv preprint},
+  year          = {2024},
+}
+
+@article{wangUnderstandingHowDimension,
+  title = {Understanding {{How Dimension Reduction Tools Work}}: {{An Empirical Approach}} to {{Deciphering}} t-{{SNE}}, {{UMAP}}, {{TriMap}}, and {{PaCMAP}} for {{Data Visualization}}},
+  author = {Wang, Yingfan and Huang, Haiyang and Rudin, Cynthia and Shaposhnik, Yaron},
+  journal = {Journal of Machine Learning Research},
+  volume = {22},
+  number = {201},
+  pages = {1--73},
+  year = {2021},
+  url = {https://jmlr.org/papers/v22/20-1061.html},
+  langid = {english},
+}

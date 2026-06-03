@@ -265,6 +265,7 @@ paper/papers/*
 paper/notes/
 paper/tables/*.docx
 /plots/
+!paper/figures/*
 
 ## Core latex/pdflatex auxiliary files:
 *.aux

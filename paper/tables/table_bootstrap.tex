@@ -1,0 +1,23 @@
+\begin{table}[htbp]
+  \centering\small
+  \begin{tabular}{l l r r r r r r}
+    \toprule
+    \textbf{Model A} & \textbf{Model B} & \textbf{$n$} & \textbf{Wins} & \textbf{Ties} & \textbf{Losses} & \textbf{Mean $\Delta$} & \textbf{95\,\% CI} \\
+    \midrule
+    MMB-base & SELFormer & 23 & 21 & 0 & 2 & +5.43 & $[+3.9,\;+7.1]$ \\
+    MMB-base & ChemBERTa-2 & 23 & 17 & 0 & 6 & +4.55 & $[+1.6,\;+7.9]$ \\
+    MMB-base & ECFP4 & 23 & 7 & 0 & 16 & -1.02 & $[-2.5,\;+0.5]$ \\
+    MMB-base & MoLFormer & 23 & 4 & 0 & 19 & -1.67 & $[-2.6,\;-0.7]$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{%
+    Paired bootstrap confidence intervals (95\,\%, $B=10{,}000$ resamples) on
+    mean $\Delta$ ROC-AUC ($\times100$) between \model{}-base and each baseline,
+    computed over the tasks where both models have a result.
+    \emph{Wins}/\emph{Ties}/\emph{Losses} count tasks where \model{}-base is
+    above, equal to, or below the baseline.
+    A positive mean $\Delta$ and CI entirely above zero indicates a consistent
+    advantage for \model{}-base.
+  }%
+  \label{tab:bootstrap-cis}
+\end{table}

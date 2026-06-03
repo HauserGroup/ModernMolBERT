@@ -1,10 +1,75 @@
-% macros.tex
-% Custom commands used by main.tex
+% macros.tex — shared macros for the ModernMolBERT manuscript
+% Include in main.tex via: \input{macros}
+%
+% Convention:
+%   \model, \modernbert, \selfies … — proper names / system names
+%   \R, \E, \N …                   — math shorthands
+%   \todo, \placeholder …          — draft helpers (disable for submission)
 
+% ============================================================
+%  MODEL AND SYSTEM NAMES
+% ============================================================
+\newcommand{\model}{\textsc{ModernMolBERT}}
+\newcommand{\modelbase}{\model\textsubscript{\textsc{base}}}
+\newcommand{\modellarge}{\model\textsubscript{\textsc{large}}}
+\newcommand{\modernbert}{\textsc{ModernBERT}}
+\newcommand{\selfies}{SELFIES}
+\newcommand{\smiles}{SMILES}
+\newcommand{\chembl}{\textsc{ChEMBL}}
+\newcommand{\ape}{APE}
+\newcommand{\mlm}{\textsc{mlm}}            % Masked Language Modelling
+\newcommand{\rope}{\textsc{rope}}           % Rotary Position Embedding
+
+% ============================================================
+%  TABLE COLUMN TYPES (used by the embedder comparison table)
+% ============================================================
+% L{width} — ragged-right paragraph column
+% K{width} — centred paragraph column (K avoids clash with standard c)
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{K}[1]{>{\centering\arraybackslash}p{#1}}
+
+% ============================================================
+%  MATH SHORTHANDS
+% ============================================================
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\E}{\mathbb{E}}
-\newcommand{\Var}{\mathrm{Var}}
-\newcommand{\SE}{\mathrm{SE}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Z}{\mathbb{Z}}
 
-% Example domain-specific macros
-\newcommand{\logtauka}{\log_{10}(\tau/K_A)}
+\newcommand{\norm}[1]{\left\lVert#1\right\rVert}
+\newcommand{\abs}[1]{\left|#1\right|}
+\newcommand{\set}[1]{\left\{#1\right\}}
+\newcommand{\inner}[2]{\left\langle#1,\,#2\right\rangle}
+
+\DeclareMathOperator{\softmax}{softmax}
+\DeclareMathOperator{\sigmoid}{sigmoid}
+\DeclareMathOperator{\argmax}{argmax}
+\DeclareMathOperator{\argmin}{argmin}
+
+% ============================================================
+%  DRAFT HELPERS
+% ============================================================
+% \needcite  — inline red [cite] marker for missing references
+\newcommand{\needcite}{%
+  \textsuperscript{\textcolor{red}{\textbf{[cite]}}}%
+}
+
+% \placeholder{text}  — grey italic placeholder text
+\newcommand{\placeholder}[1]{%
+  \textcolor{gray}{\textit{[#1]}}%
+}
+
+% Author annotation macros (coloured inline comments, à la \WA{} in ChemBERTa-2).
+% Usage: \JSM{This paragraph needs a citation.}
+% DISABLE BEFORE SUBMISSION by redefining to \@gobble, e.g.:
+%   \renewcommand{\JSM}[1]{}
+\newcommand{\JSM}[1]{\textcolor{MidnightBlue}{(\textbf{JSM:} #1)}}
+\newcommand{\ASH}[1]{\textcolor{OliveGreen}{(\textbf{ASH:} #1)}}
+\newcommand{\SA}[1]{\textcolor{BurntOrange}{(\textbf{SA:} #1)}}
+
+% ============================================================
+%  HYPERREF / CLEVEREF TWEAKS
+% ============================================================
+% Make appendix labels read "Appendix A" in cleveref
+\crefname{appsec}{Appendix}{Appendices}
+\Crefname{appsec}{Appendix}{Appendices}

@@ -1,0 +1,41 @@
+% tables/tokenizer_table.tex
+% SELFIES-adapted APE tokenizer statistics.
+% All values from the tokenizer trained on 2M randomly sampled ChEMBL 36 SELFIES strings.
+% Evaluated on 10,000 held-out ChEMBL 36 molecules.
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabular}{l r}
+    \toprule
+    \textbf{Tokenizer property} & \textbf{Value} \\
+    \midrule
+    \multicolumn{2}{l}{\textit{Vocabulary}} \\
+    Training molecules          & \num{2000000} \\
+    Base vocabulary (APE merges) & 589 \\
+    Added \selfies{} primitives  & 42 \\
+    Final vocabulary             & 631 \\
+    \addlinespace
+    \multicolumn{2}{l}{\textit{Sequence statistics (10\,000 held-out \chembl{}~36 molecules)}} \\
+    Median length (tokens)       & 24 \\
+    Mean length (tokens)         & 25.7 \\
+    95th percentile              & 43 \\
+    99th percentile              & 56 \\
+    \addlinespace
+    \multicolumn{2}{l}{\textit{Coverage}} \\
+    Truncation at 128 tokens     & $<$0.1\% \\
+    Unknown-token rate           & 0.0\% \\
+    \bottomrule
+  \end{tabular}
+  \caption{%
+    Summary statistics for the \selfies{}-adapted \ape{} tokenizer.
+    The base vocabulary is learned by APE merge training on 2M randomly
+    sampled \chembl{}~36 \selfies{} strings; 42 additional \selfies{} primitives
+    observed in downstream benchmark molecules are appended after merge
+    learning but before model pretraining, giving a final vocabulary of
+    631 tokens on which all model weights are initialized and trained.
+    Sequence statistics and coverage are evaluated on 10\,000 held-out
+    \chembl{}~36 molecules.
+  }%
+  \label{tab:tokenizer-stats}
+\end{table}

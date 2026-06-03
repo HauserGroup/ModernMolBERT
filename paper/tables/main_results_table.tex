@@ -1,0 +1,26 @@
+\begin{table}[htbp]
+  \centering
+  \small
+  \begin{tabularx}{\linewidth}{l r r r r r}
+    \toprule
+    \textbf{Model} & \textbf{TDC-ADME} & \textbf{TDC-Tox} & \textbf{TDC-HTS} & \textbf{MoleculeNet} & \textbf{Overall} \\
+    \midrule
+    ECFP4 & 81.1 & 85.0 & \textbf{68.6} & 74.8 & 78.9 \\
+    ChemBERTa-2 (MLM) & 77.3 & 73.1 & 66.3 & 67.2 & 72.9 \\
+    SELFormer & 75.1 & 74.6 & 61.1 & 68.8 & 72.1 \\
+    MoLFormer & \textbf{81.5} & \textbf{85.2} & 66.8 & \textbf{77.6} & \textbf{79.8} \\
+    \midrule
+    \textbf{\model{}-small} & 79.6 & 83.7 & 64.8 & 73.2 & 77.3 \\
+    \textbf{\model{}-base} & 80.7 & 83.8 & 64.4 & 70.7 & 77.4 \\
+    \bottomrule
+  \end{tabularx}
+  \caption{%
+    Mean ROC-AUC ($\times100$) on the 25-dataset benchmark of \citet{praskiBenchmarkingPretrainedMolecular2025}, broken down by
+    task group. Each entry averages per-dataset ROC-AUC using the best cross-validated downstream head (ridge / random forest / $k$NN);
+    for multi-endpoint datasets, endpoint scores are averaged before aggregation.
+    \emph{Overall} is the unweighted mean across completed benchmark datasets (25 for \model{}-small; 24 for \model{}-base,
+    which lacks Tox21; see \cref{tab:pertask}).
+    \textbf{Bold} marks the best value per column.
+  }%
+  \label{tab:main-results}
+\end{table}

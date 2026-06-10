@@ -61,7 +61,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 EMBED_PATH = ROOT / "outputs/visualize/best_span_100k/embeddings.npy"
 META_PATH = ROOT / "outputs/visualize/best_span_100k/metadata.parquet"

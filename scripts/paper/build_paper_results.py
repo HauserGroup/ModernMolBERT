@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import wilcoxon
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "outputs/eval/best_metric_by_dataset_embedder.csv"
 OUT = ROOT / "outputs/eval/paper"
 OUT.mkdir(parents=True, exist_ok=True)

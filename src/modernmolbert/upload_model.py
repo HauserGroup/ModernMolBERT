@@ -26,7 +26,7 @@ from modernmolbert.utils import copy_tokenizer_metadata_from_anywhere, repo_root
 MODEL_MAX_LENGTH = 128
 
 # Default collator parameters per masking strategy.
-# mlm_probability and span params match training runs documented in write_model_cards.py.
+# mlm_probability and span params match training runs documented in modernmolbert.model_cards.
 MASKING_DEFAULTS: dict[str, dict[str, Any]] = {
     "standard": {
         "masking_strategy": "standard",

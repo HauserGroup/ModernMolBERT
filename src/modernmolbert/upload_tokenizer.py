@@ -3,7 +3,6 @@
 import argparse
 import json
 import shutil
-import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -200,19 +199,10 @@ def verify_saved_tokenizer(
 
 
 def _write_readme(staging_dir: Path, repo_id: str) -> None:
-    """Write README.md using the canonical card generator in write_model_cards.py."""
-    root = Path(__file__).resolve().parents[2]
-    write_model_cards = root / "scripts" / "write_model_cards.py"
-    if not write_model_cards.exists():
-        print(f"WARNING: {write_model_cards} not found; skipping README.md", file=sys.stderr)
-        return
+    """Write README.md using the canonical card generator (modernmolbert.model_cards)."""
+    from modernmolbert.model_cards import tokenizer_card
 
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("write_model_cards", write_model_cards)
-    mod = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    (staging_dir / "README.md").write_text(mod.tokenizer_card(), encoding="utf-8")
+    (staging_dir / "README.md").write_text(tokenizer_card(), encoding="utf-8")
     print(f"wrote README.md to {staging_dir}")
 
 

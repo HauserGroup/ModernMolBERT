@@ -10,7 +10,7 @@ Main-analysis exclusions:
 from pathlib import Path
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
 OUT = ROOT / "outputs/eval/paper/table_pertask.tex"
 EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}

@@ -53,7 +53,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MATRIX_PATH = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
 OUT_DIR = ROOT / "outputs/eval/paper"
 FIGURE_DIR = OUT_DIR / "figures"

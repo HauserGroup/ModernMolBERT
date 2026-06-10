@@ -142,10 +142,9 @@ ignore = [
     # Vendored benchmark harness: depends on uninstalled optional deps
     # (hydra, omegaconf, tdc, skfp, playhouse) and is not part of the
     # type-checked package surface.
-    "src/modernmolbert/eval/junk",
     "src/modernmolbert/eval/benchmarking_molecular_models",
 ]
-extraPaths = ["src", "scripts"]
+extraPaths = ["src", "scripts", "scripts/paper"]
 reportMissingImports = true
 reportMissingTypeStubs = false
 # torch's stub does not re-export its public callables via __all__, so every

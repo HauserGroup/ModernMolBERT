@@ -31,6 +31,16 @@ from modernmolbert.utils import (
 
 DATASET_NAME = PUBCHEM10M_DATASET
 
+# Special-token IDs the model/config pipeline depends on. resolve_special_ids
+# returns the same keys, so this can be compared directly.
+EXPECTED_SPECIAL_IDS = {
+    "bos_token": 0,
+    "pad_token": 1,
+    "eos_token": 2,
+    "unk_token": 3,
+    "mask_token": 4,
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -88,6 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument("--unk_rate_threshold", type=float, default=0.001)
+    parser.add_argument("--mostly_unknown_threshold", type=float, default=0.01)
     parser.add_argument("--truncation_warn_threshold", type=float, default=0.05)
     parser.add_argument(
         "--warn_only",
@@ -208,7 +219,13 @@ def main() -> None:
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)
-    if recorded_sha and recorded_sha != actual_sha:
+    if not recorded_sha:
+        print(
+            "WARNING: metadata has no tokenizer_sha256; skipping vocabulary integrity check.",
+            flush=True,
+        )
+    elif recorded_sha != actual_sha:
+        # Corruption / wrong file pairing — always hard fail, even under --warn_only.
         raise ValueError(
             "Tokenizer hash mismatch between metadata and file. "
             f"metadata={recorded_sha} file={actual_sha}"
@@ -224,19 +241,49 @@ def main() -> None:
 
     warning_count = 0
 
+    if special_ids != EXPECTED_SPECIAL_IDS:
+        warning_count += int(
+            _fail_or_warn(
+                args,
+                f"Unexpected special token IDs: {special_ids}; expected {EXPECTED_SPECIAL_IDS}. "
+                "Model config and inference depend on these positions.",
+            )
+        )
+    metadata_special_ids = metadata.get("special_ids")
+    if metadata_special_ids is not None and metadata_special_ids != special_ids:
+        warning_count += int(
+            _fail_or_warn(
+                args,
+                f"Tokenizer special IDs {special_ids} disagree with metadata {metadata_special_ids}.",
+            )
+        )
+
+    source = args.fixture_jsonl or args.dataset_name
     sequences = _sample_sequences(args)
-    validate_sample_shape(sequences, args.representation)
+    if not sequences:
+        _fail_or_warn(args, f"No sequences sampled from {source}; nothing to validate.")
+        return
+
+    try:
+        validate_sample_shape(sequences, args.representation)
+    except ValueError as exc:
+        warning_count += int(_fail_or_warn(args, str(exc)))
+
     try:
         assert_representation_compatible(tokenizer, special_ids, args.representation)
     except ValueError as exc:
         warning_count += int(_fail_or_warn(args, str(exc)))
 
-    stats = compute_tokenization_stats(
-        tokenizer=tokenizer,
-        sequences=sequences,
-        max_seq_length=args.max_seq_length,
-        special_ids=special_ids,
-    )
+    try:
+        stats = compute_tokenization_stats(
+            tokenizer=tokenizer,
+            sequences=sequences,
+            max_seq_length=args.max_seq_length,
+            special_ids=special_ids,
+        )
+    except ValueError as exc:
+        _fail_or_warn(args, str(exc))
+        return
 
     print(f"representation: {args.representation}")
     print(f"molecule_column: {args.molecule_column}")
@@ -275,19 +322,25 @@ def main() -> None:
         )
     if stats["empty_sequence_rate"] > 0.0:
         warning_count += int(_fail_or_warn(args, "Tokenizer produced empty tokenized sequences."))
-    if stats["mostly_unknown_rate"] > 0.01:
+    if stats["mostly_unknown_rate"] > args.mostly_unknown_threshold:
         warning_count += int(
             _fail_or_warn(
                 args,
-                f"Too many sequences are mostly unknown tokens: {stats['mostly_unknown_rate']:.4f}",
+                "Too many sequences are mostly unknown tokens: "
+                f"{stats['mostly_unknown_rate']:.4f} "
+                f"(threshold {args.mostly_unknown_threshold:.4f})",
             )
         )
 
     if stats["truncation_rate"] > args.truncation_warn_threshold:
+        # Soft signal by design (threshold name says "warn"): never hard-fails,
+        # but is counted so the --warn_only summary stays accurate.
         print(
-            "warning: truncation rate is above threshold "
-            f"({stats['truncation_rate']:.4f} > {args.truncation_warn_threshold:.4f})"
+            "WARNING: truncation rate is above threshold "
+            f"({stats['truncation_rate']:.4f} > {args.truncation_warn_threshold:.4f})",
+            flush=True,
         )
+        warning_count += 1
 
     if warning_count > 0 and args.warn_only:
         print(f"validation completed with {warning_count} warning(s)", flush=True)

@@ -13,23 +13,20 @@ from modernmolbert.utils import (
     SELFIES_REPRESENTATION,
     SMILES_REPRESENTATION,
     assert_metadata_representation,
+    assert_representation_compatible,
     compute_tokenization_stats,
-    default_selfies_tokenizer_path,
-    default_smiles_tokenizer_path,
-    eligible_token_ids,
+    default_tokenizer_path,
     encode_sequence,
     file_sha256,
     get_streaming_dataset,
-    infer_selfies_column,
-    infer_smiles_column,
+    infer_molecule_column,
     load_tokenizer_metadata,
     metadata_path_for_vocab,
     normalize_sequence,
     resolve_special_ids,
     sample_jsonl_sequences,
     tokenizer_vocab_size,
-    validate_selfies_sample_shape,
-    validate_smiles_sample_shape,
+    validate_sample_shape,
 )
 
 DATASET_NAME = PUBCHEM10M_DATASET
@@ -183,38 +180,16 @@ def _print_unknown_examples(
             break
 
 
-def _assert_ethanol_not_unknown(
-    tokenizer: APEPreTrainedTokenizer,
-    special_ids: dict[str, int],
-    representation: str,
-) -> None:
-    ethanol = "CCO" if representation == SMILES_REPRESENTATION else "[C][C][O]"
-    encoded = encode_sequence(tokenizer, ethanol, max_seq_length=256)["input_ids"]
-    eligible = eligible_token_ids(encoded, special_ids)
-    if not eligible:
-        raise ValueError(f"Tokenizer produced no usable tokens for ethanol ({ethanol}).")
-    unk_id = special_ids["unk_token"]
-    unk_rate = sum(1 for x in eligible if x == unk_id) / len(eligible)
-    if unk_rate > 0.05:
-        raise ValueError(
-            f"Tokenizer is not {representation}-compatible: {ethanol} unk_rate={unk_rate:.3f}, ids={encoded}"
-        )
-
-
 def main() -> None:
     load_dotenv()
     args = parse_args()
 
     if args.tokenizer_vocab_path is None:
-        if args.representation == SMILES_REPRESENTATION:
-            args.tokenizer_vocab_path = str(default_smiles_tokenizer_path())
-        else:
-            args.tokenizer_vocab_path = str(default_selfies_tokenizer_path())
+        args.tokenizer_vocab_path = str(default_tokenizer_path(args.representation))
 
-    if args.representation == SMILES_REPRESENTATION:
-        args.molecule_column = infer_smiles_column(args.dataset_name, args.molecule_column)
-    else:
-        args.molecule_column = infer_selfies_column(args.dataset_name, args.molecule_column)
+    args.molecule_column = infer_molecule_column(
+        args.dataset_name, args.representation, args.molecule_column
+    )
 
     vocab_path = Path(args.tokenizer_vocab_path)
     if not vocab_path.exists():
@@ -250,12 +225,9 @@ def main() -> None:
     warning_count = 0
 
     sequences = _sample_sequences(args)
-    if args.representation == SMILES_REPRESENTATION:
-        validate_smiles_sample_shape(sequences)
-    else:
-        validate_selfies_sample_shape(sequences)
+    validate_sample_shape(sequences, args.representation)
     try:
-        _assert_ethanol_not_unknown(tokenizer, special_ids, args.representation)
+        assert_representation_compatible(tokenizer, special_ids, args.representation)
     except ValueError as exc:
         warning_count += int(_fail_or_warn(args, str(exc)))
 

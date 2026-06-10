@@ -39,6 +39,7 @@ from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
     assert_metadata_representation,
+    assert_representation_compatible,
     compute_tokenization_stats,
     copy_tokenizer_artifacts,
     default_selfies_tokenizer_path,
@@ -549,23 +550,9 @@ def load_and_validate_tokenizer(
     )
     validate_selfies_sample_shape(validation_sequences)
 
-    ethanol_encoded = encode_sequence(tokenizer, "[C][C][O]", args.max_seq_length)["input_ids"]
-    eligible_ethanol = eligible_token_ids(ethanol_encoded, special_ids)
-    if not eligible_ethanol:
-        raise ValueError("Tokenizer produced no usable SELFIES tokens for [C][C][O]")
-    unk_ethanol = sum(1 for x in eligible_ethanol if x == special_ids["unk_token"])
-    unk_ethanol_rate = unk_ethanol / len(eligible_ethanol)
-    if unk_ethanol_rate > 0.05:
-        tokens = (
-            tokenizer.convert_ids_to_tokens(ethanol_encoded)
-            if hasattr(tokenizer, "convert_ids_to_tokens")
-            else None
-        )
-        raise ValueError(
-            "Tokenizer is not SELFIES-compatible: "
-            f"[C][C][O] unk_rate={unk_ethanol_rate:.3f}, "
-            f"ids={ethanol_encoded}, tokens={tokens}"
-        )
+    assert_representation_compatible(
+        tokenizer, special_ids, SELFIES_REPRESENTATION, args.max_seq_length
+    )
 
     stats = compute_tokenization_stats(
         tokenizer=tokenizer,
@@ -631,29 +618,16 @@ def make_train_iterable_dataset(
 
 
 def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenizer) -> Dataset:
-    requested_eval_size = args.eval_size
-    n_eval = requested_eval_size
-
+    n_eval = args.eval_size
     if args.max_eval_batches > 0:
-        batch_capped_eval_size = args.max_eval_batches * args.per_device_eval_batch_size
+        n_eval = min(n_eval, args.max_eval_batches * args.per_device_eval_batch_size)
 
-        n_eval = min(requested_eval_size, batch_capped_eval_size)
-
-        log(
-            "Building finite validation set: "
-            f"requested_eval_size={requested_eval_size}, "
-            f"max_eval_batches={args.max_eval_batches}, "
-            f"per_device_eval_batch_size={args.per_device_eval_batch_size}, "
-            f"actual_eval_size={n_eval}"
-        )
-
-    else:
-        log(
-            "Building finite validation set: "
-            f"requested_eval_size={requested_eval_size}, "
-            f"max_eval_batches=none, "
-            f"actual_eval_size={n_eval}"
-        )
+    log(
+        "Building finite validation set: "
+        f"requested_eval_size={args.eval_size}, "
+        f"max_eval_batches={args.max_eval_batches or 'none'}, "
+        f"actual_eval_size={n_eval}"
+    )
 
     eval_split = args.validation_split if args.use_validation_split else args.train_split
     ds = get_streaming_dataset(
@@ -702,14 +676,14 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenize
     return Dataset.from_list(rows)
 
 
-# HuggingFace repo IDs used only as config templates (to inherit ModernBERT-specific fields
-# like rotary embedding settings and attention implementation defaults). No pretrained weights
-# are loaded from these — all models are trained from scratch with our molecular vocabulary.
-# "large" is kept here for completeness but is not exposed as a --model_size choice.
-_MODERNBERT_CONFIG_TEMPLATES = {
-    "base": "answerdotai/ModernBERT-base",
-    "large": "answerdotai/ModernBERT-large",
-}
+# Official base config, used only to inherit ModernBERT-specific fields (rotary embedding
+# settings, attention defaults) that the presets below override in part. No pretrained
+# weights are loaded — all models train from scratch with our molecular vocabulary.
+_MODERNBERT_BASE_CONFIG = "answerdotai/ModernBERT-base"
+
+# Both presets use a 128-token context; --max_seq_length overrides it.
+DEFAULT_MAX_SEQ_LENGTH = 128
+
 LOCAL_MODERNBERT_PRESETS = {
     # ~28–30M params, 512-dim. Sub-MoLFormer-XL (46.8M) efficiency variant.
     # Comparable to Chemformer (45M, 512-dim) and Uni-Mol (47M, 512-dim).
@@ -751,22 +725,19 @@ def build_modernbert_config(
     vocab_size: int,
     special_ids: dict[str, int],
 ):
-    if args.model_size in LOCAL_MODERNBERT_PRESETS:
-        # Start from official base config so we preserve ModernBERT-specific fields,
-        # then override only the scale-related fields.
-        config = AutoConfig.from_pretrained(_MODERNBERT_CONFIG_TEMPLATES["base"])
-        for key, value in LOCAL_MODERNBERT_PRESETS[args.model_size].items():
-            setattr(config, key, value)
-        # Regenerate layer_types to match the new num_hidden_layers and global_attn_every_n_layers.
-        # The base config carries a fixed 22-element list; overriding num_hidden_layers alone leaves
-        # them out of sync and triggers a save-time validation error.
-        every_n = getattr(config, "global_attn_every_n_layers", 3)
-        config.layer_types = [
-            "sliding_attention" if bool(i % every_n) else "full_attention"
-            for i in range(config.num_hidden_layers)
-        ]
-    else:
-        config = AutoConfig.from_pretrained(_MODERNBERT_CONFIG_TEMPLATES[args.model_size])
+    # Start from the official base config to preserve ModernBERT-specific fields,
+    # then override only the scale-related fields for the chosen preset.
+    config = AutoConfig.from_pretrained(_MODERNBERT_BASE_CONFIG)
+    for key, value in LOCAL_MODERNBERT_PRESETS[args.model_size].items():
+        setattr(config, key, value)
+    # Regenerate layer_types to match the new num_hidden_layers and global_attn_every_n_layers.
+    # The base config carries a fixed 22-element list; overriding num_hidden_layers alone leaves
+    # them out of sync and triggers a save-time validation error.
+    every_n = getattr(config, "global_attn_every_n_layers", 3)
+    config.layer_types = [
+        "sliding_attention" if bool(i % every_n) else "full_attention"
+        for i in range(config.num_hidden_layers)
+    ]
 
     try:
         import flash_attn  # type: ignore # noqa
@@ -1003,13 +974,8 @@ def main() -> None:
     args = adjust_args_for_backend(args, backend)
     validate_args(args, backend)
 
-    # Resolve max_seq_length from the official model config when not explicitly set.
     if args.max_seq_length is None:
-        if args.model_size in LOCAL_MODERNBERT_PRESETS:
-            args.max_seq_length = 128
-        else:
-            _tmp = AutoConfig.from_pretrained(_MODERNBERT_CONFIG_TEMPLATES[args.model_size])
-            args.max_seq_length = _tmp.max_position_embeddings
+        args.max_seq_length = DEFAULT_MAX_SEQ_LENGTH
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

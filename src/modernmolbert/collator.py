@@ -98,6 +98,10 @@ class MolecularMLMCollator(DataCollatorMixin):
     def __post_init__(self) -> None:
         special_ids = {int(token_id) for token_id in self.special_token_ids}
         eligible = [token_id for token_id in range(self.vocab_size) if token_id not in special_ids]
+        if not eligible:
+            raise ValueError(
+                "No eligible non-special token IDs available for MLM random replacement."
+            )
         self._eligible_replacement_ids = torch.tensor(eligible, dtype=torch.long)
 
         if self.return_tensors != "pt":
@@ -169,7 +173,7 @@ class MolecularMLMCollator(DataCollatorMixin):
         random_draw = torch.rand(labels.shape, device=labels.device)
         replace_with_random = (random_draw < 0.5) & masked_indices & ~replace_with_mask
         if replace_with_random.any():
-            eligible_random_ids = self._eligible_random_token_ids(device=input_ids.device)
+            eligible_random_ids = self._eligible_replacement_ids.to(input_ids.device)
             random_indices = torch.randint(
                 low=0,
                 high=len(eligible_random_ids),
@@ -230,21 +234,6 @@ class MolecularMLMCollator(DataCollatorMixin):
                     row_mask[col] = True
             masked_indices[i] = row_mask
         return masked_indices
-
-    def _eligible_random_token_ids(
-        self,
-        device: torch.device | None = None,
-    ) -> torch.Tensor:
-
-        if len(self._eligible_replacement_ids) == 0:
-            raise ValueError(
-                "No eligible non-special token IDs available for MLM random replacement."
-            )
-
-        if device is None:
-            return self._eligible_replacement_ids
-
-        return self._eligible_replacement_ids.to(device)
 
     def _build_token_start_weights(self) -> torch.Tensor:
         """Return a (vocab_size,) float weight tensor for heteroatom-biased span starts.

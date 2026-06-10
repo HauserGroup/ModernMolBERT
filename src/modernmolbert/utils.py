@@ -30,6 +30,26 @@ SPECIAL_TOKENS: dict[str, str] = {
     "mask_token": "<mask>",
 }
 
+# Special-token IDs the model config and inference pipeline depend on.
+# resolve_special_ids returns the same keys, so the two compare directly.
+EXPECTED_SPECIAL_IDS: dict[str, int] = {
+    "bos_token": 0,
+    "pad_token": 1,
+    "eos_token": 2,
+    "unk_token": 3,
+    "mask_token": 4,
+}
+
+
+def assert_special_ids(special_ids: dict[str, int]) -> None:
+    """Raise if special-token IDs are not the layout the pipeline expects."""
+    if special_ids != EXPECTED_SPECIAL_IDS:
+        raise ValueError(
+            f"Unexpected special token IDs: {special_ids}; expected {EXPECTED_SPECIAL_IDS}. "
+            "Model config and inference depend on these positions."
+        )
+
+
 SELFIES_REPRESENTATION = "SELFIES"
 SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
 SMILES_REPRESENTATION = "SMILES"

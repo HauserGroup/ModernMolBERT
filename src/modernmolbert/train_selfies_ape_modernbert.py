@@ -40,6 +40,7 @@ from modernmolbert.utils import (
     SELFIES_REPRESENTATION,
     assert_metadata_representation,
     assert_representation_compatible,
+    assert_special_ids,
     compute_tokenization_stats,
     copy_tokenizer_artifacts,
     default_selfies_tokenizer_path,
@@ -530,7 +531,9 @@ def load_and_validate_tokenizer(
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)
-    if recorded_sha and recorded_sha != actual_sha:
+    if not recorded_sha:
+        log("Warning: tokenizer metadata has no tokenizer_sha256; skipping integrity check.")
+    elif recorded_sha != actual_sha:
         raise ValueError(
             "Tokenizer hash mismatch between file and metadata. "
             f"metadata={recorded_sha}, file={actual_sha}"
@@ -544,6 +547,7 @@ def load_and_validate_tokenizer(
         raise ValueError(f"Suspiciously small tokenizer vocabulary: {vocab_size}")
 
     special_ids = resolve_special_ids(tokenizer)
+    assert_special_ids(special_ids)
 
     validation_sequences = _sample_train_partition_sequences(
         args, n=args.tokenizer_validation_samples

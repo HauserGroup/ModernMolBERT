@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
+    EXPECTED_SPECIAL_IDS,
     SELFIES_REPRESENTATION,
     SMILES_REPRESENTATION,
     assert_metadata_representation,
@@ -30,16 +31,6 @@ from modernmolbert.utils import (
 )
 
 DATASET_NAME = PUBCHEM10M_DATASET
-
-# Special-token IDs the model/config pipeline depends on. resolve_special_ids
-# returns the same keys, so this can be compared directly.
-EXPECTED_SPECIAL_IDS = {
-    "bos_token": 0,
-    "pad_token": 1,
-    "eos_token": 2,
-    "unk_token": 3,
-    "mask_token": 4,
-}
 
 
 def parse_args() -> argparse.Namespace:

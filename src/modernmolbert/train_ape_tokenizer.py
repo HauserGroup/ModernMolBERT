@@ -196,6 +196,7 @@ from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
     SMILES_REPRESENTATION,
+    assert_special_ids,
     collect_corpus_for_tokenizer,
     default_tokenizer_path,
     file_sha256,
@@ -335,6 +336,25 @@ def load_extra_vocab_symbols(
     return sorted(symbols)
 
 
+def validate_args(args: argparse.Namespace) -> None:
+    """Reject obviously invalid training arguments before any data is collected."""
+    positive = {
+        "tokenizer_train_size": args.tokenizer_train_size,
+        "max_vocab_size": args.max_vocab_size,
+        "min_freq_for_merge": args.min_freq_for_merge,
+        "shuffle_buffer_size": args.shuffle_buffer_size,
+    }
+    for name, value in positive.items():
+        if value <= 0:
+            raise ValueError(f"--{name} must be positive, got {value}")
+
+    if args.representation == SMILES_REPRESENTATION and args.extra_vocab_selfies_path is not None:
+        raise ValueError(
+            "--extra_vocab_selfies_path extracts SELFIES bracket symbols and is only "
+            "valid with --representation SELFIES. Use --extra_vocab_symbols_path for SMILES."
+        )
+
+
 def validate_selfies_symbols(symbols: list[str]) -> None:
     """Fail early if extra SELFIES symbols are malformed."""
 
@@ -350,6 +370,7 @@ def validate_selfies_symbols(symbols: list[str]) -> None:
 def main() -> None:
     load_dotenv()
     args = parse_args()
+    validate_args(args)
 
     if args.output_vocab_path is None:
         args.output_vocab_path = str(default_tokenizer_path(args.representation))
@@ -413,6 +434,7 @@ def main() -> None:
     vocab_sha256 = file_sha256(output_vocab_path)
     vocab_size = tokenizer_vocab_size(tokenizer)
     special_ids = resolve_special_ids(tokenizer)
+    assert_special_ids(special_ids)
     metadata_path = metadata_path_for_vocab(output_vocab_path)
 
     # Phase 3: write metadata — SHA reflects the final on-disk vocab.

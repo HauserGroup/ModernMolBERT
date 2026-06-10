@@ -19,7 +19,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 FIGDIR = Path("/Users/skn506/Documents/Claude/Projects/ModernMolBERT pre-print manuscript/figures")
 RUN = ROOT / "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_standard"
 

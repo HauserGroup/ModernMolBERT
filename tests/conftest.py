@@ -8,9 +8,10 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-SCRIPTS = ROOT / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+# Paper-analysis scripts live in scripts/paper/ and are imported by name in tests.
+for scripts_dir in (ROOT / "scripts", ROOT / "scripts" / "paper"):
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
 
 
 def find_existing_minimal_model() -> Path | None:

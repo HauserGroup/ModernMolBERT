@@ -1,4 +1,4 @@
-"""Tests for scripts/make_ape_token_table.py.
+"""Tests for scripts/paper/make_ape_token_table.py.
 
 All tests are self-contained (no large files, no network). They use small
 in-memory fixtures to exercise every function in the module.

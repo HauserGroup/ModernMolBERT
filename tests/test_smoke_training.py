@@ -67,9 +67,9 @@ def test_local_tokenizer_encode_selfies_examples() -> None:
         "[C][=C][C][=C][C][=C][Ring1][=Branch1]",
     ]
 
-    unk_id = tok.vocabulary[tok.unk_token]
-    bos_id = tok.vocabulary[tok.bos_token]
-    eos_id = tok.vocabulary[tok.eos_token]
+    unk_id = tok.vocabulary[str(tok.unk_token)]
+    bos_id = tok.vocabulary[str(tok.bos_token)]
+    eos_id = tok.vocabulary[str(tok.eos_token)]
     verbose = os.environ.get("MODERNMOLBERT_TEST_VERBOSE") == "1"
     summaries: list[str] = []
 

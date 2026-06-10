@@ -45,7 +45,7 @@ def test_existing_minimal_model_encoder_output(existing_minimal_model: Path) -> 
         print(f"[encoder-test] hidden_size={model.config.hidden_size}")
         print(f"[encoder-test] num_layers={model.config.num_hidden_layers}")
 
-    unk_id = tok.vocabulary[tok.unk_token]
+    unk_id = tok.vocabulary[str(tok.unk_token)]
 
     for text in _TEXTS:
         batch = tok(text, add_special_tokens=True, return_tensors="pt")

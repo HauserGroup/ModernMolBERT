@@ -1,4 +1,4 @@
-"""Tests for scripts/compute_property_regression.py.
+"""Tests for scripts/paper/compute_property_regression.py.
 
 All tests use small in-memory fixtures — no large parquet files, no network.
 """

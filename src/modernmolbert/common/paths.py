@@ -46,21 +46,3 @@ def project_path(*parts: str | os.PathLike[str], start: str | Path | None = None
     """Return an absolute path inside the project root."""
 
     return find_project_root(start=start).joinpath(*parts)
-
-
-def data_path(*parts: str | os.PathLike[str], start: str | Path | None = None) -> Path:
-    """Return an absolute path inside the project data directory."""
-
-    return project_path("data", *parts, start=start)
-
-
-def outputs_path(*parts: str | os.PathLike[str], start: str | Path | None = None) -> Path:
-    """Return an absolute path inside the project outputs directory."""
-
-    return project_path("outputs", *parts, start=start)
-
-
-def runs_path(*parts: str | os.PathLike[str], start: str | Path | None = None) -> Path:
-    """Return an absolute path inside the project runs directory."""
-
-    return project_path("runs", *parts, start=start)

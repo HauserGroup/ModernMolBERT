@@ -1,7 +1,7 @@
 [project]
 name = "modernmolbert"
 version = "0.2.0"
-description = "Add your description here"
+description = "Compact ModernBERT encoders for SELFIES molecular embeddings, pre-trained on ChEMBL 36."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -136,7 +136,17 @@ typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
-ignore = ["notebooks", "scratch"]
-extraPaths = ["src", "scripts"]
+ignore = [
+    "notebooks",
+    "scratch",
+    # Vendored benchmark harness: depends on uninstalled optional deps
+    # (hydra, omegaconf, tdc, skfp, playhouse) and is not part of the
+    # type-checked package surface.
+    "src/modernmolbert/eval/benchmarking_molecular_models",
+]
+extraPaths = ["src", "scripts", "scripts/paper"]
 reportMissingImports = true
 reportMissingTypeStubs = false
+# torch's stub does not re-export its public callables via __all__, so every
+# torch.<fn> access is a false positive under this rule.
+reportPrivateImportUsage = false

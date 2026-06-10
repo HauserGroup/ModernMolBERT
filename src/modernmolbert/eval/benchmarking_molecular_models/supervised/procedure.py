@@ -15,20 +15,20 @@ from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     count_result_rows,
     delete_result_rows,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     EvaluationResult,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.const import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
     DEFAULT_MEMORY_WEIGHT,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     evaluate,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
     fit_and_eval_embedding,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     NpEncoder,
     get_model_version_hash,
 )
@@ -79,14 +79,12 @@ def eval_embedding(
     data: EmbeddedDataset,
     pred_directory: str,
     dataset_config,
-    metric_name: str,
     model_head: str,
     n_jobs: int | None = None,
 ) -> EvaluationResult:
     log.info("Training model")
     head_result = fit_and_eval_embedding(
         dataset=data,
-        metric_name=metric_name,
         model_head=model_head,
         memory_weight=dataset_config.get("memory_weight", DEFAULT_MEMORY_WEIGHT),
         n_jobs=n_jobs,
@@ -194,7 +192,6 @@ def eval_procedure(
         embedded_data,
         predictions_dir,
         dataset_info,
-        dataset_info.metric,
         model_head,
         n_jobs=n_jobs,
     )

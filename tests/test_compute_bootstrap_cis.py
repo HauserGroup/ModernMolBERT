@@ -1,4 +1,4 @@
-"""Tests for scripts/compute_bootstrap_cis.py.
+"""Tests for scripts/paper/compute_bootstrap_cis.py.
 
 All tests are self-contained (no large files, no network). They use small
 in-memory fixtures.

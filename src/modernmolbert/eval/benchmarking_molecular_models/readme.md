@@ -61,7 +61,7 @@ The stripped benchmark runner uses `argparse` plus YAML loading directly; it
 does not require Hydra, OmegaConf, SQL, or database files.
 
 The scoring heads are `rf`, `ridge`, and `knn`. Their grids are defined in
-`src/eval/supervised/models.py`; changing them changes benchmark results and
+`supervised/models.py`; changing them changes benchmark results and
 the `library_hash`.
 
 ## Skipping datasets

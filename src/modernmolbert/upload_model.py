@@ -12,23 +12,21 @@ uv run python -m modernmolbert.upload_model \
 
 import argparse
 import json
-import os
 import shutil
-import tempfile
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any
 
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
 
+from modernmolbert.hf_upload import make_staging_dir, push_folder_to_hub, resolve_hf_token
 from modernmolbert.utils import copy_tokenizer_metadata_from_anywhere, repo_root
 
 
 MODEL_MAX_LENGTH = 128
 
 # Default collator parameters per masking strategy.
-# mlm_probability and span params match training runs documented in write_model_cards.py.
+# mlm_probability and span params match training runs documented in modernmolbert.model_cards.
 MASKING_DEFAULTS: dict[str, dict[str, Any]] = {
     "standard": {
         "masking_strategy": "standard",
@@ -127,55 +125,43 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _final_model_or_raise(run_dir: Path, reason: str, error: Exception) -> Path:
+    """Return run_dir/final_model if it exists (logging the fallback), else raise error."""
+    fallback = run_dir / "final_model"
+    if fallback.exists():
+        print(f"{reason}; falling back to {fallback}", flush=True)
+        return fallback
+    raise error
+
+
+def resolve_best_checkpoint(run_dir: Path) -> Path:
+    state_path = run_dir / "trainer_state.json"
+    if not state_path.exists():
+        msg = f"trainer_state.json not found in {run_dir}"
+        return _final_model_or_raise(run_dir, msg, FileNotFoundError(msg))
+
+    best = json.loads(state_path.read_text(encoding="utf-8")).get("best_model_checkpoint")
+    if not best:
+        return _final_model_or_raise(
+            run_dir,
+            "trainer_state.json has no best_model_checkpoint",
+            ValueError("trainer_state.json has no best_model_checkpoint entry"),
+        )
+
+    source = Path(best)
+    if not source.is_absolute():
+        source = repo_root() / source
+    if not source.exists():
+        msg = f"best_model_checkpoint does not exist: {source}"
+        return _final_model_or_raise(run_dir, msg, FileNotFoundError(msg))
+    return source
+
+
 def resolve_source_dir(run_dir: Path, checkpoint: str) -> Path:
     if checkpoint == "final":
         source = run_dir / "final_model"
-
     elif checkpoint == "best":
-        state_path = run_dir / "trainer_state.json"
-
-        if not state_path.exists():
-            fallback = run_dir / "final_model"
-            if fallback.exists():
-                print(
-                    f"trainer_state.json not found in {run_dir}; falling back to {fallback}",
-                    flush=True,
-                )
-                source = fallback
-            else:
-                raise FileNotFoundError(f"trainer_state.json not found in {run_dir}")
-
-        else:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-            best = state.get("best_model_checkpoint")
-
-            if not best:
-                fallback = run_dir / "final_model"
-                if fallback.exists():
-                    print(
-                        f"trainer_state.json has no best_model_checkpoint; falling back to {fallback}",
-                        flush=True,
-                    )
-                    source = fallback
-                else:
-                    raise ValueError("trainer_state.json has no best_model_checkpoint entry")
-
-            else:
-                source = Path(best)
-                if not source.is_absolute():
-                    source = repo_root() / source
-
-                if not source.exists():
-                    fallback = run_dir / "final_model"
-                    if fallback.exists():
-                        print(
-                            f"best_model_checkpoint does not exist: {source}; falling back to {fallback}",
-                            flush=True,
-                        )
-                        source = fallback
-                    else:
-                        raise FileNotFoundError(f"best_model_checkpoint does not exist: {source}")
-
+        source = resolve_best_checkpoint(run_dir)
     else:
         source = run_dir / f"checkpoint-{checkpoint}"
 
@@ -803,29 +789,6 @@ def validate_staged_model(tmp: Path) -> None:
     print(f"[validate] OK logits shape={tuple(out.logits.shape)}", flush=True)
 
 
-def prepare_staging_dir(keep_staging_dir: Path | None) -> tuple[Path, Callable[[], None]]:
-    if keep_staging_dir is not None:
-        tmp = keep_staging_dir
-
-        if tmp.exists():
-            shutil.rmtree(tmp)
-
-        tmp.mkdir(parents=True, exist_ok=True)
-
-        def cleanup() -> None:
-            return None
-
-        return tmp, cleanup
-
-    temp_dir = tempfile.TemporaryDirectory()
-    tmp = Path(temp_dir.name)
-
-    def cleanup() -> None:
-        temp_dir.cleanup()
-
-    return tmp, cleanup
-
-
 def upload_model_to_hub(
     run_dir: Path,
     repo_id: str,
@@ -844,7 +807,7 @@ def upload_model_to_hub(
     source_dir = resolve_source_dir(run_dir, checkpoint)
     print(f"Source: {source_dir}", flush=True)
 
-    tmp, cleanup = prepare_staging_dir(keep_staging_dir)
+    tmp, cleanup = make_staging_dir(keep_staging_dir)
     staged_names: list[str] = []
 
     try:
@@ -863,19 +826,14 @@ def upload_model_to_hub(
         if dry_run:
             print(f"Dry run: skipped upload to https://huggingface.co/{repo_id}", flush=True)
         else:
-            if api is None:
-                api = HfApi(token=token)
-            api.create_repo(
-                repo_id=repo_id,
+            push_folder_to_hub(
+                tmp,
+                repo_id,
                 repo_type="model",
                 private=private,
-                exist_ok=True,
-            )
-            api.upload_folder(
-                folder_path=str(tmp),
-                repo_id=repo_id,
-                repo_type="model",
                 commit_message=commit_message,
+                token=token,
+                api=api,
             )
 
     finally:
@@ -897,13 +855,7 @@ def main() -> None:
     load_dotenv()
     args = parse_args()
 
-    token = os.environ.get("HF_TOKEN_ORG") or os.environ.get("HF_TOKEN") or None
-
-    if args.hf_login:
-        from huggingface_hub import login
-
-        login(token=token)
-        token = None
+    token = resolve_hf_token(args.hf_login)
 
     result = upload_model_to_hub(
         run_dir=args.run_dir,

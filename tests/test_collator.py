@@ -144,20 +144,20 @@ def test_collator_random_replacement_candidates_exclude_special_ids():
         special_token_ids=[0, 1, 2, 3, 4],
     )
 
-    assert collator._eligible_random_token_ids().tolist() == [5, 6, 7, 8, 9, 10]
+    assert collator._eligible_replacement_ids.tolist() == [5, 6, 7, 8, 9, 10]
 
 
 def test_collator_random_replacement_candidates_require_content_tokens():
-    collator = MolecularMLMCollator(
-        pad_token_id=1,
-        mask_token_id=4,
-        vocab_size=5,
-        mlm_probability=0.15,
-        special_token_ids=[0, 1, 2, 3, 4],
-    )
-
+    # A vocabulary made entirely of special tokens leaves nothing to sample for
+    # random replacement; this is rejected when the collator is constructed.
     with pytest.raises(ValueError, match="No eligible non-special token IDs"):
-        collator._eligible_random_token_ids()
+        MolecularMLMCollator(
+            pad_token_id=1,
+            mask_token_id=4,
+            vocab_size=5,
+            mlm_probability=0.15,
+            special_token_ids=[0, 1, 2, 3, 4],
+        )
 
 
 def test_standard_masking_replacement_runs_without_special_tokens():

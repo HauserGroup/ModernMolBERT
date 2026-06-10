@@ -1,63 +1,14 @@
 import os
+from collections.abc import Sequence
+
 import numpy as np
-import logging as log
 
 from sklearn.metrics import roc_auc_score
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EvaluationResult,
     HeadResult,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
-    get_sklearn_scorer,
-)
-
-
-def evaluate_tdc(y_pred: np.ndarray, dataset_name: str) -> tuple[str, float]:
-    """
-    Returns:
-        Tuple[str, float]: Tuple containing metric name and value
-    """
-    grp_path = os.path.join(os.getcwd(), "data/cache")
-    os.makedirs(grp_path, exist_ok=True)
-    from tdc.benchmark_group import admet_group
-
-    group = admet_group(path=grp_path)
-    benchmark = group.get(dataset_name)
-
-    predictions = {benchmark["name"]: y_pred}
-
-    metric_name, metric_value = list(list(group.evaluate(predictions).values())[0].items())[0]
-    return metric_name, metric_value
-
-
-def evaluate_ogb(y_pred: np.ndarray, y_test: np.ndarray, dataset_name: str) -> tuple[str, float]:
-    """
-    Returns:
-        Tuple[str, float]: Tuple containing metric name and value
-    """
-    from ogb.graphproppred import Evaluator
-
-    evaluator = Evaluator(name=dataset_name)
-
-    if y_pred.ndim == 1:
-        y_pred = y_pred.reshape(-1, 1)
-    if y_test.ndim == 1:
-        y_test = y_test.reshape(-1, 1)
-
-    input_dict = {"y_true": y_test, "y_pred": y_pred}
-    result_dict = evaluator.eval(input_dict)
-    return list(result_dict.items())[0]
-
-
-def evaluate_sklearn(y_pred: np.ndarray, y_test: np.ndarray, metric_name: str) -> tuple[str, float]:
-    scorer = get_sklearn_scorer(metric_name)
-    if y_pred.ndim == 1:
-        y_pred = y_pred.reshape(-1, 1)
-    if y_test.ndim == 1:
-        y_test = y_test.reshape(-1, 1)
-    metric_value = scorer._score_func(y_test, y_pred)
-    return metric_name, metric_value
 
 
 def log_predictions(data: HeadResult, pred_directory: str):
@@ -85,24 +36,6 @@ def log_predictions(data: HeadResult, pred_directory: str):
 
     np.savez(base_path + ".npz", y_true=y_true, y_score=y_score)
     print(f"Saving predictions to {base_path}.npy / .npz")
-
-
-def evaluate_tdc_safe(
-    y_pred: np.ndarray, y_test: np.ndarray, dataset_name: str, fallback_metric: str
-) -> tuple[str, float]:
-    """
-    Safely evaluates TDC datasets, falling back to a specified metric if the dataset is not found.
-
-    Returns:
-        Tuple[str, float]: Tuple containing metric name and value
-    """
-    try:
-        return evaluate_tdc(y_pred, dataset_name)
-    except Exception as e:
-        log.error(
-            f"TDC failed for dataset {dataset_name}. Falling back to {fallback_metric}. Cause: {e}"
-        )
-        return evaluate_sklearn(y_pred, y_test, fallback_metric)
 
 
 def _object_array(value):
@@ -237,7 +170,10 @@ def get_skfp_roc_auc(y_pred: np.ndarray, y_test: np.ndarray) -> float:
         return multioutput_auroc_score(y_test, y_pred)
 
 
-def multioutput_auroc_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
+def multioutput_auroc_score(
+    y_true: np.ndarray,
+    y_score: np.ndarray | Sequence[np.ndarray],
+) -> float:
     y_true = np.asarray(y_true, dtype=float)
     n_outputs = 1 if y_true.ndim == 1 else y_true.shape[1]
     y_score = _normalize_auc_scores(

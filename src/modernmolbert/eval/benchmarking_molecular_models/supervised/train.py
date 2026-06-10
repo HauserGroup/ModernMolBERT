@@ -9,28 +9,28 @@ from sklearn.model_selection import KFold, ParameterGrid, StratifiedKFold
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import make_scorer
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     HeadResult,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.common.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.datasplit import (
     get_test_data,
     get_train_data,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.const import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
     CV_SPLITS,
     N_JOBS,
     VERBOSITY,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     multioutput_auroc_score,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
     FiniteLabelMultiOutputClassifier,
     get_clf_models,
     get_reg_models,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_sklearn_scorer,
 )
 
@@ -50,7 +50,6 @@ def fit_model(
     X: np.ndarray,
     y: np.ndarray,
     task: str,
-    metric_name: str,
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
@@ -145,14 +144,6 @@ def fit_model(
     del grid_search
     gc.collect()
     return result
-    # greater_is_better = scorer._sign > 0
-    # # filter out nans
-    # res = [x for x in res if not np.isnan(x["best_score"])]
-    # if len(res) == 0:
-    #     raise ValueError("All models failed to fit")
-
-    # f = max if greater_is_better else min
-    # return f(res, key=lambda x: x["best_score"])
 
 
 def finite_label_multioutput_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -246,7 +237,6 @@ def fit_multioutput_finite_label_model(
 
 def fit_and_eval_embedding(
     dataset: EmbeddedDataset,
-    metric_name: str,
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
@@ -256,7 +246,6 @@ def fit_and_eval_embedding(
         X=X_train,
         y=y_train,
         task=dataset.task,
-        metric_name=metric_name,
         model_head=model_head,
         memory_weight=memory_weight,
         n_jobs=n_jobs,

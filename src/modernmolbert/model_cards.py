@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
-"""
-write_model_cards.py
+"""Generate HuggingFace model cards (README.md) for the released ModernMolBERT
+checkpoints, in a structure approximately matching MODEL_CARD.md and including
+the simplest possible SELFIES encode + tokenize example.
 
-Generate HuggingFace model cards (README.md) for the four released
-ModernMolBERT checkpoints, in a structure approximately matching MODEL_CARD.md
-and including the simplest possible SELFIES encode + tokenize example.
-
-This is the single source of truth for the static cards; the same card body is
-mirrored by `build_readme()` in `src/modernmolbert/upload_model.py` for live
-uploads. Run from the repo root: `python scripts/write_model_cards.py`.
+Single source of truth for the static cards: `tokenizer_card()` is imported by
+`upload_tokenizer.py`, and the same card body is mirrored by `build_readme()` in
+`upload_model.py` for live uploads. Run as a module from the repo root:
+`python -m modernmolbert.model_cards`.
 """
 
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 RUNS = ROOT / "runs/chembl36_small_mask_mlm_lr_sweep"
 
 # Per-variant facts (verified from each checkpoint's config / training logs).

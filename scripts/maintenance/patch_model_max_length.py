@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""One-off fix: force ``model_max_length: 128`` in tokenizer_config.json files.
+
+Run from the repo root. The paths below are hardcoded to the specific released
+sweep run directories whose tokenizer_config.json shipped without an explicit
+``model_max_length``. Kept for provenance; not part of any pipeline.
+"""
 
 import json
 

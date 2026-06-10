@@ -10,14 +10,14 @@ from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     PRASKI_COLUMNS,
     to_praski_schema,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     Config,
     load_dataset_registry,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     multioutput_auroc_score,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_model_version_hash,
 )
 

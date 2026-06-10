@@ -3,14 +3,14 @@ import os
 import joblib
 from pathlib import Path
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
     load_embedding_config,
     load_yaml_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import load
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import EmbeddingConfig
+from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import load
+from modernmolbert.eval.benchmarking_molecular_models.common.types import EmbeddingConfig
 
 
 def parse_args() -> argparse.Namespace:

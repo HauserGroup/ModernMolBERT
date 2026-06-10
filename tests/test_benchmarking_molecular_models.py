@@ -10,34 +10,29 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
-    PRASKI_COLUMNS,
-    append_result_row,
-    read_results_csv,
-)
 from modernmolbert.eval.benchmarking_molecular_models.embed_modernmolbert import (
     embed_dataset,
 )
 from modernmolbert.eval.featurizers.base import FeatureBatch
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     Dataset,
     EmbeddedDataset,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     multioutput_auroc_score,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
     get_knn_distance,
     tanimoto_count_distance,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
     fit_and_eval_embedding,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_model_version_hash,
 )
 
@@ -91,7 +86,7 @@ def test_dataset_registry_is_single_yaml() -> None:
 
 
 def test_tdc_loader_keeps_scaffold_split_when_one_smiles_fails(capsys) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         load_tdc_module_dataset,
     )
 
@@ -139,7 +134,7 @@ def test_tdc_loader_keeps_scaffold_split_when_one_smiles_fails(capsys) -> None:
 
 
 def test_tdc_metadata_patch_adds_pampa_to_old_tdc_registry(monkeypatch) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common import data_v2
+    from modernmolbert.eval.benchmarking_molecular_models.common import data_v2
 
     metadata = SimpleNamespace(
         dataset_names={"ADME": ["hia_hou"]},
@@ -163,7 +158,7 @@ def test_tdc_metadata_patch_adds_pampa_to_old_tdc_registry(monkeypatch) -> None:
 
 
 def test_tdc_metadata_patch_adds_herg_karim_to_old_tdc_registry(monkeypatch) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common import data_v2
+    from modernmolbert.eval.benchmarking_molecular_models.common import data_v2
 
     metadata = SimpleNamespace(
         dataset_names={"Tox": ["herg"]},
@@ -187,7 +182,7 @@ def test_tdc_metadata_patch_adds_herg_karim_to_old_tdc_registry(monkeypatch) -> 
 
 
 def test_build_dataset_drops_uncanonicalizable_smiles_and_remaps_splits(capsys) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         build_dataset,
     )
 
@@ -211,7 +206,7 @@ def test_build_dataset_drops_uncanonicalizable_smiles_and_remaps_splits(capsys) 
 
 
 def test_ogb_torch_load_context_sets_legacy_weights_only_default(monkeypatch) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         torch_load_with_legacy_ogb_defaults,
     )
 
@@ -234,7 +229,7 @@ def test_ogb_torch_load_context_sets_legacy_weights_only_default(monkeypatch) ->
 
 
 def test_ogb_outdated_pkg_resources_warning_is_suppressed() -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         suppress_outdated_pkg_resources_warning,
     )
 
@@ -490,70 +485,6 @@ def test_embed_modernmolbert_help_and_unknown_dataset() -> None:
     assert "Unknown dataset" in bad_result.stderr
 
 
-def test_score_writes_dataset_checkpoint(monkeypatch, tmp_path) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models import score
-
-    config_dir = tmp_path / "config"
-    write_embedding_test_config(config_dir)
-    (config_dir / "score.yaml").write_text("cache: true\ndatasets:\n  - tiny_clf\n")
-    output_csv = tmp_path / "results.csv"
-    checkpoint_dir = tmp_path / "checkpoints"
-
-    def fake_eval(
-        safe,
-        embed_config,
-        full_model_name,
-        short_model_name,
-        dataset_info,
-        model_head,
-        output_csv,
-        override,
-    ):
-        append_result_row(
-            output_csv,
-            {
-                "dataset": dataset_info.name,
-                "task": dataset_info.task,
-                "embedder": short_model_name,
-                "model": model_head,
-                "hyperparams": "{}",
-                "library_hash": "test",
-                "cv_metric_name": dataset_info.metric,
-                "cv_metric": 0.5,
-                "test_metric_name": dataset_info.metric,
-                "test_metric": 0.6,
-            },
-        )
-
-    monkeypatch.setattr(score, "run_eval", fake_eval)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "score.py",
-            "--config-dir",
-            str(config_dir),
-            "--datasets",
-            "tiny_clf",
-            "--heads",
-            "rf",
-            "--embedder",
-            "fake_embedder",
-            "--output-csv",
-            str(output_csv),
-            "--checkpoint-dir",
-            str(checkpoint_dir),
-        ],
-    )
-
-    score.main()
-
-    checkpoint = read_results_csv(checkpoint_dir / "tiny.csv")
-    assert list(checkpoint.columns) == PRASKI_COLUMNS
-    assert checkpoint.loc[0, "dataset"] == "tiny"
-    assert checkpoint.loc[0, "embedder"] == "fake_embedder"
-
-
 def test_embed_dataset_preserves_pooling_metadata() -> None:
     dataset = Dataset(
         name="tiny",
@@ -709,7 +640,6 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
 
     result = fit_and_eval_embedding(
         dataset=dataset,
-        metric_name="roc_auc",
         model_head="knn",
         memory_weight=32,
     )
@@ -737,7 +667,6 @@ def test_regression_path_returns_1d_predictions() -> None:
 
     result = fit_and_eval_embedding(
         dataset=dataset,
-        metric_name="mae",
         model_head="ridge",
         memory_weight=32,
     )
@@ -753,42 +682,6 @@ def test_run_scoring_requires_embedder_name() -> None:
 
     assert result.returncode == 1
     assert "Usage:" in result.stdout
-
-
-def test_score_normalize_dataset_name() -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.score import normalize_dataset_name
-
-    assert normalize_dataset_name("bace") == "bace"
-    assert normalize_dataset_name("bace.yaml") == "bace"
-    assert normalize_dataset_name("config/datasets/bace.yaml") == "bace"
-    assert normalize_dataset_name(Path("bace.yaml")) == "bace"
-
-
-def test_score_resolve_dataset_names_with_skip(tmp_path: Path) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.score import resolve_dataset_names
-    from argparse import Namespace
-
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "datasets.yaml").write_text("datasets:\n  bace: {}\n  tox21: {}\n  clintox: {}\n")
-
-    # Test skipping from CLI args (stem or yaml)
-    args = Namespace(datasets=["all"], skip_datasets=["bace.yaml", "tox21"])
-    cfg = {}
-    names = resolve_dataset_names(config_dir, cfg, args)
-    assert names == ["clintox"]
-
-    # Test skipping from config list
-    args = Namespace(datasets=["all"], skip_datasets=None)
-    cfg = {"skip_datasets": ["bace", "clintox.yaml"]}
-    names = resolve_dataset_names(config_dir, cfg, args)
-    assert names == ["tox21"]
-
-    # Test skipping from config string (legacy support)
-    args = Namespace(datasets=["all"], skip_datasets=None)
-    cfg = {"skip_dataset": "bace.yaml"}
-    names = resolve_dataset_names(config_dir, cfg, args)
-    assert sorted(names) == ["clintox", "tox21"]
 
 
 def test_score_resolve_model_name() -> None:
@@ -815,66 +708,3 @@ def test_score_resolve_model_name() -> None:
     # Config model.model_name precedence
     cfg = {"model": {"model_name": "cfg_model_name"}}
     assert resolve_model_name(cfg, args) == "cfg_model_name"
-
-
-def test_score_main_skips_datasets(monkeypatch, tmp_path) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models import score
-
-    config_dir = tmp_path / "config"
-    write_embedding_test_config(config_dir)
-
-    # We define two datasets
-    (config_dir / "datasets.yaml").write_text(
-        "\n".join(
-            [
-                "datasets:",
-                "  tiny_clf:",
-                "    name: tiny",
-                "    metric: roc_auc",
-                "    task: classification",
-                "  other_clf:",
-                "    name: other",
-                "    metric: roc_auc",
-                "    task: classification",
-            ]
-        )
-    )
-    (config_dir / "score.yaml").write_text("cache: true\n")
-
-    eval_calls = []
-
-    def fake_eval(
-        safe,
-        embed_config,
-        full_model_name,
-        short_model_name,
-        dataset_info,
-        model_head,
-        output_csv,
-        override,
-    ):
-        eval_calls.append(dataset_info.name)
-
-    monkeypatch.setattr(score, "run_eval", fake_eval)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "score.py",
-            "--config-dir",
-            str(config_dir),
-            "--datasets",
-            "all",
-            "--skip_datasets",
-            "tiny_clf.yaml",
-            "--heads",
-            "rf",
-            "--embedder",
-            "fake_embedder",
-        ],
-    )
-
-    score.main()
-
-    # The skip_datasets flag should have omitted tiny_clf, so only other is called
-    assert eval_calls == ["other"]

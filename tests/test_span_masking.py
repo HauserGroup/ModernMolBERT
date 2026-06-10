@@ -319,7 +319,7 @@ def test_hetero_span_sampling_uses_hetero_start_weights(monkeypatch):
         captured_weights.append(weights.detach().clone())
         return torch.tensor([1])
 
-    coll._geom_dist = OneTokenSpans()
+    coll._geom_dist = OneTokenSpans()  # type: ignore[assignment]
     monkeypatch.setattr(torch, "multinomial", choose_hetero_position)
 
     input_ids_row = torch.tensor([0, 5, 6, 7, 2])

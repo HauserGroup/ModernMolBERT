@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from os.path import join
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import EmbeddedDataset
+from modernmolbert.eval.benchmarking_molecular_models.common.types import EmbeddedDataset
 
 
 def get_data(dataset: EmbeddedDataset) -> tuple[np.ndarray, np.ndarray]:

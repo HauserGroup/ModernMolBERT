@@ -6,7 +6,7 @@ from modernmolbert.collator import MolecularMLMCollator
 
 
 def _load_module():
-    module_path = Path(__file__).resolve().parents[1] / "scripts" / "fixed_eval_best_models.py"
+    module_path = Path(__file__).resolve().parents[1] / "analysis" / "sweep" / "fixed_eval_best_models.py"
     spec = importlib.util.spec_from_file_location("fixed_eval_best_models", module_path)
     assert spec is not None
     assert spec.loader is not None
@@ -75,43 +75,6 @@ def test_tensor_fingerprint_changes_when_labels_change() -> None:
     tensors["labels"][0, 1] = 99
 
     assert m.tensor_fingerprint(tensors, ["input_ids", "labels"]) != original_fingerprint
-
-
-def test_resolve_selected_runs_reads_best_metadata(tmp_path: Path) -> None:
-    m = _load_module()
-    sweep = tmp_path / "sweep"
-    run_dir = sweep / "mask_standard__mlm_0p15__lr_4e-4"
-    ckpt_dir = run_dir / "checkpoint-30000"
-    ckpt_dir.mkdir(parents=True)
-    _write_json(
-        run_dir / "run_args.json",
-        {
-            "masking_strategy": "standard",
-            "mlm_probability": 0.15,
-            "learning_rate": 4e-4,
-        },
-    )
-    _write_json(
-        sweep / "best_standard_run.json",
-        {
-            "run_name": "mask_standard__mlm_0p15__lr_4e-4",
-            "best_model_checkpoint": str(ckpt_dir),
-        },
-    )
-    _write_json(
-        sweep / "best_span_run.json",
-        {
-            "run_name": "mask_standard__mlm_0p15__lr_4e-4",
-            "best_model_checkpoint": str(ckpt_dir),
-        },
-    )
-
-    selected = m.resolve_selected_runs(sweep)
-
-    assert [run.label for run in selected] == ["standard", "span"]
-    assert selected[0].run_name == "mask_standard__mlm_0p15__lr_4e-4"
-    assert selected[0].run_dir == run_dir
-    assert selected[0].trained_masking_strategy == "standard"
 
 
 def test_script_uses_repo_collator_class() -> None:

@@ -12,24 +12,24 @@ import numpy as np
 from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     write_dataset_checkpoint,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
     load_embedding_config,
     load_yaml_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     EmbeddingConfig,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
     AVAILABLE_HEADS,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.procedure import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.procedure import (
     eval_procedure,
     load_embedded_dataset,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_model_version_hash,
 )
 
@@ -590,9 +590,6 @@ def build_run_plan(
     *,
     items: list[DatasetItem],
     skip_set: set[str],
-    checkpoint_dir: Path | None,
-    embedder: str,
-    resume: bool,
 ) -> tuple[list[DatasetItem], list[SkippedItem]]:
     """Apply all pre-run decisions once.
 
@@ -940,9 +937,6 @@ def main() -> int:
     run_items, skipped_items = build_run_plan(
         items=items,
         skip_set=skip_set,
-        checkpoint_dir=args.checkpoint_dir,
-        embedder=scoring_model_name,
-        resume=args.resume,
     )
 
     print_run_plan(

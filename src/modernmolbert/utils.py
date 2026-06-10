@@ -2,7 +2,6 @@
 Shared utilities for APE tokenizer interaction and dataset loading.
 """
 
-import hashlib
 import json
 import shutil
 import statistics
@@ -18,6 +17,8 @@ import torch
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
 from tqdm.auto import tqdm
 
+# Re-exported so existing callers can keep importing it from modernmolbert.utils.
+from modernmolbert.hf_upload import file_sha256 as file_sha256
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
@@ -29,12 +30,30 @@ SPECIAL_TOKENS: dict[str, str] = {
     "mask_token": "<mask>",
 }
 
+# Special-token IDs the model config and inference pipeline depend on.
+# resolve_special_ids returns the same keys, so the two compare directly.
+EXPECTED_SPECIAL_IDS: dict[str, int] = {
+    "bos_token": 0,
+    "pad_token": 1,
+    "eos_token": 2,
+    "unk_token": 3,
+    "mask_token": 4,
+}
+
+
+def assert_special_ids(special_ids: dict[str, int]) -> None:
+    """Raise if special-token IDs are not the layout the pipeline expects."""
+    if special_ids != EXPECTED_SPECIAL_IDS:
+        raise ValueError(
+            f"Unexpected special token IDs: {special_ids}; expected {EXPECTED_SPECIAL_IDS}. "
+            "Model config and inference depend on these positions."
+        )
+
+
 SELFIES_REPRESENTATION = "SELFIES"
 SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
-SELFIES_TOKENIZER_METADATA_FILENAME = "selfies_ape_tokenizer.metadata.json"
 SMILES_REPRESENTATION = "SMILES"
 SMILES_TOKENIZER_FILENAME = "smiles_ape_tokenizer.json"
-SMILES_TOKENIZER_METADATA_FILENAME = "smiles_ape_tokenizer.metadata.json"
 TOKENIZER_METADATA_FILENAMES = (
     "tokenizer_metadata.json",
     "ape_tokenizer_metadata.json",
@@ -88,6 +107,19 @@ def infer_validation_split(dataset_name: str, validation_split: str | None = Non
     if dataset_name == ZINC20_DATASET:
         return "validation"
     return None
+
+
+def _is_smiles(representation: str) -> bool:
+    return representation.upper() == SMILES_REPRESENTATION
+
+
+def infer_molecule_column(
+    dataset_name: str, representation: str, molecule_column: str | None = None
+) -> str:
+    """Resolve the dataset column holding molecule strings for the representation."""
+    if _is_smiles(representation):
+        return infer_smiles_column(dataset_name, molecule_column)
+    return infer_selfies_column(dataset_name, molecule_column)
 
 
 def filter_zinc20_chembl36_by_source(
@@ -182,17 +214,19 @@ def _resolve_dataset_name_as_local_path(dataset_name: str) -> Path | None:
     return None
 
 
-def _available_local_parquet_splits(directory: Path) -> set[str]:
-    aliases = {
-        "train": {"train"},
-        "valid": {"valid", "validation", "val"},
-        "validation": {"validation", "valid", "val"},
-        "val": {"val", "validation", "valid"},
-        "test": {"test"},
-    }
+# Accepted on-disk filename stems for each requested split.
+_SPLIT_ALIASES: dict[str, list[str]] = {
+    "train": ["train"],
+    "valid": ["valid", "validation", "val"],
+    "validation": ["validation", "valid", "val"],
+    "val": ["val", "validation", "valid"],
+    "test": ["test"],
+}
 
+
+def _available_local_parquet_splits(directory: Path) -> set[str]:
     available: set[str] = set()
-    for split_name, names in aliases.items():
+    for split_name, names in _SPLIT_ALIASES.items():
         if any((directory / f"{name}.parquet").exists() for name in names):
             available.add(split_name)
             continue
@@ -206,21 +240,13 @@ def _available_local_parquet_splits(directory: Path) -> set[str]:
 
 
 def _split_parquet_files(directory: Path, split: str) -> list[Path]:
-    aliases = {
-        "train": ["train"],
-        "valid": ["valid", "validation", "val"],
-        "validation": ["validation", "valid", "val"],
-        "val": ["val", "validation", "valid"],
-        "test": ["test"],
-    }
-
     files: list[Path] = []
-    for name in aliases.get(split, [split]):
+    for name in _SPLIT_ALIASES.get(split, [split]):
         files.extend(directory.glob(f"{name}.parquet"))
         files.extend(directory.glob(f"{name}-*.parquet"))
 
     if not files:
-        for name in aliases.get(split, [split]):
+        for name in _SPLIT_ALIASES.get(split, [split]):
             files.extend(directory.glob(f"**/{name}.parquet"))
             files.extend(directory.glob(f"**/{name}-*.parquet"))
 
@@ -311,16 +337,15 @@ def default_smiles_tokenizer_path() -> Path:
     return repo_root() / "tokenizer" / SMILES_TOKENIZER_FILENAME
 
 
+def default_tokenizer_path(representation: str) -> Path:
+    """Default tokenizer vocabulary path for the given representation."""
+    if _is_smiles(representation):
+        return default_smiles_tokenizer_path()
+    return default_selfies_tokenizer_path()
+
+
 def metadata_path_for_vocab(vocab_path: Path) -> Path:
     return vocab_path.with_suffix(".metadata.json")
-
-
-def file_sha256(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
 
 
 def write_tokenizer_metadata(metadata_path: Path, metadata: dict[str, Any]) -> None:
@@ -461,6 +486,14 @@ def validate_smiles_sample_shape(sequences: list[str]) -> None:
     empty = sum(1 for s in sequences if not s)
     if empty / len(sequences) > 0.05:
         raise ValueError("Sampled values do not look like SMILES strings (too many empty).")
+
+
+def validate_sample_shape(sequences: list[str], representation: str) -> None:
+    """Sanity-check that sampled sequences look like the expected representation."""
+    if _is_smiles(representation):
+        validate_smiles_sample_shape(sequences)
+    else:
+        validate_selfies_sample_shape(sequences)
 
 
 # ---------------------------------------------------------------------------
@@ -713,6 +746,31 @@ def ignored_special_token_ids(special_ids: dict[str, int]) -> set[int]:
 def eligible_token_ids(input_ids: list[int], special_ids: dict[str, int]) -> list[int]:
     excluded = ignored_special_token_ids(special_ids)
     return [tok for tok in input_ids if tok not in excluded]
+
+
+def assert_representation_compatible(
+    tokenizer: APEPreTrainedTokenizer,
+    special_ids: dict[str, int],
+    representation: str,
+    max_seq_length: int | None = 256,
+) -> None:
+    """Fail fast if the tokenizer cannot represent a trivial molecule (ethanol).
+
+    Catches a wrong or mismatched vocabulary before any expensive work: ethanol
+    must tokenize to mostly-known tokens for the given representation.
+    """
+    ethanol = "CCO" if _is_smiles(representation) else "[C][C][O]"
+    encoded = encode_sequence(tokenizer, ethanol, max_seq_length)["input_ids"]
+    eligible = eligible_token_ids(encoded, special_ids)
+    if not eligible:
+        raise ValueError(f"Tokenizer produced no usable tokens for ethanol ({ethanol}).")
+
+    unk_rate = sum(1 for tok in eligible if tok == special_ids["unk_token"]) / len(eligible)
+    if unk_rate > 0.05:
+        raise ValueError(
+            f"Tokenizer is not {representation}-compatible: {ethanol} "
+            f"unk_rate={unk_rate:.3f}, ids={encoded}"
+        )
 
 
 def compute_tokenization_stats(

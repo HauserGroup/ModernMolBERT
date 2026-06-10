@@ -196,17 +196,15 @@ from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
     SMILES_REPRESENTATION,
+    assert_special_ids,
     collect_corpus_for_tokenizer,
-    default_selfies_tokenizer_path,
-    default_smiles_tokenizer_path,
+    default_tokenizer_path,
     file_sha256,
-    infer_selfies_column,
-    infer_smiles_column,
+    infer_molecule_column,
     metadata_path_for_vocab,
     resolve_special_ids,
     tokenizer_vocab_size,
-    validate_selfies_sample_shape,
-    validate_smiles_sample_shape,
+    validate_sample_shape,
     write_tokenizer_metadata,
 )
 
@@ -257,25 +255,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer_train_size", type=int, default=2_000_000)
     parser.add_argument("--max_vocab_size", type=int, default=5000)
     parser.add_argument("--min_freq_for_merge", type=int, default=2000)
-    # Temporarily disabled: current implementation only writes vocab snapshots
-    # and does not support true resumeable tokenizer training checkpoints.
-    # parser.add_argument(
-    #     "--save_checkpoint",
-    #     action="store_true",
-    #     help="Periodically save intermediate tokenizer checkpoints during APE merge training.",
-    # )
-    # parser.add_argument(
-    #     "--checkpoint_path",
-    #     type=str,
-    #     default="tokenizer/checkpoints",
-    #     help="Directory where intermediate checkpoints are saved when --save_checkpoint is set.",
-    # )
-    # parser.add_argument(
-    #     "--checkpoint_interval",
-    #     type=int,
-    #     default=500,
-    #     help="Checkpoint interval in learned vocabulary entries.",
-    # )
     parser.add_argument(
         "--extra_vocab_symbols_path",
         type=Path,
@@ -357,6 +336,25 @@ def load_extra_vocab_symbols(
     return sorted(symbols)
 
 
+def validate_args(args: argparse.Namespace) -> None:
+    """Reject obviously invalid training arguments before any data is collected."""
+    positive = {
+        "tokenizer_train_size": args.tokenizer_train_size,
+        "max_vocab_size": args.max_vocab_size,
+        "min_freq_for_merge": args.min_freq_for_merge,
+        "shuffle_buffer_size": args.shuffle_buffer_size,
+    }
+    for name, value in positive.items():
+        if value <= 0:
+            raise ValueError(f"--{name} must be positive, got {value}")
+
+    if args.representation == SMILES_REPRESENTATION and args.extra_vocab_selfies_path is not None:
+        raise ValueError(
+            "--extra_vocab_selfies_path extracts SELFIES bracket symbols and is only "
+            "valid with --representation SELFIES. Use --extra_vocab_symbols_path for SMILES."
+        )
+
+
 def validate_selfies_symbols(symbols: list[str]) -> None:
     """Fail early if extra SELFIES symbols are malformed."""
 
@@ -372,17 +370,14 @@ def validate_selfies_symbols(symbols: list[str]) -> None:
 def main() -> None:
     load_dotenv()
     args = parse_args()
+    validate_args(args)
 
     if args.output_vocab_path is None:
-        if args.representation == SMILES_REPRESENTATION:
-            args.output_vocab_path = str(default_smiles_tokenizer_path())
-        else:
-            args.output_vocab_path = str(default_selfies_tokenizer_path())
+        args.output_vocab_path = str(default_tokenizer_path(args.representation))
 
-    if args.representation == SMILES_REPRESENTATION:
-        resolved_column = infer_smiles_column(args.dataset_name, args.molecule_column)
-    else:
-        resolved_column = infer_selfies_column(args.dataset_name, args.molecule_column)
+    resolved_column = infer_molecule_column(
+        args.dataset_name, args.representation, args.molecule_column
+    )
 
     output_vocab_path = Path(args.output_vocab_path)
     output_vocab_path.parent.mkdir(parents=True, exist_ok=True)
@@ -399,10 +394,7 @@ def main() -> None:
     )
     print(f"Corpus collected: {len(corpus)} sequences", flush=True)
 
-    if args.representation == SMILES_REPRESENTATION:
-        validate_smiles_sample_shape(corpus[: min(512, len(corpus))])
-    else:
-        validate_selfies_sample_shape(corpus[: min(512, len(corpus))])
+    validate_sample_shape(corpus[: min(512, len(corpus))], args.representation)
 
     max_merge_pieces = args.max_merge_pieces
     if max_merge_pieces is not None and max_merge_pieces <= 0:
@@ -415,10 +407,6 @@ def main() -> None:
         max_vocab_size=args.max_vocab_size,
         min_freq_for_merge=args.min_freq_for_merge,
         max_merge_pieces=max_merge_pieces,
-        # Temporarily disabled until tokenizer checkpointing can support true resume.
-        # save_checkpoint=args.save_checkpoint,
-        # checkpoint_path=args.checkpoint_path,
-        # checkpoint_interval=args.checkpoint_interval,
     )
 
     extra_symbols = load_extra_vocab_symbols(
@@ -446,6 +434,7 @@ def main() -> None:
     vocab_sha256 = file_sha256(output_vocab_path)
     vocab_size = tokenizer_vocab_size(tokenizer)
     special_ids = resolve_special_ids(tokenizer)
+    assert_special_ids(special_ids)
     metadata_path = metadata_path_for_vocab(output_vocab_path)
 
     # Phase 3: write metadata — SHA reflects the final on-disk vocab.

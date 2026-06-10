@@ -24,7 +24,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
 FIGDIR = Path("/Users/skn506/Documents/Claude/Projects/ModernMolBERT pre-print manuscript/figures")
 EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}

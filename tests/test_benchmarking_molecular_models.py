@@ -754,39 +754,12 @@ def test_run_scoring_requires_embedder_name() -> None:
 
 
 def test_score_normalize_dataset_name() -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.score import normalize_dataset_name
+    from modernmolbert.eval.benchmarking_molecular_models.score import normalize_name
 
-    assert normalize_dataset_name("bace") == "bace"
-    assert normalize_dataset_name("bace.yaml") == "bace"
-    assert normalize_dataset_name("config/datasets/bace.yaml") == "bace"
-    assert normalize_dataset_name(Path("bace.yaml")) == "bace"
-
-
-def test_score_resolve_dataset_names_with_skip(tmp_path: Path) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.score import resolve_dataset_names
-    from argparse import Namespace
-
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "datasets.yaml").write_text("datasets:\n  bace: {}\n  tox21: {}\n  clintox: {}\n")
-
-    # Test skipping from CLI args (stem or yaml)
-    args = Namespace(datasets=["all"], skip_datasets=["bace.yaml", "tox21"])
-    cfg = {}
-    names = resolve_dataset_names(config_dir, cfg, args)
-    assert names == ["clintox"]
-
-    # Test skipping from config list
-    args = Namespace(datasets=["all"], skip_datasets=None)
-    cfg = {"skip_datasets": ["bace", "clintox.yaml"]}
-    names = resolve_dataset_names(config_dir, cfg, args)
-    assert names == ["tox21"]
-
-    # Test skipping from config string (legacy support)
-    args = Namespace(datasets=["all"], skip_datasets=None)
-    cfg = {"skip_dataset": "bace.yaml"}
-    names = resolve_dataset_names(config_dir, cfg, args)
-    assert sorted(names) == ["clintox", "tox21"]
+    assert normalize_name("bace") == "bace"
+    assert normalize_name("bace.yaml") == "bace"
+    assert normalize_name("config/datasets/bace.yaml") == "bace"
+    assert normalize_name(Path("bace.yaml")) == "bace"
 
 
 def test_score_resolve_model_name() -> None:

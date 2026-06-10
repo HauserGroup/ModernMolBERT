@@ -1,4 +1,6 @@
 import os
+from collections.abc import Sequence
+
 import numpy as np
 
 from sklearn.metrics import roc_auc_score
@@ -168,7 +170,10 @@ def get_skfp_roc_auc(y_pred: np.ndarray, y_test: np.ndarray) -> float:
         return multioutput_auroc_score(y_test, y_pred)
 
 
-def multioutput_auroc_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
+def multioutput_auroc_score(
+    y_true: np.ndarray,
+    y_score: np.ndarray | Sequence[np.ndarray],
+) -> float:
     y_true = np.asarray(y_true, dtype=float)
     n_outputs = 1 if y_true.ndim == 1 else y_true.shape[1]
     y_score = _normalize_auc_scores(

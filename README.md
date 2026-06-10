@@ -32,7 +32,13 @@ uv sync
 
 For CUDA training, add the CUDA extra: `uv sync --extra cuda`. FlashAttention is optional and CUDA-only — do not install it for Mac MPS.
 
-To only *use* a released model, all you need is `transformers`, `torch`, and `selfies`:
+The package is not published to PyPI. To install it directly into another environment, point pip at this GitHub repository:
+
+```bash
+pip install git+https://github.com/HauserGroup/ModernMolBERT
+```
+
+To only *use* a released model, you do not need this package at all — just `transformers`, `torch`, and `selfies`, and load the weights from the Hugging Face Hub:
 
 ```bash
 pip install transformers torch selfies

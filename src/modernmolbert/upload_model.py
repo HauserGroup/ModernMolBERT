@@ -127,55 +127,43 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _final_model_or_raise(run_dir: Path, reason: str, error: Exception) -> Path:
+    """Return run_dir/final_model if it exists (logging the fallback), else raise error."""
+    fallback = run_dir / "final_model"
+    if fallback.exists():
+        print(f"{reason}; falling back to {fallback}", flush=True)
+        return fallback
+    raise error
+
+
+def resolve_best_checkpoint(run_dir: Path) -> Path:
+    state_path = run_dir / "trainer_state.json"
+    if not state_path.exists():
+        msg = f"trainer_state.json not found in {run_dir}"
+        return _final_model_or_raise(run_dir, msg, FileNotFoundError(msg))
+
+    best = json.loads(state_path.read_text(encoding="utf-8")).get("best_model_checkpoint")
+    if not best:
+        return _final_model_or_raise(
+            run_dir,
+            "trainer_state.json has no best_model_checkpoint",
+            ValueError("trainer_state.json has no best_model_checkpoint entry"),
+        )
+
+    source = Path(best)
+    if not source.is_absolute():
+        source = repo_root() / source
+    if not source.exists():
+        msg = f"best_model_checkpoint does not exist: {source}"
+        return _final_model_or_raise(run_dir, msg, FileNotFoundError(msg))
+    return source
+
+
 def resolve_source_dir(run_dir: Path, checkpoint: str) -> Path:
     if checkpoint == "final":
         source = run_dir / "final_model"
-
     elif checkpoint == "best":
-        state_path = run_dir / "trainer_state.json"
-
-        if not state_path.exists():
-            fallback = run_dir / "final_model"
-            if fallback.exists():
-                print(
-                    f"trainer_state.json not found in {run_dir}; falling back to {fallback}",
-                    flush=True,
-                )
-                source = fallback
-            else:
-                raise FileNotFoundError(f"trainer_state.json not found in {run_dir}")
-
-        else:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-            best = state.get("best_model_checkpoint")
-
-            if not best:
-                fallback = run_dir / "final_model"
-                if fallback.exists():
-                    print(
-                        f"trainer_state.json has no best_model_checkpoint; falling back to {fallback}",
-                        flush=True,
-                    )
-                    source = fallback
-                else:
-                    raise ValueError("trainer_state.json has no best_model_checkpoint entry")
-
-            else:
-                source = Path(best)
-                if not source.is_absolute():
-                    source = repo_root() / source
-
-                if not source.exists():
-                    fallback = run_dir / "final_model"
-                    if fallback.exists():
-                        print(
-                            f"best_model_checkpoint does not exist: {source}; falling back to {fallback}",
-                            flush=True,
-                        )
-                        source = fallback
-                    else:
-                        raise FileNotFoundError(f"best_model_checkpoint does not exist: {source}")
-
+        source = resolve_best_checkpoint(run_dir)
     else:
         source = run_dir / f"checkpoint-{checkpoint}"
 

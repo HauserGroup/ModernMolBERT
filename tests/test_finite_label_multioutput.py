@@ -7,11 +7,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
     ConstantProbabilityClassifier,
     FiniteLabelMultiOutputClassifier,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
     finite_label_multioutput_score,
     fit_model,
     fit_multioutput_finite_label_model,

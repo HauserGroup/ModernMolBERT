@@ -15,20 +15,20 @@ from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     count_result_rows,
     delete_result_rows,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     EvaluationResult,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.const import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
     DEFAULT_MEMORY_WEIGHT,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     evaluate,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
     fit_and_eval_embedding,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     NpEncoder,
     get_model_version_hash,
 )

@@ -12,24 +12,24 @@ import numpy as np
 from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     write_dataset_checkpoint,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
     load_embedding_config,
     load_yaml_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     EmbeddingConfig,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
     AVAILABLE_HEADS,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.procedure import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.procedure import (
     eval_procedure,
     load_embedded_dataset,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_model_version_hash,
 )
 

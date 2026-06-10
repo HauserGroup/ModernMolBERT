@@ -19,25 +19,25 @@ from modernmolbert.eval.benchmarking_molecular_models.embed_modernmolbert import
     embed_dataset,
 )
 from modernmolbert.eval.featurizers.base import FeatureBatch
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     Dataset,
     EmbeddedDataset,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     multioutput_auroc_score,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
     get_knn_distance,
     tanimoto_count_distance,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.train import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
     fit_and_eval_embedding,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_model_version_hash,
 )
 
@@ -91,7 +91,7 @@ def test_dataset_registry_is_single_yaml() -> None:
 
 
 def test_tdc_loader_keeps_scaffold_split_when_one_smiles_fails(capsys) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         load_tdc_module_dataset,
     )
 
@@ -139,7 +139,7 @@ def test_tdc_loader_keeps_scaffold_split_when_one_smiles_fails(capsys) -> None:
 
 
 def test_tdc_metadata_patch_adds_pampa_to_old_tdc_registry(monkeypatch) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common import data_v2
+    from modernmolbert.eval.benchmarking_molecular_models.common import data_v2
 
     metadata = SimpleNamespace(
         dataset_names={"ADME": ["hia_hou"]},
@@ -163,7 +163,7 @@ def test_tdc_metadata_patch_adds_pampa_to_old_tdc_registry(monkeypatch) -> None:
 
 
 def test_tdc_metadata_patch_adds_herg_karim_to_old_tdc_registry(monkeypatch) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common import data_v2
+    from modernmolbert.eval.benchmarking_molecular_models.common import data_v2
 
     metadata = SimpleNamespace(
         dataset_names={"Tox": ["herg"]},
@@ -187,7 +187,7 @@ def test_tdc_metadata_patch_adds_herg_karim_to_old_tdc_registry(monkeypatch) -> 
 
 
 def test_build_dataset_drops_uncanonicalizable_smiles_and_remaps_splits(capsys) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         build_dataset,
     )
 
@@ -211,7 +211,7 @@ def test_build_dataset_drops_uncanonicalizable_smiles_and_remaps_splits(capsys) 
 
 
 def test_ogb_torch_load_context_sets_legacy_weights_only_default(monkeypatch) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         torch_load_with_legacy_ogb_defaults,
     )
 
@@ -234,7 +234,7 @@ def test_ogb_torch_load_context_sets_legacy_weights_only_default(monkeypatch) ->
 
 
 def test_ogb_outdated_pkg_resources_warning_is_suppressed() -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.src.common.data_v2 import (
+    from modernmolbert.eval.benchmarking_molecular_models.common.data_v2 import (
         suppress_outdated_pkg_resources_warning,
     )
 

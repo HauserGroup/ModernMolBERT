@@ -23,7 +23,7 @@ import joblib
 import numpy as np
 import selfies as sf
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
 )

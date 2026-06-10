@@ -5,7 +5,7 @@ import numpy as np
 
 from sklearn.metrics import roc_auc_score
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EvaluationResult,
     HeadResult,
 )

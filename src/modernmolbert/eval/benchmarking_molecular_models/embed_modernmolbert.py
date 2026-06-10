@@ -16,12 +16,12 @@ from typing import Any
 import joblib
 import numpy as np
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.config import (
+from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
     load_embedding_config,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     Dataset,
     EmbeddedDataset,
     EmbeddingConfig,

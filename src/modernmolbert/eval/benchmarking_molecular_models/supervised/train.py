@@ -9,28 +9,28 @@ from sklearn.model_selection import KFold, ParameterGrid, StratifiedKFold
 from sklearn.metrics import roc_auc_score
 from sklearn.metrics import make_scorer
 
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import (
+from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     HeadResult,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.common.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.datasplit import (
     get_test_data,
     get_train_data,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.const import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
     CV_SPLITS,
     N_JOBS,
     VERBOSITY,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.eval_metrics import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     multioutput_auroc_score,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.models import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
     FiniteLabelMultiOutputClassifier,
     get_clf_models,
     get_reg_models,
 )
-from modernmolbert.eval.benchmarking_molecular_models.src.eval.supervised.utils import (
+from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_sklearn_scorer,
 )
 

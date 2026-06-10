@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models import score
-from modernmolbert.eval.benchmarking_molecular_models.src.common.types import EmbeddedDataset
+from modernmolbert.eval.benchmarking_molecular_models.common.types import EmbeddedDataset
 
 
 def make_dataset_info(name: str, metric: str = "roc_auc"):

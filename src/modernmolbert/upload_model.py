@@ -12,16 +12,14 @@ uv run python -m modernmolbert.upload_model \
 
 import argparse
 import json
-import os
 import shutil
-import tempfile
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any
 
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
 
+from modernmolbert.hf_upload import make_staging_dir, push_folder_to_hub, resolve_hf_token
 from modernmolbert.utils import copy_tokenizer_metadata_from_anywhere, repo_root
 
 
@@ -791,29 +789,6 @@ def validate_staged_model(tmp: Path) -> None:
     print(f"[validate] OK logits shape={tuple(out.logits.shape)}", flush=True)
 
 
-def prepare_staging_dir(keep_staging_dir: Path | None) -> tuple[Path, Callable[[], None]]:
-    if keep_staging_dir is not None:
-        tmp = keep_staging_dir
-
-        if tmp.exists():
-            shutil.rmtree(tmp)
-
-        tmp.mkdir(parents=True, exist_ok=True)
-
-        def cleanup() -> None:
-            return None
-
-        return tmp, cleanup
-
-    temp_dir = tempfile.TemporaryDirectory()
-    tmp = Path(temp_dir.name)
-
-    def cleanup() -> None:
-        temp_dir.cleanup()
-
-    return tmp, cleanup
-
-
 def upload_model_to_hub(
     run_dir: Path,
     repo_id: str,
@@ -832,7 +807,7 @@ def upload_model_to_hub(
     source_dir = resolve_source_dir(run_dir, checkpoint)
     print(f"Source: {source_dir}", flush=True)
 
-    tmp, cleanup = prepare_staging_dir(keep_staging_dir)
+    tmp, cleanup = make_staging_dir(keep_staging_dir)
     staged_names: list[str] = []
 
     try:
@@ -851,19 +826,14 @@ def upload_model_to_hub(
         if dry_run:
             print(f"Dry run: skipped upload to https://huggingface.co/{repo_id}", flush=True)
         else:
-            if api is None:
-                api = HfApi(token=token)
-            api.create_repo(
-                repo_id=repo_id,
+            push_folder_to_hub(
+                tmp,
+                repo_id,
                 repo_type="model",
                 private=private,
-                exist_ok=True,
-            )
-            api.upload_folder(
-                folder_path=str(tmp),
-                repo_id=repo_id,
-                repo_type="model",
                 commit_message=commit_message,
+                token=token,
+                api=api,
             )
 
     finally:
@@ -885,13 +855,7 @@ def main() -> None:
     load_dotenv()
     args = parse_args()
 
-    token = os.environ.get("HF_TOKEN_ORG") or os.environ.get("HF_TOKEN") or None
-
-    if args.hf_login:
-        from huggingface_hub import login
-
-        login(token=token)
-        token = None
+    token = resolve_hf_token(args.hf_login)
 
     result = upload_model_to_hub(
         run_dir=args.run_dir,

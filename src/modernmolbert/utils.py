@@ -2,7 +2,6 @@
 Shared utilities for APE tokenizer interaction and dataset loading.
 """
 
-import hashlib
 import json
 import shutil
 import statistics
@@ -18,6 +17,8 @@ import torch
 from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
 from tqdm.auto import tqdm
 
+# Re-exported so existing callers can keep importing it from modernmolbert.utils.
+from modernmolbert.hf_upload import file_sha256 as file_sha256
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
@@ -325,14 +326,6 @@ def default_tokenizer_path(representation: str) -> Path:
 
 def metadata_path_for_vocab(vocab_path: Path) -> Path:
     return vocab_path.with_suffix(".metadata.json")
-
-
-def file_sha256(path: Path) -> str:
-    hasher = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
 
 
 def write_tokenizer_metadata(metadata_path: Path, metadata: dict[str, Any]) -> None:

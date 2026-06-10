@@ -12,15 +12,13 @@ uv run python -m modernmolbert.upload_dataset \
 
 import argparse
 import json
-import os
 import shutil
-import tempfile
 from pathlib import Path
-from collections.abc import Callable
 
 from dotenv import load_dotenv
 from huggingface_hub import HfApi
 
+from modernmolbert.hf_upload import make_staging_dir, push_folder_to_hub, resolve_hf_token
 from modernmolbert.utils import repo_root
 
 
@@ -74,6 +72,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _fmt_int(value: object) -> str:
+    """Thousands-separated int, or the value as-is when it is not an int."""
+    return f"{value:,}" if isinstance(value, int) else str(value)
+
+
 def build_readme(metadata: dict) -> str:
     stats = metadata.get("preparation_stats", {})
     counts = metadata.get("row_counts", {})
@@ -111,9 +114,9 @@ def build_readme(metadata: dict) -> str:
         "|-------|-------|\n"
         f"| source | [{metadata.get('dataset_name', '-')}](https://huggingface.co/datasets/{metadata.get('dataset_name', '-')}) |\n"
         f"| representation | {metadata.get('representation', '-')} |\n"
-        f"| train rows | {train_n:,} |\n"
-        f"| validation rows | {valid_n:,} |\n"
-        f"| total rows | {total_n:,} |\n"
+        f"| train rows | {_fmt_int(train_n)} |\n"
+        f"| validation rows | {_fmt_int(valid_n)} |\n"
+        f"| total rows | {_fmt_int(total_n)} |\n"
         f"| min heavy atoms | {config.get('min_heavy_atoms', '-')} |\n"
         f"| max heavy atoms | {config.get('max_heavy_atoms', '-')} |\n"
         f"| max MW | {config.get('max_mw', '-')} |\n"
@@ -121,11 +124,11 @@ def build_readme(metadata: dict) -> str:
         f"| split method | deterministic hash on InChIKey |\n"
         f"| valid fraction | {config.get('valid_fraction', '-')} |\n\n"
         "## Preparation stats\n\n"
-        f"- Input rows: {stats.get('input_rows', '-'):,}\n"
-        f"- After deduplication: {stats.get('rows_after_dedupe', '-'):,}\n"
-        f"- Valid SELFIES conversions: {stats.get('rows_valid_after_conversion', '-'):,}\n"
-        f"- After physicochemical filters: {stats.get('rows_after_filters', '-'):,}\n"
-        f"- Dropped (invalid or filtered): {stats.get('dropped_invalid_or_filtered', '-'):,}\n\n"
+        f"- Input rows: {_fmt_int(stats.get('input_rows', '-'))}\n"
+        f"- After deduplication: {_fmt_int(stats.get('rows_after_dedupe', '-'))}\n"
+        f"- Valid SELFIES conversions: {_fmt_int(stats.get('rows_valid_after_conversion', '-'))}\n"
+        f"- After physicochemical filters: {_fmt_int(stats.get('rows_after_filters', '-'))}\n"
+        f"- Dropped (invalid or filtered): {_fmt_int(stats.get('dropped_invalid_or_filtered', '-'))}\n\n"
         "## Columns\n\n"
         "| column | description |\n"
         "|--------|-------------|\n"
@@ -188,27 +191,6 @@ def build_staging_dir(dataset_dir: Path, tmp: Path) -> dict:
     return metadata
 
 
-def prepare_staging_dir(keep_staging_dir: Path | None) -> tuple[Path, Callable[[], None]]:
-    if keep_staging_dir is not None:
-        tmp = keep_staging_dir
-        if tmp.exists():
-            shutil.rmtree(tmp)
-        tmp.mkdir(parents=True, exist_ok=True)
-
-        def cleanup() -> None:
-            return None
-
-        return tmp, cleanup
-
-    temp_dir = tempfile.TemporaryDirectory()
-    tmp = Path(temp_dir.name)
-
-    def cleanup() -> None:
-        temp_dir.cleanup()
-
-    return tmp, cleanup
-
-
 def upload_dataset_to_hub(
     dataset_dir: Path,
     repo_id: str,
@@ -222,7 +204,7 @@ def upload_dataset_to_hub(
     if not dataset_dir.is_absolute():
         dataset_dir = repo_root() / dataset_dir
 
-    tmp, cleanup = prepare_staging_dir(keep_staging_dir)
+    tmp, cleanup = make_staging_dir(keep_staging_dir)
     staged_names: list[str] = []
 
     try:
@@ -238,19 +220,14 @@ def upload_dataset_to_hub(
                 f"Dry run: skipped upload to https://huggingface.co/datasets/{repo_id}", flush=True
             )
         else:
-            if api is None:
-                api = HfApi(token=token)
-            api.create_repo(
-                repo_id=repo_id,
+            push_folder_to_hub(
+                tmp,
+                repo_id,
                 repo_type="dataset",
                 private=private,
-                exist_ok=True,
-            )
-            api.upload_folder(
-                folder_path=str(tmp),
-                repo_id=repo_id,
-                repo_type="dataset",
                 commit_message=commit_message,
+                token=token,
+                api=api,
             )
             print(f"[upload] uploaded to https://huggingface.co/datasets/{repo_id}", flush=True)
 
@@ -273,13 +250,7 @@ def main() -> None:
     load_dotenv()
     args = parse_args()
 
-    token = os.environ.get("HF_TOKEN_ORG") or os.environ.get("HF_TOKEN") or None
-
-    if args.hf_login:
-        from huggingface_hub import login
-
-        login(token=token)
-        token = None
+    token = resolve_hf_token(args.hf_login)
 
     result = upload_dataset_to_hub(
         dataset_dir=args.dataset_dir,

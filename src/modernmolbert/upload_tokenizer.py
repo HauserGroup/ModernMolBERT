@@ -1,17 +1,15 @@
 """Stage and upload an APE tokenizer to Hugging Face Hub."""
 
 import argparse
-import hashlib
 import json
-import os
 import shutil
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
-from huggingface_hub import HfApi
 from transformers import AutoTokenizer
 
+from modernmolbert.hf_upload import file_sha256, push_folder_to_hub, resolve_hf_token
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
@@ -68,14 +66,6 @@ def load_metadata(metadata_path: Path) -> dict:
         raise FileNotFoundError(f"Missing tokenizer metadata: {metadata_path}")
 
     return json.loads(metadata_path.read_text(encoding="utf-8"))
-
-
-def file_sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def verify_metadata(metadata: dict, vocab_path: Path) -> str:
@@ -274,21 +264,14 @@ def upload_tokenizer_to_hub(
         print(f"Dry run staged tokenizer at {staging_dir}")
         return
 
-    api = HfApi(token=token)
-
-    api.create_repo(
-        repo_id=repo_id,
+    push_folder_to_hub(
+        staging_dir,
+        repo_id,
         repo_type="model",
         private=private,
-        exist_ok=True,
-    )
-
-    api.upload_folder(
-        folder_path=str(staging_dir),
-        repo_id=repo_id,
-        repo_type="model",
         commit_message=commit_message
         or f"Add APE {representation} tokenizer with max length {model_max_length}",
+        token=token,
     )
 
     if not keep_staging_dir:
@@ -300,13 +283,7 @@ def main() -> None:
     load_dotenv()
     args = parse_args()
 
-    token = os.environ.get("HF_TOKEN_ORG") or os.environ.get("HF_TOKEN") or None
-
-    if args.hf_login:
-        from huggingface_hub import login
-
-        login(token=token)
-        token = None
+    token = resolve_hf_token(args.hf_login)
 
     upload_tokenizer_to_hub(
         repo_id=args.repo_id,

@@ -266,9 +266,6 @@ def test_build_run_plan_skips_requested_datasets() -> None:
     run_items, skipped_items = score.build_run_plan(
         items=items,
         skip_set={"ogbg-molhiv", "ogbg-molmuv"},
-        checkpoint_dir=None,
-        embedder="modernmolbert_best_span",
-        resume=True,
     )
 
     assert [item.name for item in run_items] == ["AMES"]
@@ -278,7 +275,9 @@ def test_build_run_plan_skips_requested_datasets() -> None:
     ]
 
 
-def test_build_run_plan_skips_existing_checkpoints(tmp_path) -> None:
+def test_build_run_plan_keeps_all_items_when_no_skips() -> None:
+    # build_run_plan only applies requested skips; checkpoint-based resume is
+    # decided per-head inside the scoring loop and must not remove items here.
     items = [
         score.DatasetItem(
             config_name="clf_AMES",
@@ -292,56 +291,16 @@ def test_build_run_plan_skips_existing_checkpoints(tmp_path) -> None:
         ),
     ]
 
-    checkpoint = score.dataset_checkpoint_path(
-        checkpoint_dir=tmp_path,
-        dataset="AMES",
-        embedder="modernmolbert_best_span",
-    )
-    checkpoint.write_text("dataset,embedder\nAMES,modernmolbert_best_span\n")
-
     run_items, skipped_items = score.build_run_plan(
         items=items,
         skip_set=set(),
-        checkpoint_dir=tmp_path,
-        embedder="modernmolbert_best_span",
-        resume=True,
     )
 
-    assert [item.name for item in run_items] == ["DILI"]
-    assert [(item.name, item.reason) for item in skipped_items] == [
-        ("AMES", "checkpoint exists"),
-    ]
-
-
-def test_build_run_plan_does_not_skip_checkpoint_when_resume_false(tmp_path) -> None:
-    items = [
-        score.DatasetItem(
-            config_name="clf_AMES",
-            name="AMES",
-            info=make_dataset_info("AMES"),
-        ),
-    ]
-
-    checkpoint = score.dataset_checkpoint_path(
-        checkpoint_dir=tmp_path,
-        dataset="AMES",
-        embedder="modernmolbert_best_span",
-    )
-    checkpoint.write_text("dataset,embedder\nAMES,modernmolbert_best_span\n")
-
-    run_items, skipped_items = score.build_run_plan(
-        items=items,
-        skip_set=set(),
-        checkpoint_dir=tmp_path,
-        embedder="modernmolbert_best_span",
-        resume=False,
-    )
-
-    assert [item.name for item in run_items] == ["AMES"]
+    assert [item.name for item in run_items] == ["AMES", "DILI"]
     assert skipped_items == []
 
 
-def test_build_run_plan_requested_skip_takes_priority_over_checkpoint(tmp_path) -> None:
+def test_build_run_plan_applies_requested_skip() -> None:
     items = [
         score.DatasetItem(
             config_name="clf_AMES",
@@ -349,20 +308,10 @@ def test_build_run_plan_requested_skip_takes_priority_over_checkpoint(tmp_path) 
             info=make_dataset_info("AMES"),
         ),
     ]
-
-    checkpoint = score.dataset_checkpoint_path(
-        checkpoint_dir=tmp_path,
-        dataset="AMES",
-        embedder="modernmolbert_best_span",
-    )
-    checkpoint.write_text("dataset,embedder\nAMES,modernmolbert_best_span\n")
 
     run_items, skipped_items = score.build_run_plan(
         items=items,
         skip_set={"AMES"},
-        checkpoint_dir=tmp_path,
-        embedder="modernmolbert_best_span",
-        resume=True,
     )
 
     assert run_items == []

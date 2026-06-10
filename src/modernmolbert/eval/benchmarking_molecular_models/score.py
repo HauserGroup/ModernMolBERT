@@ -590,9 +590,6 @@ def build_run_plan(
     *,
     items: list[DatasetItem],
     skip_set: set[str],
-    checkpoint_dir: Path | None,
-    embedder: str,
-    resume: bool,
 ) -> tuple[list[DatasetItem], list[SkippedItem]]:
     """Apply all pre-run decisions once.
 
@@ -940,9 +937,6 @@ def main() -> int:
     run_items, skipped_items = build_run_plan(
         items=items,
         skip_set=skip_set,
-        checkpoint_dir=args.checkpoint_dir,
-        embedder=scoring_model_name,
-        resume=args.resume,
     )
 
     print_run_plan(

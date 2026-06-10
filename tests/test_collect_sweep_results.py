@@ -4,7 +4,9 @@ from pathlib import Path
 
 
 def _load_module():
-    module_path = Path(__file__).resolve().parents[1] / "scripts" / "collect_sweep_results.py"
+    module_path = (
+        Path(__file__).resolve().parents[1] / "analysis" / "sweep" / "collect_sweep_results.py"
+    )
     spec = importlib.util.spec_from_file_location("collect_sweep_results", module_path)
     assert spec is not None
     assert spec.loader is not None

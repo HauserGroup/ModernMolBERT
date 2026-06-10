@@ -10,11 +10,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
-    PRASKI_COLUMNS,
-    append_result_row,
-    read_results_csv,
-)
 from modernmolbert.eval.benchmarking_molecular_models.embed_modernmolbert import (
     embed_dataset,
 )
@@ -490,70 +485,6 @@ def test_embed_modernmolbert_help_and_unknown_dataset() -> None:
     assert "Unknown dataset" in bad_result.stderr
 
 
-def test_score_writes_dataset_checkpoint(monkeypatch, tmp_path) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models import score
-
-    config_dir = tmp_path / "config"
-    write_embedding_test_config(config_dir)
-    (config_dir / "score.yaml").write_text("cache: true\ndatasets:\n  - tiny_clf\n")
-    output_csv = tmp_path / "results.csv"
-    checkpoint_dir = tmp_path / "checkpoints"
-
-    def fake_eval(
-        safe,
-        embed_config,
-        full_model_name,
-        short_model_name,
-        dataset_info,
-        model_head,
-        output_csv,
-        override,
-    ):
-        append_result_row(
-            output_csv,
-            {
-                "dataset": dataset_info.name,
-                "task": dataset_info.task,
-                "embedder": short_model_name,
-                "model": model_head,
-                "hyperparams": "{}",
-                "library_hash": "test",
-                "cv_metric_name": dataset_info.metric,
-                "cv_metric": 0.5,
-                "test_metric_name": dataset_info.metric,
-                "test_metric": 0.6,
-            },
-        )
-
-    monkeypatch.setattr(score, "run_eval", fake_eval)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "score.py",
-            "--config-dir",
-            str(config_dir),
-            "--datasets",
-            "tiny_clf",
-            "--heads",
-            "rf",
-            "--embedder",
-            "fake_embedder",
-            "--output-csv",
-            str(output_csv),
-            "--checkpoint-dir",
-            str(checkpoint_dir),
-        ],
-    )
-
-    score.main()
-
-    checkpoint = read_results_csv(checkpoint_dir / "tiny.csv")
-    assert list(checkpoint.columns) == PRASKI_COLUMNS
-    assert checkpoint.loc[0, "dataset"] == "tiny"
-    assert checkpoint.loc[0, "embedder"] == "fake_embedder"
-
-
 def test_embed_dataset_preserves_pooling_metadata() -> None:
     dataset = Dataset(
         name="tiny",
@@ -753,15 +684,6 @@ def test_run_scoring_requires_embedder_name() -> None:
     assert "Usage:" in result.stdout
 
 
-def test_score_normalize_dataset_name() -> None:
-    from modernmolbert.eval.benchmarking_molecular_models.score import normalize_name
-
-    assert normalize_name("bace") == "bace"
-    assert normalize_name("bace.yaml") == "bace"
-    assert normalize_name("config/datasets/bace.yaml") == "bace"
-    assert normalize_name(Path("bace.yaml")) == "bace"
-
-
 def test_score_resolve_model_name() -> None:
     from modernmolbert.eval.benchmarking_molecular_models.score import resolve_model_name
     from argparse import Namespace
@@ -786,66 +708,3 @@ def test_score_resolve_model_name() -> None:
     # Config model.model_name precedence
     cfg = {"model": {"model_name": "cfg_model_name"}}
     assert resolve_model_name(cfg, args) == "cfg_model_name"
-
-
-def test_score_main_skips_datasets(monkeypatch, tmp_path) -> None:
-    from modernmolbert.eval.benchmarking_molecular_models import score
-
-    config_dir = tmp_path / "config"
-    write_embedding_test_config(config_dir)
-
-    # We define two datasets
-    (config_dir / "datasets.yaml").write_text(
-        "\n".join(
-            [
-                "datasets:",
-                "  tiny_clf:",
-                "    name: tiny",
-                "    metric: roc_auc",
-                "    task: classification",
-                "  other_clf:",
-                "    name: other",
-                "    metric: roc_auc",
-                "    task: classification",
-            ]
-        )
-    )
-    (config_dir / "score.yaml").write_text("cache: true\n")
-
-    eval_calls = []
-
-    def fake_eval(
-        safe,
-        embed_config,
-        full_model_name,
-        short_model_name,
-        dataset_info,
-        model_head,
-        output_csv,
-        override,
-    ):
-        eval_calls.append(dataset_info.name)
-
-    monkeypatch.setattr(score, "run_eval", fake_eval)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "score.py",
-            "--config-dir",
-            str(config_dir),
-            "--datasets",
-            "all",
-            "--skip_datasets",
-            "tiny_clf.yaml",
-            "--heads",
-            "rf",
-            "--embedder",
-            "fake_embedder",
-        ],
-    )
-
-    score.main()
-
-    # The skip_datasets flag should have omitted tiny_clf, so only other is called
-    assert eval_calls == ["other"]

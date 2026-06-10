@@ -52,7 +52,11 @@ def _tiny_tokenizer() -> APEPreTrainedTokenizer:
     return tok
 
 
-def _broken_bracket_tokenizer() -> APEPreTrainedTokenizer:
+def _incomplete_vocab_tokenizer() -> APEPreTrainedTokenizer:
+    # Valid SELFIES vocab that is missing every token in the test sample
+    # ([C], [O]), so encoding those sequences yields all-<unk>. (A vocab with
+    # bare non-bracket tokens like "C" is now rejected outright by the strict
+    # SELFIES pre-tokenizer, so it can no longer stand in for a "broken" vocab.)
     tok = APEPreTrainedTokenizer()
     tok.vocabulary = {
         "<s>": 0,
@@ -60,8 +64,8 @@ def _broken_bracket_tokenizer() -> APEPreTrainedTokenizer:
         "</s>": 2,
         "<unk>": 3,
         "<mask>": 4,
-        "C": 5,
-        "O": 6,
+        "[N]": 5,
+        "[P]": 6,
     }
     tok.special_tokens = {
         "<s>": 0,
@@ -113,7 +117,7 @@ def test_tokenization_stats_and_metadata_helpers(tmp_path: Path):
 
 
 def test_unk_rate_counts_unknown_tokens_when_unk_is_special():
-    tokenizer = _broken_bracket_tokenizer()
+    tokenizer = _incomplete_vocab_tokenizer()
     special_ids = resolve_special_ids(tokenizer)
 
     stats = compute_tokenization_stats(
@@ -123,7 +127,7 @@ def test_unk_rate_counts_unknown_tokens_when_unk_is_special():
         special_ids=special_ids,
     )
 
-    # Expect unknowns from bracket characters to be counted.
+    # [C] and [O] are absent from the vocab, so every token is unknown.
     assert stats["unk_rate"] > 0.5
 
     encoded = tokenizer("[C][C][O]", add_special_tokens=True)["input_ids"]
@@ -133,7 +137,7 @@ def test_unk_rate_counts_unknown_tokens_when_unk_is_special():
 
 
 def test_ethanol_gate_fails_when_selfies_symbols_are_unknown():
-    tokenizer = _broken_bracket_tokenizer()
+    tokenizer = _incomplete_vocab_tokenizer()
     special_ids = resolve_special_ids(tokenizer)
 
     try:
@@ -294,7 +298,7 @@ def test_print_unknown_examples_skips_when_n_zero(capsys):
 def test_print_unknown_examples_prints_sequences_with_unk(capsys):
     from modernmolbert.validate_tokenizer import _print_unknown_examples
 
-    tok = _broken_bracket_tokenizer()
+    tok = _incomplete_vocab_tokenizer()
     special_ids = resolve_special_ids(tok)
     _print_unknown_examples(tok, ["[C][C][O]"], special_ids, max_seq_length=64, n=1)
     out = capsys.readouterr().out

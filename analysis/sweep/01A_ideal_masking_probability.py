@@ -192,7 +192,6 @@ for _, opt_row in df_optimal.iterrows():
             print(f"  {ds_name}: fitting {HEAD} ...", end=" ", flush=True)
             head_result = fit_and_eval_embedding(
                 dataset=embedded,
-                metric_name=cfg.metric,
                 model_head=HEAD,
                 memory_weight=cfg.get("memory_weight", DEFAULT_MEMORY_WEIGHT),
             )

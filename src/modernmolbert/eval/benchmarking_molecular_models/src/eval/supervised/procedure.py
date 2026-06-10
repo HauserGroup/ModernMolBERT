@@ -79,14 +79,12 @@ def eval_embedding(
     data: EmbeddedDataset,
     pred_directory: str,
     dataset_config,
-    metric_name: str,
     model_head: str,
     n_jobs: int | None = None,
 ) -> EvaluationResult:
     log.info("Training model")
     head_result = fit_and_eval_embedding(
         dataset=data,
-        metric_name=metric_name,
         model_head=model_head,
         memory_weight=dataset_config.get("memory_weight", DEFAULT_MEMORY_WEIGHT),
         n_jobs=n_jobs,
@@ -194,7 +192,6 @@ def eval_procedure(
         embedded_data,
         predictions_dir,
         dataset_info,
-        dataset_info.metric,
         model_head,
         n_jobs=n_jobs,
     )

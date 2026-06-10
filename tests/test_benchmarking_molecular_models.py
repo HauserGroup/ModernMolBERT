@@ -709,7 +709,6 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
 
     result = fit_and_eval_embedding(
         dataset=dataset,
-        metric_name="roc_auc",
         model_head="knn",
         memory_weight=32,
     )
@@ -737,7 +736,6 @@ def test_regression_path_returns_1d_predictions() -> None:
 
     result = fit_and_eval_embedding(
         dataset=dataset,
-        metric_name="mae",
         model_head="ridge",
         memory_weight=32,
     )

@@ -50,7 +50,6 @@ def fit_model(
     X: np.ndarray,
     y: np.ndarray,
     task: str,
-    metric_name: str,
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
@@ -145,14 +144,6 @@ def fit_model(
     del grid_search
     gc.collect()
     return result
-    # greater_is_better = scorer._sign > 0
-    # # filter out nans
-    # res = [x for x in res if not np.isnan(x["best_score"])]
-    # if len(res) == 0:
-    #     raise ValueError("All models failed to fit")
-
-    # f = max if greater_is_better else min
-    # return f(res, key=lambda x: x["best_score"])
 
 
 def finite_label_multioutput_score(y_true: np.ndarray, y_score: np.ndarray) -> float:
@@ -246,7 +237,6 @@ def fit_multioutput_finite_label_model(
 
 def fit_and_eval_embedding(
     dataset: EmbeddedDataset,
-    metric_name: str,
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
@@ -256,7 +246,6 @@ def fit_and_eval_embedding(
         X=X_train,
         y=y_train,
         task=dataset.task,
-        metric_name=metric_name,
         model_head=model_head,
         memory_weight=memory_weight,
         n_jobs=n_jobs,

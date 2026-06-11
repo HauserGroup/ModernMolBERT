@@ -27,13 +27,24 @@ paper. No model training. Tested scripts have unit tests under `tests/`.
 
 ## `sweeps/` — pre-training launchers
 
-Bash hyperparameter sweeps that call `python -m modernmolbert.train_selfies_ape_modernbert`.
+`run_sweep.py` drives a masking × MLM-prob × learning-rate grid, launching each
+run sequentially via `accelerate launch -m modernmolbert.train_selfies_ape_modernbert`.
+Batch geometry, warmup, and the default LR grid follow `--model-size`; every
+axis is overridable, and populated run directories are skipped on re-run.
 
-| Script | Sweep |
-|--------|-------|
-| `train_chembl36_small_sweep.sh` | small model, masking (3) × MLM prob (3) × LR (3) = 27 runs |
-| `train_chembl36_small_sweep_standard.sh` | small model, standard masking only = 9 runs |
-| `train_chembl36_base_sweep_standard.sh` | base model, standard masking only = 9 runs |
+```bash
+# full small-model sweep (3 maskings × 3 MLM × 3 LR = 27 runs)
+python scripts/sweeps/run_sweep.py --model-size small
+
+# standard-masking only (9 runs); base preset
+python scripts/sweeps/run_sweep.py --model-size base --masking standard
+
+# preview without launching
+python scripts/sweeps/run_sweep.py --model-size small --dry-run
+```
+
+This replaces the former `train_chembl36_*.sh` trio, which were ~95% duplicated
+and differed only in model size and which strategies/LRs to sweep.
 
 ## `maintenance/` — one-off fixes (kept for provenance)
 

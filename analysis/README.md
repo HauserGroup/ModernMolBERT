@@ -163,7 +163,7 @@ variance. More complex; used to explore uncertainty-aware regression.
 |---|---|
 | `R/collect_sweep_results.R` | Preferred sweep collector — richer than the Python version; outputs `sweep_results.csv` and `fixed_eval_collected.csv` |
 | `R/FigX.R` | ggplot2 figure comparing masking strategies across MLM probabilities and learning rates |
-| `scripts/sweeps/train_chembl36_small_sweep.sh` | Launches the full hyperparameter sweep (span + hetero_span + standard, three MLM probs, three LRs) |
-| `scripts/sweeps/train_chembl36_small_sweep_standard.sh` | Standard-masking-only sweep |
-| `scripts/sweeps/train_chembl36_base_sweep_standard.sh` | Base-size model sweep |
+| `scripts/sweeps/run_sweep.py --model-size small` | Full small-model sweep (standard + span + hetero_span, three MLM probs, three LRs) |
+| `scripts/sweeps/run_sweep.py --model-size small --masking standard` | Standard-masking-only small-model sweep |
+| `scripts/sweeps/run_sweep.py --model-size base` | Base-size model sweep |
 | `exploratory/README.md` | Documents `--extra_vocab_symbols_path` / `--extra_vocab_selfies_path` arguments for tokenizer training |

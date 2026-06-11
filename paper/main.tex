@@ -73,7 +73,7 @@
                       SELFIES Molecular Language Modeling},
             pdfauthor={Jakob S. Madsen, Sara Angelucci, Alexander S. Hauser},
             pdfkeywords={molecular language model, SELFIES, ModernBERT,
-                         representation learning, cheminformatics, APE tokenizer},
+                         representation learning, cheminformatics, APE tokeniser},
             pdfsubject={Chemical Machine Learning}]{hyperref}
 
 % ---------- Smart cross-references (must come after hyperref) ----------
@@ -141,7 +141,7 @@
 We introduce \model{}, a family of encoder-only transformer models for
 small-molecule representation learning. \model{} adapts the \modernbert{}
 architecture to molecular language modelling and pairs it with a
-\selfies{}-aware \emph{Atom Pair Encoding} (\ape{}) tokenizer.
+\selfies{}-aware \emph{Atom Pair Encoding} (\ape{}) tokeniser.
 Both released variants (\emph{small} and \emph{base}) are pre-trained with
 masked language modelling on $\sim$\num{2.4}M unique \selfies{} strings from
 \chembl{}~36 and evaluated as frozen molecular embedders on 25 binary
@@ -151,7 +151,7 @@ competitive with a strong fingerprint baseline and improving on comparable
 pre-trained string encoders by roughly four to five points.
 \model{} provides a compact, reproducible, open-source foundation for
 \selfies{}-based molecular representation learning; we release the model
-weights, the \ape{} tokenizer, and training code.
+weights, the \ape{} tokeniser, and training code.
 \end{abstract}
 
 
@@ -162,9 +162,8 @@ weights, the \ape{} tokenizer, and training code.
 
 Molecular embeddings are the numerical interface between chemical structure and machine learning. They are the vectors passed to property predictors, virtual screening pipelines, similarity searches, clustering analyses, analogue-retrieval workflows, and dataset-triage tools. Their quality determines which chemical differences are visible to a model, which structure–activity patterns can be learned from sparse assay labels, and how well a representation transfers from known to unexplored chemical space.
 
-Molecular representation learning is therefore an essential preprocessing step. A useful molecular embedder should preserve chemically meaningful structure, avoid artefacts introduced by molecular notation, and be efficient enough to apply across large compound collections. ModernMolBERT addresses all of these by combining chemically valid SELFIES strings, a SELFIES-aware Atom Pair Encoding tokenizer, and an efficient ModernBERT encoder trained as a reusable frozen molecular embedder.
+Molecular representation learning is therefore an essential preprocessing step. A useful molecular embedder should preserve chemically meaningful structure, avoid artefacts introduced by molecular notation, and be efficient enough to apply across large compound collections. ModernMolBERT addresses all of these by combining chemically valid SELFIES strings, a SELFIES-aware Atom Pair Encoding tokeniser, and an efficient ModernBERT encoder trained as a reusable frozen molecular embedder (\cref{fig:overview}).
 
-\paragraph{From fingerprints to learned representations.}
 For decades, the dominant answer was to map each molecule to a fixed-length
 vector of hand-crafted descriptors, such as physicochemical properties and
 substructure-based fingerprints. The most prominent examples are circular
@@ -188,22 +187,22 @@ atoms as nodes and bonds as edges --- have also more recently been proposed
 but these require specialised aggregation schemes and sit outside the
 mainstream transformer pretraining paradigm.
 
-\paragraph{Molecular language models on \smiles{}.}
 The BERT~\citep{devlinBERTPreTrainingDeep2019} family of bidirectional
-encoder models revolutonized how masked language model~(MLM) pretraining on
+encoder models revolutionised how masked language model~(MLM) pretraining on
 large unlabelled corpora could produce representations that transfer to many
 downstream tasks with minimal fine-tuning.
-Molecules encoded as \smiles{} (Simplified Molecular-Input Line-Entry System)
-strings~\citep{weininger1988smiles} which are a linear notation that encodes
-atomic connectivity as a depth-first traversal of the molecular graph. Representations that
-are a natural substrate for words and sentences.
+Molecules are encoded as \smiles{} (Simplified Molecular-Input Line-Entry
+System) strings~\citep{weininger1988smiles}, a linear notation that encodes
+atomic connectivity as a depth-first traversal of the molecular graph. This
+sequential form is a natural substrate for the same sequence models originally
+developed for words and sentences.
 
 \smiles{} molecular language models followed in rapid succession:
 ChemBERTa~\citep{chithranandaChemBERTaLargeScaleSelf2020},
 MolBERT~\citep{fabianMolecularRepresentationLearning2020},
 ChemBERTa-2~\citep{ahmadChemBERTa2TowardsChemical2022}, and
 MoLFormer~\citep{rossLargescaleChemicalLanguage2022}. These collectively
-established that MLM pretraining on \smiles{} yielde representations
+established that MLM pretraining on \smiles{} yielded representations
 competitive with fingerprint baselines on property-prediction benchmarks
 without task-specific feature engineering, and that the approach scales to
 billion-molecule corpora.
@@ -213,57 +212,65 @@ billion-molecule corpora.
 % ------ Table 1: molecular embedder comparison ---------------
 \begin{table}[htbp]
   \centering
-  \small
-  \begin{tabularx}{\linewidth}{l l l l l}
+  \footnotesize
+  \setlength{\tabcolsep}{3.5pt}
+  \begin{tabularx}{\linewidth}{@{} X l l l r l r @{}}
     \toprule
     \textbf{Model}
       & \textbf{Repr.}
-      & \textbf{Tokenizer}
+      & \textbf{Tokeniser}
+      & \textbf{Arch.}
+      & \textbf{Params}
       & \textbf{Corpus}
-      & \textbf{Arch.} \\
+      & \textbf{Size (M)} \\
     \midrule
     ChemBERTa~\citep{chithranandaChemBERTaLargeScaleSelf2020}
-      & \smiles{}  & BPE      & PubChem      & RoBERTa      \\
+      & \smiles{}  & BPE      & RoBERTa      & 5--46$^{\dagger}$ & PubChem      & 77 \\
     ChemBERTa-2~\citep{ahmadChemBERTa2TowardsChemical2022}
-      & \smiles{}  & BPE/atom & PubChem      & RoBERTa      \\
+      & \smiles{}  & BPE/atom & RoBERTa      & 5--46$^{\dagger}$ & PubChem      & 77 \\
     MolBERT~\citep{fabianMolecularRepresentationLearning2020}
-      & \smiles{}  & atom     & \chembl{}    & BERT         \\
+      & \smiles{}  & atom     & BERT         & 85   & \chembl{}    & 2 \\
     MoLFormer~\citep{rossLargescaleChemicalLanguage2022}
-      & \smiles{}  & atom     & ZINC+PubChem & Linear-attn. \\
+      & \smiles{}  & atom     & Linear-attn. & 46.8 & ZINC+PubChem & $>$1{,}100 \\
     SELFormer~\citep{yukselSELFormerMolecularRepresentation2023}
-      & \selfies{} & BPE      & \chembl{}    & RoBERTa      \\
+      & \selfies{} & BPE      & RoBERTa      & 87   & \chembl{}    & 2 \\
     \midrule
     \textbf{\model-small}
-      & \textbf{\selfies{}} & \textbf{\ape{}} & \textbf{\chembl{}~36} & \textbf{\modernbert{}} \\
+      & \textbf{\selfies{}} & \textbf{\ape{}} & \textbf{\modernbert{}} & \textbf{34.1} & \textbf{\chembl{}~36} & \textbf{2.4} \\
     \textbf{\model-base}
-      & \textbf{\selfies{}} & \textbf{\ape{}} & \textbf{\chembl{}~36} & \textbf{\modernbert{}} \\
+      & \textbf{\selfies{}} & \textbf{\ape{}} & \textbf{\modernbert{}} & \textbf{114.3} & \textbf{\chembl{}~36} & \textbf{2.4} \\
     \bottomrule
   \end{tabularx}
   \caption{%
     Overview of representative molecular string encoder models.
     \emph{Repr.}: molecular string representation used for pretraining.
-    \emph{Tokenizer}: tokenization strategy
+    \emph{Tokeniser}: tokenisation strategy
     (BPE = Byte Pair Encoding; atom = atom-level; APE = Atom Pair Encoding).
     \emph{Arch.}: encoder backbone.
+    \emph{Params}: trainable parameters in millions.
+    \emph{Size}: pretraining corpus size in millions of molecules.
+    Embedding dimensions for these and additional models are listed in
+    \cref{tab:embedders-full} (\cref{app:embedders}).
     \textbf{Bold} rows indicate the models introduced here.
+    $^{\dagger}$The ChemBERTa family spans several released checkpoints of
+    approximately 5--46M parameters; the 77M label denotes pretraining
+    molecules, not parameters.
   }%
   \label{tab:embedder-comparison}
 \end{table}
 
-\paragraph{Limitations of \smiles{}.}
 \smiles{}-based language models have two weaknesses as notation.
 First, most perturbations of a \smiles{} string are chemically
 invalid~\citep{krennSELFIESSelfReferencingEmbedded2020}, so a model must spend
 capacity recognising ill-formed inputs, and a single molecule admits many
 equivalent strings. This inflates the effective vocabulary and complicates
 self-supervised objectives.
-Second, subword tokenizers such as Byte Pair Encoding~(BPE)~\citep{sennrichNeuralMachineTranslation2016},
+Second, subword tokenisers such as Byte Pair Encoding~(BPE)~\citep{sennrichNeuralMachineTranslation2016},
 applied na\"{i}vely to molecular strings, split multi-character atomic symbols
 (e.g.\ \texttt{Cl} into \texttt{C}~+~\texttt{l})~\citep{leonComparingSMILESSELFIES2024},
-destroying the chemically meaningful units a molecular tokenizer should
+destroying the chemically meaningful units a molecular tokeniser should
 preserve.
 
-\paragraph{Guaranteed chemical validity with \selfies{}.}
 SELFIES (Self-Referencing Embedded Strings)~\citep{krennSELFIESSelfReferencingEmbedded2020}
 addresses the validity problem by construction. Its context-free grammar
 guarantees that every syntactically valid \selfies{} string decodes to a
@@ -273,14 +280,13 @@ It removes invalid-string noise from the pretraining signal while
 preserving the sequential structure that makes transformer encoders effective.
 Yet \selfies{} has been adopted mainly for molecular \emph{generation}, while
 encoder-only \selfies{} representation learning remains comparatively
-unexplored~\citep{leonComparingSMILESSELFIES2024}.To our knowledge the
-combination of \selfies{}, a \selfies{}-adapted atom-preserving tokenizer, and
+unexplored~\citep{leonComparingSMILESSELFIES2024}. To our knowledge the
+combination of \selfies{}, a \selfies{}-adapted atom-preserving tokeniser, and
 a \modernbert{}-style encoder has not been systematically evaluated as a
 molecular embedder.
 
-\paragraph{Atom Pair Encoding.}
-Tokenization which is the mapping from a raw string to discrete vocabulary units, is almost as essential as the model itself.
-Atom-level tokenization is chemically principled but
+Tokenisation, the mapping from a raw string to discrete vocabulary units, is almost as essential as the model itself.
+Atom-level tokenisation is chemically principled but
 yields long sequences and misses recurring substructures, whereas BPE operates
 on raw character frequencies and produces entries that straddle atom boundaries.
 \citet{leonComparingSMILESSELFIES2024} proposed \emph{Atom Pair Encoding}~(\ape{}),
@@ -289,11 +295,10 @@ restricting merges to adjacent complete molecular symbols. We adapt \ape{} to
 \selfies{} by merging only adjacent complete \selfies{} primitives, so every
 vocabulary entry is a valid concatenation of complete \selfies{} symbols rather
 than a character-level artefact (\cref{fig:design}C). \ape{} thus occupies a
-middle ground: compact like subword tokenization, chemically principled like
-atom-level tokenization.
+middle ground: compact like subword tokenisation, chemically principled like
+atom-level tokenisation.
 
-\paragraph{Modernising the encoder architecture.}
-Many molecular string encoders such ChemBERTa, ChemBERTa-2, MolBERT,
+Many molecular string encoders such as ChemBERTa, ChemBERTa-2, MolBERT,
 and SELFormer are built on BERT- or RoBERTa-era
 backbones~\citep{devlinBERTPreTrainingDeep2019,liuRoBERTaRobustlyOptimized}
 with absolute positional embeddings and full quadratic attention.
@@ -302,10 +307,14 @@ local/global attention, and GeGLU activations (\cref{sec:rel-modernbert}). To ou
 have not been applied to \selfies{}-based molecular language modelling.
 Especially RoPE may be suited to molecular strings, where absolute sequence
 position is partly an artefact of the chosen graph traversal rather than an
-intrinsic molecular property.
+intrinsic molecular property. Because RoPE conditions attention on the
+\emph{relative} offset between two tokens rather than their absolute indices,
+the encoder becomes largely invariant to where a traversal happens to begin ---
+precisely the component of \smiles{}/\selfies{} positioning that carries no
+chemical meaning --- while still distinguishing the local ordering of
+neighbouring symbols.
 
-\paragraph{Masking strategies.}
-The MLM objective does not specify directly tokens to mask. Standard BERT masks tokens
+The MLM objective does not directly specify which tokens to mask. Standard BERT masks tokens
 independently at random~\citep{devlinBERTPreTrainingDeep2019}, whereas
 SpanBERT~\citep{joshiSpanBERTImprovingPreTraining2020} masks contiguous spans
 to encourage modelling of longer-range structure. Masking can also be made
@@ -315,11 +324,10 @@ carry disproportionate property-relevant information. Whether such
 structure-aware masking benefits a frozen \selfies{} embedder is an open
 question we examine in an ablation (\cref{sec:ablations}).
 
-\paragraph{Contributions.}
 We introduce \model{}, a compact family of encoder-only molecular language
 models combining three design choices not previously studied together: a \modernbert{}
 backbone, chemically valid \selfies{} inputs, and a \selfies{}-adapted \ape{}
-tokenizer. The models are trained from scratch with MLM on 2.4M curated
+tokeniser. The models are trained from scratch with MLM on 2.4M curated
 \chembl{}~36 molecules and released in small and base variants for molecular property prediction. We evaluate them on the
 25-dataset benchmark of \citet{praskiBenchmarkingPretrainedMolecular2025}
 against a fingerprint baseline and representative pre-trained string encoders.
@@ -333,8 +341,8 @@ against a fingerprint baseline and representative pre-trained string encoders.
   \caption{%
     \textbf{\model{} pretraining and frozen-evaluation pipeline.}
     Approximately \num{2.4}M unique \chembl{}~36 small molecules are curated,
-    canonicalised, and converted to \selfies{} strings, then pre-tokenized with
-    the \selfies{}-adapted \ape{} tokenizer (\cref{fig:design}C). A
+    canonicalised, and converted to \selfies{} strings, then pre-tokenised with
+    the \selfies{}-adapted \ape{} tokeniser (\cref{fig:design}C). A
     \modernbert{} encoder is trained from scratch on this corpus with the masked
     language modelling (MLM) objective, yielding \model{}. For evaluation the
     encoder is \emph{frozen}: mean-pooled final-layer token embeddings over
@@ -353,11 +361,11 @@ against a fingerprint baseline and representative pre-trained string encoders.
   \includegraphics[width=\linewidth]{figures/Fig1_B}
   \caption{%
     \textbf{Method comparison of the two molecular design choices in \model{}:
-    input representation and tokenization.}
+    input representation and tokenisation.}
     \textbf{(A)}~\emph{Input representation: \smiles{} versus \selfies{}.}
     The same molecule is shown encoded as a \smiles{} string (top) and as a
     \selfies{} string (bottom). \smiles{} tokens can violate chemical syntax
-    under perturbation or naive tokenization --- mismatched brackets and
+    under perturbation or naive tokenisation --- mismatched brackets and
     ill-formed ring-closure indices are marked with red crosses --- whereas
     every syntactically valid \selfies{} \emph{string} decodes to a
     chemically valid molecule~\citep{krennSELFIESSelfReferencingEmbedded2020}.
@@ -378,15 +386,21 @@ against a fingerprint baseline and representative pre-trained string encoders.
 \label{sec:related-work}
 % ============================================================
 
+The introduction motivated the three design choices behind \model{}; this
+section places them in the context of prior work along the four axes most
+relevant to a frozen \selfies{} embedder --- molecular string representations,
+molecular language models, modern encoder architectures, and molecular
+tokenisation --- and identifies the specific models we later use as baselines.
 
 \subsection{Molecular String Representations}
 \label{sec:rel-representations}
 
-The chemical-validity guarantee of \selfies{}~\citep{krennSELFIESSelfReferencingEmbedded2020}
-holds under arbitrary mutation: a single random bit-flip leaves a \smiles{}
-string valid only 26.6\% of the time and ten bit-flips reduce validity to
-0.2\%, whereas \selfies{} remains 100\% valid in both cases. The representation
-is also complete meaning that every molecule can be encoded and it can serve as a drop-in
+The chemical-validity guarantee of \selfies{} holds under arbitrary mutation:
+as reported by \citet{krennSELFIESSelfReferencingEmbedded2020}, a single random
+bit-flip leaves a \smiles{} string valid only 26.6\% of the time and ten
+bit-flips reduce validity to 0.2\%, whereas \selfies{} remains 100\% valid in
+both cases. The representation
+is also complete, meaning that every molecule can be encoded, and it can serve as a drop-in
 input to any model. In generative settings, VAEs and GANs trained on \selfies{}
 populate their latent spaces with two orders of magnitude more diverse valid
 molecules than equivalent \smiles{}-based
@@ -461,11 +475,11 @@ The two released variants for natural language use are \modernbert{}-base (149M 
 achieve state-of-the-art results among encoder-only models on natural-language
 and code benchmarks.
 
-\subsection{Molecular Tokenization}
-\label{sec:rel-tokenization}
+\subsection{Molecular Tokenisation}
+\label{sec:rel-tokenisation}
 
-The atom-preserving \ape{} tokenizer~\citep{leonComparingSMILESSELFIES2024}
-(\cref{sec:ape-tokenizer}) was shown to outperform standard BPE in a controlled
+The atom-preserving \ape{} tokeniser~\citep{leonComparingSMILESSELFIES2024}
+(\cref{sec:ape-tokeniser}) was shown to outperform standard BPE in a controlled
 comparison of RoBERTa-based models pre-trained on 1M PubChem molecules and
 fine-tuned on MoleculeNet, with the largest gains on \selfies{} representations
 (ROC-AUC improvements of $+$0.059 on BBBP and HIV and $+$0.017 on Tox21;
@@ -478,14 +492,18 @@ its merges aligning with \selfies{}'s symbol-level structure.
 % ============================================================
 
 
-\subsection{Atom Pair Encoding Tokenizer}
-\label{sec:ape-tokenizer}
+\subsection{Atom Pair Encoding Tokeniser}
+\label{sec:ape-tokeniser}
 
 We use a custom reimplementation of the \ape{} algorithm
 \citep{leonComparingSMILESSELFIES2024,mayuareAPETokenizer} with
-several modifications for \selfies{} pretraining at scale.
+several modifications for \selfies{} pretraining at scale, detailed in the
+paragraphs below: molecular-aware pre-tokenisation that restricts merges to
+complete \selfies{} primitives, frequency- and span-controlled vocabulary
+construction, deterministic greedy longest-match inference, and post-training
+injection of benchmark-observed primitives.
 
-\paragraph{Molecular-aware pre-tokenization.}
+\paragraph{Molecular-aware pre-tokenisation.}
 \selfies{} strings are first split on a regex that isolates each complete
 bracket-enclosed primitive, so merges operate only over whole \selfies{}
 primitives and every vocabulary entry is a valid concatenation of complete
@@ -497,10 +515,10 @@ Merging is controlled by two criteria: a minimum merge frequency
 adjacent pair co-occurs fewer than 3\,000 times, and a maximum merge span
 (\texttt{max\_merge\_pieces}~$=2$), which excludes candidates spanning more
 primitives to avoid long, uninformative concatenations. In practice
-\texttt{min\_freq} is the binding early-stopping criterion. Full tokenizer
-statistics are reported in \cref{tab:tokenizer-stats} (\cref{app:tokenizer}).
+\texttt{min\_freq} is the binding early-stopping criterion. Full tokeniser
+statistics are reported in \cref{tab:tokeniser-stats} (\cref{app:tokeniser}).
 
-\paragraph{Greedy longest-match tokenization.}
+\paragraph{Greedy longest-match tokenisation.}
 At inference, each position is consumed by the longest matching vocabulary
 entry, looking up to \texttt{max\_merge\_pieces} positions ahead. The procedure
 is deterministic and $O(n\cdot\texttt{max\_merge\_pieces})$ per sequence, with
@@ -512,7 +530,7 @@ primitive that appears $\ge 10$ times in the benchmark molecules but is absent
 from the learned vocabulary is appended. This uses only primitive-frequency
 information; no benchmark labels or train/test split information are used in
 this step. It guarantees a zero unknown-token rate on evaluation molecules; all
-model weights were initialized and trained on the completed 631-token vocabulary
+model weights were initialised and trained on the completed 631-token vocabulary
 from the outset.
 
 \subsection{Model Architecture}
@@ -520,16 +538,16 @@ from the outset.
 
 Both \model{} variants use the \modernbert{} encoder backbone
 (\cref{sec:rel-modernbert})~\citep{warnerSmarterBetterFaster2024} in its default
-configuration: RoPE, GeGLU feed-forward blocks, pre-normalization, no
-linear-layer biases. It usesu npadded Flash Attention with global attention
+configuration: RoPE, GeGLU feed-forward blocks, pre-normalisation, no
+linear-layer biases. It uses unpadded Flash Attention with global attention
 every 3 layers and a 128-token local sliding window. They are trained from
 scratch on our \selfies{} \ape{} vocabulary; no weights are transferred from
 the official \modernbert{} checkpoints~\citep{warnerModernBERTBlog2024}.
 Per-variant hyper-parameters are listed in \cref{tab:model-config}
 (\cref{app:training-details}).
 \model{}-small (34.1M parameters, 512-dimensional hidden state) sits in the
-compact regime below MoLFormer-XL~\citep{rossLargescaleChemicalLanguage2022}
-(44.4M), Chemformer~\citep{irwinChemformerPretrainedTransformer2022} (45M), and
+compact regime below Chemformer~\citep{irwinChemformerPretrainedTransformer2022}
+(45M), MoLFormer-XL~\citep{rossLargescaleChemicalLanguage2022} (46.8M), and
 Uni-Mol~\citep{zhouUniMolUniversal3D2023} (47.6M), and is notably smaller than
 the closest \selfies{} comparator SELFormer (86.7M). \model{}-base (114.3M
 parameters, 768-dimensional) is significantly larger than the existing models considered here.
@@ -540,15 +558,15 @@ parameters, 768-dimensional) is significantly larger than the existing models co
 Pretraining data are sourced from \chembl{}~36~\citep{zdrazilChEMBLDatabase20232024}
 via the \texttt{lukaskim/ChEMBL-36} Hugging Face dataset\footnote{\url{https://huggingface.co/datasets/lukaskim/ChEMBL-36}}.
 Molecules are deduplicated by \texttt{standard\_inchi\_key}, parsed and
-lightly sanitized with RDKit~\citep{landrumRDKitOpenSourceCheminformatics} (ring perception and aromaticity assignment
-only, avoiding full sanitization), and canonicalized to isomeric
+lightly sanitised with RDKit~\citep{landrumRDKitOpenSourceCheminformatics} (ring perception and aromaticity assignment
+only, avoiding full sanitisation), and canonicalised to isomeric
 canonical \smiles{} using RDKit's \texttt{MolToSmiles} with
 \texttt{isomericSmiles=True}.
 The resulting canonical \smiles{} strings are then encoded to
 \selfies{}~\citep{krennSELFIESSelfReferencingEmbedded2020} using the
 \texttt{selfies} Python package.
-Molecules that fail RDKit parsing, limited sanitization,
-canonicalization, or \selfies{} encoding are excluded.
+Molecules that fail RDKit parsing, limited sanitisation,
+canonicalisation, or \selfies{} encoding are excluded.
 We further filter by size and type, retaining only entries flagged as
 small molecules with $3 \le$ heavy atoms $\le 100$ and molecular weight
 $\le 1000$\,Da.
@@ -557,11 +575,11 @@ by SHA-1 hashing of a stable per-molecule identifier (preferring the
 standard InChIKey, with fallbacks to ChEMBL~ID, canonical \smiles{}, and
 \selfies{} in that order) with seed~13,
 yielding \num{2390317} training and \num{24228} validation molecules.
-The resulting \selfies{} strings are subsequently pre-tokenized with the
-\ape{} tokenizer~\citep{leonComparingSMILESSELFIES2024} using greedy
-longest-match tokenization.
-The full curation and pre-tokenization pipeline is available at
-\url{https://github.com/HauserGroup/ModernMolBERT}. The final dataset is available on \url{https://huggingface.co/HauserGroup}..
+The resulting \selfies{} strings are subsequently pre-tokenised with the
+\ape{} tokeniser~\citep{leonComparingSMILESSELFIES2024} using greedy
+longest-match tokenisation.
+The full curation and pre-tokenisation pipeline is available at
+\url{https://github.com/HauserGroup/ModernMolBERT}. The final dataset is available on \url{https://huggingface.co/HauserGroup}.
 
 \subsection{Pretraining Procedure}
 \label{sec:pretraining-procedure}
@@ -604,8 +622,13 @@ Using their public benchmark code at
 For each molecule, the encoder is run in inference mode and molecule-level
 representations are obtained by mean-pooling the final-layer token embeddings
 over non-special \selfies{} tokens; no model parameters are updated. These
-embeddings are evaluated with three downstream models --- a ridge classifier,
-random forests, and $k$-nearest neighbours --- whose hyperparameters are
+embeddings are evaluated with three lightweight downstream models chosen to
+span complementary inductive biases --- a linear ridge classifier, ensemble
+random forests, and instance-based $k$-nearest neighbours --- so that
+representation quality is not judged through a single decision boundary. We
+adopt these three heads, and their cross-validation search grids, directly from
+the benchmark protocol of \citet{praskiBenchmarkingPretrainedMolecular2025} to
+keep the comparison with their reported baselines exact; hyperparameters are
 selected by cross-validation on the training split, with performance reported
 on the held-out test split. All tasks are scored by ROC-AUC. For multi-task
 datasets, missing endpoint labels are treated as unmeasured: downstream
@@ -708,7 +731,8 @@ results for all models are given in \cref{tab:pertask}.
 \input{tables/main_results_table}
 
 \model{}-base attains a mean ROC-AUC of 77.4 across 24 evaluated benchmark
-datasets, and \model{}-small attains 77.3 across all 25 datasets
+datasets (Tox21 is omitted for \model{}-base; see \cref{tab:pertask}), and
+\model{}-small attains 77.3 across all 25 datasets
 (per-dataset results in \cref{tab:pertask}). For comparison, ECFP4 reaches 78.9, MoLFormer
 79.8, ChemBERTa-2 72.9, and SELFormer 72.1. Both \model{} variants therefore
 land between the strong fixed-fingerprint and large-scale \smiles{} baselines
@@ -725,7 +749,9 @@ where all neural embedders trail ECFP4. On MoleculeNet, MoLFormer shows its
 clearest advantage (77.6 vs.\ \model{}-base 70.7), consistent with its much
 larger and more chemically diverse pretraining corpus. This pattern is
 consistent with frozen learned embeddings transferring best to tasks governed by
-global physicochemical character rather than rare substructure recognition.
+global physicochemical character rather than rare substructure recognition, an
+interpretation in line with broader analyses of when learned molecular
+representations help~\citep{yangAnalyzingLearnedMolecular2019,dengSystematicStudyKey2023}.
 
 Relative to ECFP4, \model{} approaches but does not surpass the fingerprint
 baseline. \model{}-base exceeds ECFP4 on 7 of the 23 jointly evaluated datasets,
@@ -744,7 +770,7 @@ SELFormer on 21 of 23 jointly evaluated datasets (mean $\Delta$ ROC-AUC
 $+5.4$; 95\% CI $[+3.9,\;+7.1]$; \cref{tab:bootstrap-cis}), and
 \model{}-small on 24 of 25. Because both models consume \selfies{} inputs, this
 gap is consistent with the combined benefit of \modernbert{}-era architectural
-choices, \ape{} tokenization, and differences in the training recipe; matched
+choices, \ape{} tokenisation, and differences in the training recipe; matched
 single-axis ablations would be required to assign the gain to individual
 components. \model{} likewise exceeds the \smiles{}-based ChemBERTa-2 by 4.6
 points on 23 jointly evaluated datasets (mean $\Delta$ $+4.6$; 95\% CI
@@ -754,9 +780,15 @@ $400\times$ more molecules (mean $\Delta$ $-1.7$; 95\% CI $[-2.6,\;-0.7]$).
 A qualitative view of the learned representation is given in
 \cref{fig:embedding-space}: PaCMAP projections of the frozen \model{}-base
 embeddings organise molecules along smooth, chemically interpretable gradients
-in lipophilicity, drug-likeness, polarity, flexibility, aromaticity, and size,
-indicating that the embedding space captures global physicochemical structure
-even though it is never given these properties as training signal.
+in physicochemical descriptors spanning both whole-molecule properties
+(lipophilicity, drug-likeness, polarity, size) and more local structural counts
+(flexibility, aromaticity), indicating that the embedding space encodes
+chemically meaningful structure even though it is never given these properties
+as training signal. We read this only qualitatively: the smooth arrangement
+shows that neighbouring embeddings tend to correspond to chemically similar
+molecules, which is the property that makes the embeddings useful for the
+similarity-driven downstream heads above, and we draw no quantitative
+conclusions from the projected coordinates themselves.
 
 \begin{figure}[htbp]
   \centering
@@ -802,8 +834,8 @@ even though it is never given these properties as training signal.
     \model{} molecular embeddings, coloured by selected physicochemical
     properties from \chembl{}~36.
     Each point represents one molecule; colour indicates the corresponding
-    property value: ALogP, QED, polar surface area, rotatable bonds, aromatic
-    rings, and heavy atom count.
+    property value: ALogP, the quantitative estimate of drug-likeness (QED),
+    polar surface area, rotatable bonds, aromatic rings, and heavy atom count.
     PaCMAP is used solely for two-dimensional visualisation of the
     high-dimensional embeddings; the absolute axis coordinates are not
     chemically meaningful, and only relative neighbourhoods and broad spatial
@@ -819,11 +851,11 @@ We ablate two pretraining axes --- the MLM masking strategy and model size ---
 on validation MLM metrics (\cref{fig:masking-sweep}; full heatmaps in
 \cref{fig:masking-heatmap}) and on downstream ROC-AUC (\cref{fig:four-model}).
 The three design choices shared by all released models (the \selfies{}
-representation, the \ape{} tokenizer, and the \modernbert{} backbone) are not
+representation, the \ape{} tokeniser, and the \modernbert{} backbone) are not
 isolated here by matched single-axis ablations; they are instead probed jointly
 through the external baselines of \cref{sec:main-results}. The
 SELFormer comparison, which shares the \selfies{} representation and
-dedicated tokenizer and representation ablations are left for future work.
+dedicated tokeniser and representation ablations are left for future work.
 
 On the validation MLM objective, the choices separate more clearly: for the small model,
 span masking at $2\!\times\!10^{-4}$ is strongest and heteroatom-biased span
@@ -842,29 +874,9 @@ Frozen-embedding quality is therefore largely insensitive to masking strategy
 and to the small-to-base size increase. This supports releasing the simplest
 configuration (standard masking) as the default and is consistent with the
 larger gains over SELFormer (\cref{sec:main-results}) arising from the design
-choices shared by all released models.
-
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=\linewidth]{figures/Fig_2}
-  \caption{%
-    \textbf{Internal comparison of the four \model{} checkpoints on downstream
-    ROC-AUC.}
-    Paired scatter of held-out test ROC-AUC across the benchmark tasks (one
-    point per task, best cross-validated downstream head), isolating each
-    pretraining design axis against the released small model (standard masking,
-    $y$-axis throughout except panel a).
-    \textbf{(a)}~\model{}-small versus \model{}-base, isolating model size.
-    \textbf{(b)}~\model{}-small versus the span-masking variant.
-    \textbf{(c)}~\model{}-small versus the heteroatom-biased span-masking
-    variant. The dashed line is the identity $y=x$, points are coloured by task
-    group, and each inset reports the number of tasks on which the $y$-axis
-    model wins. Panel a is evaluated on 24 jointly evaluated datasets
-    (\model{}-base lacks Tox21) and panels b and c only on the tasks available
-    for the respective variant (23 and 22 of 25; see \cref{tab:pertask}).
-  }%
-  \label{fig:four-model}
-\end{figure}
+choices shared by all released models. The corresponding per-task paired
+scatters isolating each pretraining axis are provided in
+\cref{fig:four-model} (\cref{app:additional-results}).
 
 \begin{figure}[htbp]
   \centering
@@ -901,13 +913,19 @@ choices shared by all released models.
 \model{} is designed around a narrow but practical question: whether a
 compact encoder-only model can provide useful frozen molecular embeddings
 when trained on chemically valid \selfies{} strings with a \selfies{}-aware
-\ape{} tokenizer. This scope differs from large generative chemical language models,
+\ape{} tokeniser. This scope differs from large generative chemical language models,
 multimodal assay--molecule models, and graph or 3D molecular encoders. The
 resulting comparison is therefore most informative when interpreted as a test
 of frozen, string-based molecular representation learning rather than as a
-claim about all molecular foundation models.
+claim about all molecular foundation models. \model{} is used here purely as an
+encoder, not as a generative model; we therefore do not sample or reconstruct
+molecules from it. We note, however, that because both inputs and the MLM head
+operate over the \selfies{} vocabulary, any \selfies{} sequence the model
+predicts decodes to a chemically valid molecule by construction, so a
+generative use of the architecture would inherit \selfies{}' validity guarantee
+--- a direction we leave to future work.
 
-It is important to read every number in this paper as a \emph{frozen-embedding}
+Every number in this paper should be read as a \emph{frozen-embedding}
 result. No encoder is fine-tuned downstream; each produces a fixed mean-pooled
 embedding that is passed to lightweight classifiers. This protocol isolates
 representation transferability and mirrors fingerprint-based workflows, where
@@ -923,16 +941,17 @@ prior \selfies{} encoder: holding the molecular representation fixed, \model{}
 improves on SELFormer by roughly five ROC-AUC points and is similarly ahead of
 the closest-scale \smiles{} MLM, ChemBERTa-2 (\cref{sec:main-results}). Because
 the SELFormer comparison shares the \selfies{} representation, this gain is
-consistent with benefits from the \modernbert{} backbone and \ape{} tokenizer,
+consistent with benefits from the \modernbert{} backbone and \ape{} tokeniser,
 though matched single-axis ablations would be required to isolate each
 component's contribution. We do not overstate the result: \model{} is
 competitive with, but does not surpass, the strong ECFP4 fingerprint baseline
 and trails MoLFormer, which is pre-trained on roughly $400\times$ more
-molecules. The contribution is therefore a compact, reproducible
+molecules~\citep{rossLargescaleChemicalLanguage2022}. The contribution is
+therefore a compact, reproducible
 \selfies{} encoder that approaches fixed-fingerprint quality while substantially
-improving on prior string-based language models at comparable scale.
+improving on prior string-based language models at comparable scale. 
 
-A practical advantage of our is accessibility. ModernMolBERT is released in the standard Hugging Face Transformers format and can be used with the current Python ecosystem without model-specific runtime dependencies, legacy Python versions, custom inference kernels, or external chemistry toolkits at embedding time once inputs are provided as SELFIES strings. Frozen embeddings can therefore be extracted with a few lines of standard Transformers code, making the model easier to incorporate into existing screening, retrieval, and benchmark pipelines than models requiring specialised environments. Likewise, the standalone tokenizer is straightforward to use in a similar fashion.
+A practical advantage of \model{} is accessibility. ModernMolBERT is released in the standard Hugging Face Transformers format and can be used with the current Python ecosystem without model-specific runtime dependencies, legacy Python versions, custom inference kernels, or external chemistry toolkits at embedding time once inputs are provided as SELFIES strings. Frozen embeddings can therefore be extracted with a few lines of standard Transformers code, making the model easier to incorporate into existing screening, retrieval, and benchmark pipelines than models requiring specialised environments. Likewise, the standalone tokeniser is straightforward to use in a similar fashion.
 
 ModernMolBERT therefore occupies a practical trade-off point rather than a pure performance extreme. Larger or more specialised models remain preferable when maximum benchmark accuracy is the only objective, but many molecular-embedding workflows require representations that are adequate, reproducible, compact, and easy to deploy. In this setting, ModernMolBERT is a reasonable default: it approaches ECFP4, improves over comparable pretrained string encoders, and exposes frozen embeddings through the standard Hugging Face Transformers interface without specialised inference infrastructure.
 
@@ -944,19 +963,19 @@ ModernMolBERT therefore occupies a practical trade-off point rather than a pure 
 dominated by drug-like, Lipinski-compliant compounds.
 Compared with MoLFormer, which draws from 1.1B PubChem~\citep{kimPubChem2023Update2023} and ZINC~\citep{irwinZINC20FreeUltralargeScale2020}
 molecules, \model{}'s training distribution is narrower; generalisation to
-natural products, agrochemicals, or other under-represented chemical
-spaces may be limited.
+natural products, agrochemicals, peptides, macrocycles, or other
+under-represented chemical spaces may be limited.
 Pretraining uses canonical-\smiles{}-derived \selfies{} strings only;
 we do not apply randomised \smiles{} augmentation or multiple-enumeration
 strategies, which have been explored as a means of improving representation
 diversity in prior molecular language
-models~\citep{winterLearningContinuousDataDriven2019,kovacsSimSonSimpleContrastive2025}.
+models~\citep{winterLearningContinuousDataDriven2019,leeSimSonSimpleContrastive2025}.
 Like all sequential string models, \model{} has no access to explicit
 3D conformational information; graph- and geometry-based models such
 as Uni-Mol~\citep{zhouUniMolUniversal3D2023} and
 GEM~\citep{fangGeometryenhancedMolecularRepresentation2022} address
 this at the cost of greater architectural complexity.
-The \selfies{}-adapted \ape{} tokenizer forms merge candidates from
+The \selfies{}-adapted \ape{} tokeniser forms merge candidates from
 sequence-adjacent \selfies{} primitives rather than reconstructing
 the molecular graph; merge boundaries therefore do not necessarily
 align with graph-level bond adjacency.
@@ -965,6 +984,14 @@ by ROC-AUC, following the benchmark of
 \citet{praskiBenchmarkingPretrainedMolecular2025}; performance on
 regression tasks, generative objectives, or out-of-distribution
 scaffolds is not assessed here.
+A further caveat concerns possible train--benchmark overlap: both the
+\chembl{}~36 pretraining corpus and several of the benchmark datasets are
+derived from overlapping medicinal-chemistry sources, and we do not explicitly
+deduplicate benchmark structures against the pretraining set. Some benchmark
+molecules or close analogues may therefore also appear during pretraining,
+which could modestly inflate absolute scores for all pretrained encoders
+evaluated here; the relative comparisons between encoders are less affected,
+since every pretrained baseline is exposed to similar public chemical space.
 Finally, all models are evaluated as frozen encoders, which may not
 reflect relative performance under full fine-tuning; frozen evaluation
 may favour representations with broader but shallower chemical
@@ -982,8 +1009,16 @@ Several extensions follow naturally from the present design, all within the
 MLM-only, string-encoder scope of this work. The most direct is broader
 pretraining beyond \chembl{}, including PubChem, ZINC, Enamine, or other
 sources that better cover natural products, fragments, reagents, and
-non-drug-like chemistry. A second direction is matched single-axis ablations
-of the tokenizer and backbone choices---substituting \ape{} with standard BPE
+non-drug-like chemistry. Pretraining \model{} on the same corpora used by the
+baselines---for example the PubChem/ZINC mixture behind MoLFormer---would
+further allow the architecture and tokeniser to be compared at matched data,
+separating the contribution of pretraining scale from that of model design. A
+closely related question is how \model{} scales: the present study fixes a
+compact small/base pair and a 30{,}000-step budget, and systematically
+increasing model size, corpus size, and training compute would establish
+whether the remaining gap to large-scale \smiles{} models such as MoLFormer
+narrows with scale. A second direction is matched single-axis ablations
+of the tokeniser and backbone choices---substituting \ape{} with standard BPE
 or the \modernbert{} backbone with a RoBERTa-era encoder---to isolate each
 component's contribution to the gains over SELFormer. A third is to explore
 \selfies{} encoders as molecular indexing models for chemical search, analogue
@@ -997,7 +1032,7 @@ compact frozen embeddings are operationally attractive.
 
 We presented \model{}, a family of compact encoder-only transformer models
 for \selfies{} molecular language modelling. The models combine the
-\modernbert{} encoder architecture with a \selfies{}-adapted \ape{} tokenizer
+\modernbert{} encoder architecture with a \selfies{}-adapted \ape{} tokeniser
 and are pre-trained from scratch on a curated \chembl{}~36 corpus using the
 masked language modelling objective.
 
@@ -1011,11 +1046,11 @@ embedding quality is largely insensitive to masking strategy and to the
 small-to-base size increase, so the gains over prior string models are
 consistent with the shared \selfies{}, \ape{}, and \modernbert{} design choices.
 These results suggest that a modern \selfies{} encoder with an atom-preserving
-\ape{} tokenizer can approach fingerprint-level frozen-feature performance while substantially
+\ape{} tokeniser can approach fingerprint-level frozen-feature performance while substantially
 improving on earlier string-based language models at comparable scale.
 
 The central motivation is practical: molecular string encoders should be
-valid by construction, tokenized in chemically meaningful units, and built on
+valid by construction, tokenised in chemically meaningful units, and built on
 modern efficient transformer components rather than inherited BERT-era
 backbones. By evaluating \model{} as a frozen embedder against ECFP4 and
 representative pre-trained molecular language models, we position
@@ -1029,7 +1064,7 @@ manageable foundation for molecular representation learning.
 
 Training code and evaluation scripts are available at
 \url{https://github.com/HauserGroup/ModernMolBERT}.
-Model weights and the \ape{} tokenizer are available on Hugging Face
+Model weights and the \ape{} tokeniser are available on Hugging Face
 at \url{https://huggingface.co/HauserGroup}.
 \chembl{}~36 is publicly available at
 \url{https://www.ebi.ac.uk/chembl/}.
@@ -1066,7 +1101,7 @@ We thank Marin Matic for valuable input on the analysis and for comments on the 
 % ============================================================
 % BIBLIOGRAPHY
 % ============================================================
-\bibliographystyle{plainnat}
+\bibliographystyle{unsrtnat}
 \bibliography{references}
 
 % ============================================================
@@ -1154,23 +1189,23 @@ We thank Marin Matic for valuable input on the analysis and for comments on the 
 \end{figure}
 
 \FloatBarrier
-\section{Tokenizer Details}%
-\label{app:tokenizer}
+\section{Tokeniser Details}%
+\label{app:tokeniser}
 
 \input{tables/tokenizer_table}
 
-The final tokenizer is trained on 2M randomly sampled \chembl{}~36
+The final tokeniser is trained on 2M randomly sampled \chembl{}~36
 \selfies{} strings with \texttt{max\_merge\_pieces\,=\,2} and
 \texttt{min\_freq\_for\_merge\,=\,3000}, yielding a base vocabulary of
 589 tokens.
 An additional 42 \selfies{} primitives observed in the benchmark datasets
 (minimum frequency $\ge 10$) are appended after \ape{} merge learning but
 before model pretraining, giving a final vocabulary of 631 tokens on which
-all model weights were initialized and trained from the outset.
+all model weights were initialised and trained from the outset.
 Special tokens are assigned fixed ids: \texttt{[BOS]}\,=\,0,
 \texttt{[PAD]}\,=\,1, \texttt{[EOS]}\,=\,2, \texttt{[UNK]}\,=\,3,
 \texttt{[MASK]}\,=\,4.
-Evaluated on 10\,000 held-out \chembl{}~36 molecules, the tokenizer
+Evaluated on 10\,000 held-out \chembl{}~36 molecules, the tokeniser
 achieves an unknown-token rate of 0.0\%, a median sequence length of 24
 tokens (mean 25.7; 95th percentile 43; 99th percentile 56), negligible
 truncation at the model context length of 128 tokens ($<$0.1\%), and zero
@@ -1191,6 +1226,28 @@ SIDER, and Tox21 for the heteroatom-span variant.
 \input{tables/pertask_table}
 
 \input{tables/table_bootstrap}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{figures/Fig_2}
+  \caption{%
+    \textbf{Internal comparison of the four \model{} checkpoints on downstream
+    ROC-AUC.}
+    Paired scatter of held-out test ROC-AUC across the benchmark tasks (one
+    point per task, best cross-validated downstream head), isolating each
+    pretraining design axis against the released small model (standard masking,
+    $y$-axis throughout except panel a).
+    \textbf{(a)}~\model{}-small versus \model{}-base, isolating model size.
+    \textbf{(b)}~\model{}-small versus the span-masking variant.
+    \textbf{(c)}~\model{}-small versus the heteroatom-biased span-masking
+    variant. The dashed line is the identity $y=x$, points are coloured by task
+    group, and each inset reports the number of tasks on which the $y$-axis
+    model wins. Panel a is evaluated on 24 jointly evaluated datasets
+    (\model{}-base lacks Tox21) and panels b and c only on the tasks available
+    for the respective variant (23 and 22 of 25; see \cref{tab:pertask}).
+  }%
+  \label{fig:four-model}
+\end{figure}
 
 \FloatBarrier
 \section{Molecular Embedding Models}%

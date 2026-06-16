@@ -2,6 +2,7 @@
 
 [![Orcid: Jakob](https://img.shields.io/badge/Jakob-bar?style=flat&logo=orcid&labelColor=white&color=grey)](https://orcid.org/0000-0002-2841-7284)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/1231819254.svg)](https://doi.org/10.5281/zenodo.20716212)
 
 <img src="imgs/mmbert_text.png" width="600"/>
 

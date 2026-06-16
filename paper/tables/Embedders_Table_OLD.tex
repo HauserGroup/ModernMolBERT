@@ -1,0 +1,117 @@
+\documentclass[11pt,a4paper]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[a4paper, landscape, top=2cm, bottom=2cm, left=2cm, right=2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{ragged2e}
+\usepackage{microtype}
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\usepackage{setspace}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+% ── Colours ───────────────────────────────────────────────────────────────────
+\definecolor{headerblue}{RGB}{31,56,100}
+\definecolor{rowgray}{RGB}{238,242,247}
+
+% ── Column types ──────────────────────────────────────────────────────────────
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+
+% ── Table spacing ─────────────────────────────────────────────────────────────
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.25}
+
+% ── Caption formatting ────────────────────────────────────────────────────────
+\captionsetup[table]{labelfont=bf, labelsep=period, justification=justified,
+  singlelinecheck=false, skip=4pt}
+
+\begin{document}
+
+\begin{longtable}{%
+    L{2.3cm}   % Model
+    L{3.0cm}   % Architecture
+    C{1.6cm}   % Parameters (M)
+    C{1.4cm}   % Emb. dim.
+    L{15.9cm}  % Description
+  }
+
+\caption{Overview of molecular embedding models: architecture, size, and description.}
+\label{tab:embedders}\\
+
+% ── First-page header ─────────────────────────────────────────────────────────
+\toprule
+\rowcolor{headerblue}
+\textcolor{white}{\textbf{Model}} &
+\textcolor{white}{\textbf{Architecture}} &
+\textcolor{white}{\textbf{Parameters (M)}} &
+\textcolor{white}{\textbf{Emb.\ dim.}} &
+\textcolor{white}{\textbf{Description}} \tabularnewline
+\midrule
+\endfirsthead
+
+% ── Continuation header ───────────────────────────────────────────────────────
+\multicolumn{5}{c}{\tablename~\thetable{} \textit{(continued)}}\tabularnewline[2pt]
+\toprule
+\rowcolor{headerblue}
+\textcolor{white}{\textbf{Model}} &
+\textcolor{white}{\textbf{Architecture}} &
+\textcolor{white}{\textbf{Parameters (M)}} &
+\textcolor{white}{\textbf{Emb.\ dim.}} &
+\textcolor{white}{\textbf{Description}} \tabularnewline
+\midrule
+\endhead
+
+% ── Foot (all pages except last) ─────────────────────────────────────────────
+\midrule
+\multicolumn{5}{r}{\footnotesize\textit{Continued on next page\ldots}}\tabularnewline
+\endfoot
+
+% ── Last-page foot ────────────────────────────────────────────────────────────
+\bottomrule
+\multicolumn{5}{p{25.2cm}}{%
+  \footnotesize\setstretch{1.15}%
+  \textbf{Note.} Parameters~(M)\,=\,trainable parameters in millions as reported
+  by the original publication; N/K\,=\,not known or not reported;
+  $0^{a}$\,=\,non-neural fingerprint with zero trainable parameters.
+  Where multiple model variants exist, the parameter count of the variant used
+  in the benchmark is reported (e.g.\ GROVER-Large, ChemFM-3\,B, ChemGPT-4.7\,M).
+  \par\medskip
+  \textbf{References.} $^{1}$\,Seidl P et al. Enhancing activity prediction models in drug discovery with the ability to understand human language. \textit{ICML} 2023.\newline $^{2}$\,Maziarka {\L} et al. Relative molecule self-attention transformer. \textit{J.~Cheminform.} 2022;14:2.\newline $^{3}$\,Fabian B et al. Molecular representation learning with language models and domain-relevant auxiliary tasks. \textit{arXiv} 2020:2011.03814.\newline $^{4}$\,Chithrananda S et al. ChemBERTa: Large-scale self-supervised pretraining for molecular property prediction. \textit{arXiv} 2020:2010.09885.\newline $^{5}$\,Rogers D, Hahn M. Extended-connectivity fingerprints. \textit{J.~Chem.~Inf.~Model.} 2010;50(5):742--754.\newline $^{6}$\,Winter R et al. Learning continuous and data-driven molecular descriptors by translating equivalent chemical representations. \textit{Chem.~Sci.} 2019;10:1692--1701.\newline $^{7}$\,Carhart RE et al. Atom pairs as molecular features in structure-activity studies. \textit{J.~Chem.~Inf.~Comput.~Sci.} 1985;25(2):64--69.\newline $^{8}$\,Maziarka {\L} et al. Molecule attention transformer. \textit{arXiv} 2020:2002.08264.\newline $^{9}$\,Ross J et al. Large-scale chemical language representations capture molecular structure and properties. \textit{Nat.~Mach.~Intell.} 2022;4:1256--1264.\newline $^{10}$\,Jaeger S et al. Mol2vec: Unsupervised machine learning approach with chemical intuition. \textit{J.~Chem.~Inf.~Model.} 2018;58(1):27--35.\newline $^{11}$\,Nilakantan R et al. Topological torsion: A new molecular descriptor for SAR applications. \textit{J.~Chem.~Inf.~Comput.~Sci.} 1987;27(2):82--85.\newline $^{12}$\,Bao Z et al. ChemFM: A versatile foundation model for chemistry. \textit{arXiv} 2024:2404.01196.\newline $^{13}$\,Zhou G et al. Uni-Mol2: Exploring molecular pretraining model at scale. \textit{arXiv} 2024:2406.14969.\newline $^{14}$\,Wang H et al. Chemical-reaction-aware molecule representation learning. \textit{ICLR} 2022.\newline $^{15}$\,Chilingaryan G et al. COATI: Multi-modal contrastive pre-training for representing and traversing chemical space. \textit{arXiv} 2023:2310.00981.\newline $^{16}$\,Liu S et al. Pre-training molecular graph representation with 3D geometry. \textit{ICLR} 2022.\newline $^{17}$\,Irwin R et al. Chemformer: A pre-trained transformer for computational chemistry. \textit{Mach.~Learn.:~Sci.~Technol.} 2022;3:015022.\newline $^{18}$\,Zhou G et al. Uni-Mol: A universal 3D molecular representation learning framework. \textit{ICLR} 2023.\newline $^{19}$\,Rong Y et al. Self-supervised graph transformer on large-scale molecular data. \textit{NeurIPS} 2020.\newline $^{20}$\,Hu W et al. Strategies for pre-training graph neural networks. \textit{ICLR} 2020.\newline $^{21}$\,Mukherjee S et al. SimSon: Simple contrastive learning of SMILES representations. \textit{arXiv} 2023.\newline $^{22}$\,Frey NC et al. Neural scaling of deep chemical models. \textit{Nat.~Mach.~Intell.} 2023;5:1288--1298.\newline $^{23}$\,Fang X et al. Geometry-enhanced molecular representation learning for property prediction. \textit{Nat.~Mach.~Intell.} 2022;4:127--134.\newline $^{24}$\,Y\"{u}ksel A et al. SELFormer: Molecular representation learning via SELFIES language models. \textit{Mach.~Learn.:~Sci.~Technol.} 2023;4:025035.\newline $^{25}$\,Shen T et al. Molecular property prediction: A multilevel quantum interactions modeling perspective. \textit{AAAI} 2023.
+}\tabularnewline
+\endlastfoot
+
+% ── Table body ────────────────────────────────────────────────────────────────
+  \textbf{CLAMP}$^{1}$ & Fingerprint / multimodal & N/K & 768 & Contrastive assay--molecule model using concatenated molecular fingerprints passed through an MLP and aligned to assay text. \tabularnewline
+  \rowcolor{rowgray}\textbf{R-MAT}$^{2}$ & Graph & 4.0 & 3,072 & Relative Molecule Attention Transformer using molecular graph, distance, and neighbourhood-aware attention. \tabularnewline
+  \textbf{MolBERT}$^{3}$ & SMILES-based & 85.0 & 768 & BERT-style molecular language model trained on SMILES-derived molecular substructure sequences. \tabularnewline
+  \rowcolor{rowgray}\textbf{ChemBERTa}$^{4}$ & SMILES-based & N/K & 384 & RoBERTa-style transformer pretrained on large PubChem SMILES corpora with MLM or chemically guided objectives. \tabularnewline
+  \textbf{ECFP}$^{5}$ & Fingerprint & $0^{a}$ & 2,048 & Extended-connectivity circular fingerprint encoding local atom environments by hashing circular neighbourhoods. \tabularnewline
+  \rowcolor{rowgray}\textbf{CDDD}$^{6}$ & SMILES-based & N/K & 512 & Seq2seq translation model that learns fixed-size continuous descriptors from equivalent molecular string representations. \tabularnewline
+  \textbf{Atom Pair}$^{7}$ & Fingerprint & $0^{a}$ & 2,048 & Hashed atom-pair fingerprint based on shortest-path atom-pair features. \tabularnewline
+  \rowcolor{rowgray}\textbf{MAT}$^{8}$ & Graph & 101.0 & 1,024 & Molecule Attention Transformer augmenting self-attention with molecular graph adjacency and interatomic distances. \tabularnewline
+  \textbf{MoLFormer}$^{9}$ & SMILES-based & 46.8 & 768 & Large-scale SMILES transformer using linear attention and rotary positional encoding. \tabularnewline
+  \rowcolor{rowgray}\textbf{Mol2Vec}$^{10}$ & Fingerprint-like & N/K & 300 & Word2Vec-style model treating Morgan substructures as `words' and molecules as `sentences'. \tabularnewline
+  \textbf{TT}$^{11}$ & Fingerprint & $0^{a}$ & 2,048 & Topological torsion fingerprint encoding paths of four bonded atoms. \tabularnewline
+  \rowcolor{rowgray}\textbf{ChemFM}$^{12}$ & SMILES-based & 3,000 & 3,072 & Causal molecular foundation model pretrained on UniChem SMILES (3\textasciitilde{}B variant used in benchmark). \tabularnewline
+  \textbf{Uni-Mol2}$^{13}$ & Graph / 3D & 84.0 & 768 & Scaled two-track transformer integrating atom-level, graph-level, and 3D geometric information. \tabularnewline
+  \rowcolor{rowgray}\textbf{MolR}$^{14}$ & Graph & N/K & 1,024 & Reaction-aware GNN enforcing compositional consistency of representations across chemical reactions. \tabularnewline
+  \textbf{COATI}$^{15}$ & SMILES / multimodal & N/K & 256 & Contrastive model aligning molecular strings and 3D information into invertible latent embeddings. \tabularnewline
+  \rowcolor{rowgray}\textbf{GraphMVP}$^{16}$ & Graph & 1.8 & 300 & Self-supervised graph pretraining aligning 2D molecular topology with 3D conformer geometry. \tabularnewline
+  \textbf{Chemformer}$^{17}$ & SMILES-based & 45.0 & 512 & BART-style encoder--decoder transformer for molecular SMILES generation and representation learning. \tabularnewline
+  \rowcolor{rowgray}\textbf{Uni-Mol}$^{18}$ & Graph / 3D & 47.0 & 512 & Universal 3D molecular representation model using transformer encoders with spatial positional information. \tabularnewline
+  \textbf{GROVER}$^{19}$ & Graph & 100.0 & 2,400 & Graph transformer combining message passing with self-supervised node-, edge-, and graph-level objectives (Large variant). \tabularnewline
+  \rowcolor{rowgray}\textbf{GIN}$^{20}$ & Graph & N/K & 300 & Graph Isomorphism Network backbone with standard graph self-supervised pretraining objectives. \tabularnewline
+  \textbf{SimSon}$^{21}$ & SMILES-based & N/K & 512 & Contrastive model trained to map randomised SMILES of the same molecule to similar embeddings. \tabularnewline
+  \rowcolor{rowgray}\textbf{ChemGPT}$^{22}$ & SMILES / SELFIES-based & 4.7 & 128 & GPT-style autoregressive chemical language model for molecular generation and embeddings (4.7\textasciitilde{}M variant). \tabularnewline
+  \textbf{GEM}$^{23}$ & Graph / 3D & N/K & 32 & Geometry-enhanced GNN modelling atoms, bonds, and bond angles with geometry-level self-supervised tasks. \tabularnewline
+  \rowcolor{rowgray}\textbf{SELFormer}$^{24}$ & SMILES / SELFIES-based & 86.7 & 768 & Transformer language model using SELFIES rather than SMILES for robust molecular string representations. \tabularnewline
+  \textbf{GraphFP}$^{25}$ & Graph & N/K & 300 & Fragment-based graph pretraining using contrastive and predictive tasks over molecular and fragment graphs. \tabularnewline
+
+\end{longtable}
+
+\end{document}

@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scientific Writing &amp; Manuscript Preparation — Master Reference</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+    --serif: 'Spectral', Georgia, serif;
+    /* ink */
+    --ink:#1a1a18; --ink2:#46443e; --ink3:#8a8880; --ink4:#a9a79f;
+    --rule:#e4e2db; --rule2:#c9c6bd;
+    --bg:#faf9f6; --card:#ffffff; --shade:#f1efe9;
+    /* semantic accents (light bg / solid / deep text) */
+    --red:#c24a1e;    --red-l:#f7ece6;    --red-d:#7c2c18;
+    --blue:#1e5fa8;   --blue-l:#e6eff8;   --blue-d:#0c447c;
+    --teal:#0f6e56;   --teal-l:#e1f5ee;   --teal-d:#0a4a38;
+    --amber:#b4600f;  --amber-l:#fbeedb;  --amber-d:#7a4a0e;
+    --purple:#5b3fa6; --purple-l:#ece8f6; --purple-d:#3c348a;
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--sans);
+    font-size: 14px; line-height: 1.65;
+    color: var(--ink); background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 880px; margin: 0 auto; padding: 60px 44px 110px; }
+
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  em { font-style: italic; }
+  sup { font-size: 0.72em; }
+
+  /* ───────── DOCUMENT HEADER ───────── */
+  .doc-header { border-bottom: 2.5px solid var(--ink); padding-bottom: 26px; margin-bottom: 14px; }
+  .doc-header .eyebrow {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--ink3); margin-bottom: 12px;
+  }
+  .doc-header h1 {
+    font-family: var(--serif); font-size: 38px; font-weight: 600;
+    line-height: 1.12; letter-spacing: -0.4px; color: var(--ink); margin-bottom: 12px;
+  }
+  .doc-header .subtitle {
+    font-family: var(--serif); font-style: italic; font-size: 17px;
+    color: var(--ink2); line-height: 1.5; max-width: 60ch;
+  }
+  .doc-header .meta {
+    margin-top: 16px; font-size: 12px; color: var(--ink3);
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+  }
+
+  /* ───────── TABLE OF CONTENTS ───────── */
+  .toc { margin: 30px 0 4px; }
+  .toc-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--ink3); margin-bottom: 14px;
+  }
+  .toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 28px; }
+  .toc-item {
+    display: flex; gap: 12px; align-items: baseline;
+    padding: 7px 0; border-bottom: 1px solid var(--rule);
+    color: var(--ink2); font-size: 13.5px;
+  }
+  .toc-item:hover { color: var(--ink); }
+  .toc-num {
+    font-family: var(--serif); font-style: italic; font-size: 13px;
+    color: var(--red); min-width: 30px; flex-shrink: 0;
+  }
+
+  /* ───────── PARTS / SECTIONS ───────── */
+  .part { margin-top: 64px; }
+  .part-head {
+    display: flex; align-items: baseline; gap: 16px;
+    padding-bottom: 14px; margin-bottom: 26px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .part-num {
+    font-family: var(--serif); font-style: italic; font-size: 26px;
+    font-weight: 500; color: var(--red); flex-shrink: 0; min-width: 46px;
+  }
+  .part-head h2 {
+    font-family: var(--serif); font-size: 25px; font-weight: 600;
+    line-height: 1.18; letter-spacing: -0.3px; color: var(--ink);
+  }
+  .part-intro { font-size: 14px; color: var(--ink2); line-height: 1.7; margin-bottom: 22px; max-width: 70ch; }
+
+  .sub { margin-top: 30px; }
+  .sub:first-of-type { margin-top: 0; }
+  .sub > h3 {
+    font-family: var(--sans); font-size: 15px; font-weight: 600;
+    color: var(--ink); margin-bottom: 12px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+    display: flex; align-items: center; gap: 9px;
+  }
+  .sub > h3 .tick {
+    width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; background: var(--red);
+  }
+  .sub > h3.b .tick { background: var(--blue); }
+  .sub > h3.t .tick { background: var(--teal); }
+  .sub > h3.a .tick { background: var(--amber); }
+  .sub > h3.p .tick { background: var(--purple); }
+
+  .kicker {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--ink3); margin: 18px 0 7px;
+  }
+  p.body { font-size: 14px; color: var(--ink2); line-height: 1.7; margin-bottom: 12px; }
+  p.body strong, .point-body strong { color: var(--ink); font-weight: 600; }
+
+  /* ───────── POINTS (label / body grid) ───────── */
+  .points { display: flex; flex-direction: column; gap: 15px; margin: 14px 0; }
+  .point { display: grid; grid-template-columns: 210px 1fr; gap: 18px; align-items: start; }
+  .point-label { font-size: 13px; font-weight: 600; color: var(--ink); padding-top: 1px; }
+  .point-label.red { color: var(--red); }
+  .point-label.blue { color: var(--blue); }
+  .point-label.teal { color: var(--teal); }
+  .point-label.amber { color: var(--amber); }
+  .point-label.purple { color: var(--purple); }
+  .point-body { font-size: 13.5px; color: var(--ink2); line-height: 1.68; }
+
+  /* ───────── CALLOUT / QUOTE / SOURCE ───────── */
+  .callout {
+    margin: 16px 0; padding: 12px 16px; border-left: 3px solid var(--red);
+    background: var(--red-l); border-radius: 0 5px 5px 0;
+    font-size: 13px; color: var(--ink2); line-height: 1.6;
+  }
+  .callout.blue { border-left-color: var(--blue); background: var(--blue-l); }
+  .callout.teal { border-left-color: var(--teal); background: var(--teal-l); }
+  .callout.amber { border-left-color: var(--amber); background: var(--amber-l); }
+  .callout.purple { border-left-color: var(--purple); background: var(--purple-l); }
+  .callout strong { color: var(--ink); font-weight: 600; }
+  .callout .tagword { font-weight: 600; }
+
+  .quote {
+    font-family: var(--serif); font-style: italic; font-size: 15px;
+    color: var(--ink2); padding: 4px 0 4px 18px; border-left: 2px solid var(--rule2);
+    margin: 16px 0; line-height: 1.6;
+  }
+  .quote cite {
+    display: block; font-style: normal; font-family: var(--sans);
+    font-size: 11.5px; color: var(--ink3); margin-top: 6px;
+  }
+  .source-note { font-size: 11px; color: var(--ink3); font-style: italic; margin-top: 6px; }
+
+  /* ───────── DIAGRAM WRAP ───────── */
+  .diagram-wrap { margin: 18px 0; border-radius: 6px; overflow: hidden; }
+  .diagram-caption { font-size: 12px; color: var(--ink3); font-style: italic; margin-top: 7px; }
+
+  /* ───────── FOCUS FORMULA (VOS triad) ───────── */
+  .focus-formula { display: flex; align-items: stretch; margin: 16px 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--rule2); }
+  .ff-node { flex: 1; padding: 15px 16px; text-align: center; }
+  .ff-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; font-weight: 600; margin-bottom: 5px; opacity: 0.85; }
+  .ff-val { font-size: 13.5px; font-weight: 600; }
+  .ff-example { font-size: 11.5px; margin-top: 4px; font-style: italic; opacity: 0.8; }
+  .ff-var { background: var(--purple-l); color: var(--purple-d); }
+  .ff-out { background: var(--amber-l); color: var(--amber-d); }
+  .ff-pop { background: var(--teal-l); color: var(--teal-d); }
+  .ff-arrow { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 6px; background: var(--shade); flex-shrink: 0; width: 56px; }
+  .ff-arrow-text { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink3); text-align: center; line-height: 1.3; margin-bottom: 2px; }
+  .ff-arrow-icon { font-size: 15px; color: var(--ink4); }
+
+  /* ───────── NARRATIVE CHAIN ───────── */
+  .narrative-chain { margin: 16px 0; border-radius: 8px; overflow: hidden; border: 1px solid var(--rule2); }
+  .nc-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--card); }
+  .nc-row:last-child { border-bottom: none; }
+  .nc-tag { width: 142px; flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: #fff; padding: 14px; display: flex; align-items: center; line-height: 1.35; }
+  .nc-text { flex: 1; font-size: 13px; padding: 14px 16px; line-height: 1.55; font-style: italic; }
+  .nc-rq .nc-tag { background: var(--red); }    .nc-rq .nc-text { background: var(--red-l); color: var(--red-d); }
+  .nc-aim .nc-tag { background: var(--amber); }  .nc-aim .nc-text { background: var(--amber-l); color: var(--amber-d); }
+  .nc-conc .nc-tag { background: var(--teal); }  .nc-conc .nc-text { background: var(--teal-l); color: var(--teal-d); }
+
+  /* ───────── STRESS / TOPIC CHAIN ───────── */
+  .stc { background: var(--shade); border-radius: 8px; padding: 16px 18px; margin: 14px 0 6px; font-size: 13.5px; }
+  .stc-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink3); margin-bottom: 10px; }
+  .stress { background: var(--red-l); color: var(--red-d); border-radius: 3px; padding: 1px 5px; }
+  .topic  { background: var(--blue-l); color: var(--blue-d); border-radius: 3px; padding: 1px 5px; }
+  .stc-row { display: flex; gap: 10px; align-items: baseline; margin-bottom: 9px; line-height: 1.75; }
+  .stc-row:last-child { margin-bottom: 0; }
+  .stc-len { font-size: 10px; color: var(--ink4); min-width: 48px; flex-shrink: 0; padding-top: 3px; }
+  .legend { display: flex; gap: 18px; font-size: 12px; color: var(--ink3); margin-top: 9px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .legend-pip { width: 11px; height: 11px; border-radius: 2px; }
+  .pip-stress { background: var(--red-l); border: 1px solid #d98b6d; }
+  .pip-topic  { background: var(--blue-l); border: 1px solid #6f9bd1; }
+
+  /* ───────── TWO-COL / COMPARE CARDS ───────── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .cbox { background: var(--shade); border-radius: 6px; padding: 13px 15px; font-size: 13px; line-height: 1.6; }
+  .cbox.card { background: var(--card); border: 1px solid var(--rule2); }
+  .cbox-head { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; margin-bottom: 7px; }
+  .ch-red { color: var(--red); } .ch-blue { color: var(--blue); } .ch-teal { color: var(--teal); } .ch-amber { color: var(--amber); } .ch-purple { color: var(--purple); }
+  .cbox ul { padding-left: 16px; }
+  .cbox ul li { margin-bottom: 4px; }
+  .bad  { color: var(--red-d); text-decoration: line-through; }
+  .good { color: var(--teal-d); font-weight: 500; }
+  .pair { display: flex; gap: 7px; align-items: baseline; line-height: 1.95; }
+  .arr { color: var(--ink4); font-size: 11px; }
+
+  /* ───────── SIGNPOST / CONNECTOR GRID ───────── */
+  .signpost-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .sp-box { background: var(--shade); border-radius: 6px; padding: 11px 13px; font-size: 12px; line-height: 1.8; border-top: 2.5px solid; }
+  .sp-head { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; margin-bottom: 6px; }
+  .sp-contrast { border-color: var(--red); }   .sp-contrast .sp-head { color: var(--red); }
+  .sp-similar  { border-color: var(--teal); }   .sp-similar .sp-head { color: var(--teal); }
+  .sp-addition { border-color: var(--blue); }   .sp-addition .sp-head { color: var(--blue); }
+  .sp-result   { border-color: var(--amber); }  .sp-result .sp-head { color: var(--amber); }
+
+  /* ───────── WORD TABLES (vocab / nominalization) ───────── */
+  .vtable { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 5px; margin: 10px 0; font-size: 13px; }
+  .vt-h { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; padding: 3px 9px; font-weight: 600; }
+  .vt-h.red { color: var(--red); } .vt-h.blue { color: var(--blue); }
+  .vt-cell { background: var(--shade); border-radius: 5px; padding: 6px 10px; }
+  .vt-cell.from { color: var(--red-d); } .vt-cell.to { color: var(--ink); }
+  .nom-table { background: var(--shade); border-radius: 6px; padding: 14px 16px; margin: 10px 0; }
+  .nom-grid { display: grid; grid-template-columns: 1fr 28px 1fr; gap: 2px 8px; font-size: 13px; align-items: center; }
+  .nom-h-from { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--blue); }
+  .nom-h-to { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--red); }
+
+  /* ───────── ZONE STACK (paragraph architecture) ───────── */
+  .zone-stack { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; font-size: 13px; }
+  .zone { border-radius: 5px; padding: 10px 13px; line-height: 1.55; }
+  .zone .z-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; display: block; margin-bottom: 4px; }
+  .zone .z-body { color: var(--ink2); }
+  .z-red   { background: var(--red-l); }    .z-red .z-tag { color: var(--red-d); }
+  .z-blue  { background: var(--blue-l); }   .z-blue .z-tag { color: var(--blue-d); }
+  .z-teal  { background: var(--teal-l); }   .z-teal .z-tag { color: var(--teal-d); }
+  .z-amber { background: var(--amber-l); }  .z-amber .z-tag { color: var(--amber-d); }
+  .z-outline { background: var(--card); border: 1.5px solid var(--rule2); }  .z-outline .z-tag { color: var(--ink2); }
+  .z-amber-bd { background: var(--amber-l); border: 1.5px solid var(--amber); } .z-amber-bd .z-tag { color: var(--amber-d); }
+  /* compact inline zone rows */
+  .zone-row { display: flex; gap: 10px; align-items: baseline; border-radius: 5px; padding: 9px 13px; font-size: 13px; line-height: 1.5; }
+  .zone-row .zr-name { font-weight: 600; flex-shrink: 0; }
+  .zr-red { background: var(--red-l); } .zr-red .zr-name { color: var(--red-d); }
+  .zr-blue { background: var(--blue-l); } .zr-blue .zr-name { color: var(--blue-d); }
+  .zr-teal { background: var(--teal-l); } .zr-teal .zr-name { color: var(--teal-d); }
+  .zr-amber { background: var(--amber-l); } .zr-amber .zr-name { color: var(--amber-d); }
+  .zone-row .zr-rest { color: var(--ink3); }
+
+  /* ───────── WORKED EXAMPLE PARAGRAPH ───────── */
+  .example { background: var(--shade); border-radius: 8px; padding: 14px 16px; margin: 12px 0; font-size: 13px; line-height: 1.85; }
+  .ex-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink3); margin-bottom: 8px; }
+  .ex-label.lbl-bad { color: var(--red-d); } .ex-label.lbl-good { color: var(--teal-d); } .ex-label.lbl-blue { color: var(--blue-d); }
+  .hl-red   { background: var(--red-l); color: var(--red-d); border-radius: 3px; padding: 1px 5px; }
+  .hl-blue  { background: var(--blue-l); color: var(--blue-d); border-radius: 3px; padding: 1px 5px; }
+  .hl-teal  { background: var(--teal-l); color: var(--teal-d); border-radius: 3px; padding: 1px 5px; }
+  .hl-amber { background: var(--amber-l); color: var(--amber-d); border-radius: 3px; padding: 1px 5px; }
+  .hl-var   { background: var(--purple-l); color: var(--purple-d); border-radius: 3px; padding: 1px 5px; }
+  .hl-out   { background: var(--amber-l); color: var(--amber-d); border-radius: 3px; padding: 1px 5px; }
+  .hl-pop   { background: var(--teal-l); color: var(--teal-d); border-radius: 3px; padding: 1px 5px; }
+
+  /* ───────── CHIPS ───────── */
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+  .chip { font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 20px; border: 1px solid var(--rule2); background: var(--card); color: var(--ink2); }
+  .chip.blue { color: var(--blue); border-color: #b5d4f4; background: var(--blue-l); }
+  .chip.teal { color: var(--teal); border-color: #9fe1cb; background: var(--teal-l); }
+  .chip.amber { color: var(--amber); border-color: #f0c585; background: var(--amber-l); }
+  .chip.purple { color: var(--purple); border-color: #b6acdf; background: var(--purple-l); }
+  .chip.red { color: var(--red-d); border-color: #e6a78f; background: var(--red-l); }
+  .hedge-wrap { background: var(--shade); border-radius: 8px; padding: 13px 15px; margin: 10px 0; }
+  .hedge-chip { display: inline-block; background: var(--card); border: 1px solid var(--rule2); border-radius: 12px; padding: 3px 10px; font-size: 12px; color: var(--ink); margin: 0 4px 6px 0; }
+
+  /* ───────── TABLE ───────── */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13px; }
+  th { text-align: left; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink3); padding: 7px 12px; border-bottom: 1px solid var(--rule2); }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--rule); color: var(--ink2); vertical-align: top; line-height: 1.55; }
+  tr:last-child td { border-bottom: none; }
+  td strong { color: var(--ink); font-weight: 600; }
+  tbody tr:nth-child(even) td { background: var(--shade); }
+
+  /* ───────── STEP LIST / NUM LIST ───────── */
+  .num-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+  .num-item { display: flex; gap: 12px; align-items: baseline; font-size: 13.5px; line-height: 1.6; color: var(--ink2); }
+  .num-badge { background: var(--purple); color: #fff; border-radius: 50%; min-width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .num-item strong { color: var(--ink); font-weight: 600; }
+
+  /* ───────── STAT GRID (power calc / reporting / keywords) ───────── */
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; text-align: center; }
+  .stat-cell { border-radius: 6px; padding: 11px 9px; }
+  .stat-cell .sc-name { font-weight: 600; margin-bottom: 4px; }
+  .stat-cell .sc-note { font-size: 12px; color: var(--ink3); line-height: 1.45; }
+  .sc-red { background: var(--red-l); } .sc-red .sc-name { color: var(--red-d); }
+  .sc-blue { background: var(--blue-l); } .sc-blue .sc-name { color: var(--blue-d); }
+  .sc-amber { background: var(--amber-l); } .sc-amber .sc-name { color: var(--amber-d); }
+  .sc-teal { background: var(--teal-l); } .sc-teal .sc-name { color: var(--teal-d); }
+  .reporting-stack { display: flex; flex-direction: column; gap: 7px; margin: 12px 0; }
+  .rep-item { background: var(--shade); border-radius: 6px; padding: 11px 14px; font-size: 13px; line-height: 1.6; }
+  .rep-item .rep-name { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink3); margin-bottom: 4px; }
+  .rep-item .rep-body { color: var(--ink2); }
+  .kw-stat { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; text-align: center; }
+  .kw-cell { border-radius: 8px; padding: 14px; }
+  .kw-cell .kw-num { font-size: 23px; font-weight: 600; margin-bottom: 3px; }
+  .kw-cell .kw-meta { font-size: 11px; color: var(--ink3); margin-bottom: 7px; }
+  .kw-cell .kw-term { font-size: 14px; font-style: italic; color: var(--ink); margin-bottom: 5px; }
+  .kw-cell .kw-verdict { font-size: 11px; }
+  .kw-bad { background: var(--red-l); } .kw-bad .kw-num { color: var(--red-d); } .kw-bad .kw-verdict { color: var(--red-d); }
+  .kw-good { background: var(--teal-l); } .kw-good .kw-num { color: var(--teal-d); } .kw-good .kw-verdict { color: var(--teal-d); }
+
+  /* ───────── FUNNEL ───────── */
+  .funnel-wrap { display: flex; gap: 16px; align-items: stretch; margin: 14px 0; }
+  .funnel-vis { flex: 0 0 104px; display: flex; flex-direction: column; align-items: center; }
+  .funnel-vis div { display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 600; color: var(--blue-d); background: #b9d6f4; }
+  .funnel-detail { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+  .funnel-step { background: var(--shade); border-radius: 6px; padding: 9px 13px; font-size: 13px; line-height: 1.55; }
+  .funnel-step.gap { border: 1px solid var(--blue); background: var(--blue-l); }
+  .funnel-step strong { color: var(--ink); }
+
+  /* ───────── TAKEAWAYS (dark closing) ───────── */
+  .takeaways { background: var(--ink); color: #efece4; border-radius: 12px; padding: 34px 38px 30px; margin-top: 66px; }
+  .takeaways .tk-head { display: flex; align-items: baseline; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.14); padding-bottom: 16px; margin-bottom: 22px; }
+  .takeaways .tk-num { font-family: var(--serif); font-style: italic; font-size: 24px; color: #d98b6d; }
+  .takeaways h2 { font-family: var(--serif); font-size: 24px; font-weight: 600; color: #efece4; }
+  .takeaways .tk-point { margin-bottom: 22px; }
+  .takeaways .tk-point:last-child { margin-bottom: 0; }
+  .takeaways .tk-title { font-size: 14px; font-weight: 600; color: #f6f3ec; margin-bottom: 5px; }
+  .takeaways .tk-body { font-size: 13.5px; color: #b7b3aa; line-height: 1.7; }
+  .takeaways .tk-body strong { color: #e4ddcf; font-weight: 600; }
+
+  /* ───────── FOOTER ───────── */
+  .doc-footer { margin-top: 52px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink3); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+  @media (max-width: 680px) {
+    .page { padding: 36px 20px 70px; }
+    .doc-header h1 { font-size: 29px; }
+    .toc-grid, .two-col, .three-col, .signpost-grid, .stat-grid, .kw-stat, .vtable { grid-template-columns: 1fr; }
+    .point { grid-template-columns: 1fr; gap: 4px; }
+    .focus-formula { flex-direction: column; } .ff-arrow { width: 100%; flex-direction: row; height: 30px; }
+    .nc-tag { width: 110px; }
+    .funnel-wrap { flex-direction: column; } .funnel-vis { flex-direction: row; width: 100%; }
+    .part-head h2 { font-size: 21px; }
+  }
+  @media print {
+    body { background: #fff; }
+    .page { padding: 16px; max-width: none; }
+    .part, .sub, .example, .diagram-wrap, .focus-formula, .narrative-chain { page-break-inside: avoid; }
+    .takeaways { background: #fff; color: #1a1a18; border: 1.5px solid #1a1a18; }
+    .takeaways h2, .takeaways .tk-title { color: #1a1a18; }
+    .takeaways .tk-body { color: #46443e; }
+    .takeaways .tk-body strong { color: #1a1a18; }
+    a { color: inherit; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ════════ DOCUMENT HEADER ════════ -->
+  <header class="doc-header">
+    <p class="eyebrow">Nature Masterclasses · University of Copenhagen · Practitioner Reference</p>
+    <h1>Scientific Writing &amp; Manuscript Preparation</h1>
+    <p class="subtitle">The full arc of a manuscript — workflow, architecture, every section, figures, sentence craft, and compliance — distilled for researchers who already know the basics.</p>
+    <div class="meta">
+      <span>Consolidated master reference</span>
+      <span>·</span>
+      <span>Worked examples drawn from published Nature-portfolio papers</span>
+    </div>
+  </header>
+
+  <!-- ════════ TABLE OF CONTENTS ════════ -->
+  <nav class="toc">
+    <p class="toc-title">Contents</p>
+    <div class="toc-grid">
+      <a class="toc-item" href="#p1"><span class="toc-num">I</span><span>Writing Workflow &amp; Strategy</span></a>
+      <a class="toc-item" href="#p2"><span class="toc-num">II</span><span>Architecture &amp; Narrative Spine</span></a>
+      <a class="toc-item" href="#p3"><span class="toc-num">III</span><span>Introduction</span></a>
+      <a class="toc-item" href="#p4"><span class="toc-num">IV</span><span>Methods</span></a>
+      <a class="toc-item" href="#p5"><span class="toc-num">V</span><span>Results</span></a>
+      <a class="toc-item" href="#p6"><span class="toc-num">VI</span><span>Discussion</span></a>
+      <a class="toc-item" href="#p7"><span class="toc-num">VII</span><span>Conclusion, Title &amp; Keywords</span></a>
+      <a class="toc-item" href="#p8"><span class="toc-num">VIII</span><span>Figures &amp; Data Visualization</span></a>
+      <a class="toc-item" href="#p9"><span class="toc-num">IX</span><span>Sentence-Level Craft</span></a>
+      <a class="toc-item" href="#p10"><span class="toc-num">X</span><span>Reporting Compliance &amp; AI Policy</span></a>
+      <a class="toc-item" href="#p11"><span class="toc-num">XI</span><span>Synthesis &amp; Highest-Leverage Principles</span></a>
+    </div>
+  </nav>
+
+  <!-- ════════ PART I — WORKFLOW ════════ -->
+  <section class="part" id="p1">
+    <div class="part-head"><span class="part-num">I</span><h2>Writing Workflow &amp; Strategy</h2></div>
+    <p class="part-intro">Two distinct phases with different objectives: the outline resolves <em>what</em> to argue; the manuscript resolves <em>how</em> to say it. The most expensive revision cycles happen when both problems are being solved simultaneously.</p>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>The two-phase process</h3>
+      <div class="zone-stack">
+        <div class="zone z-blue">
+          <span class="z-tag">Phase 1 — Outline · goal: logical agreement</span>
+          <div class="z-body">Build a hierarchical outline (section → subsection → point-level). Circulate to co-authors, incorporate feedback, and obtain <strong>explicit sign-off on the logical structure before any prose is written</strong>. Structural disagreements are cheap at the outline stage and very expensive after prose exists: a co-author who restructures a written section is redoing someone else's sentence-level work, not just rearranging ideas.</div>
+        </div>
+        <div class="zone z-teal">
+          <span class="z-tag">Phase 2 — Manuscript · goal: clear communication</span>
+          <div class="z-body">Write section-by-section. Send each completed section for feedback while you start the next — a parallel review loop in which you are never idle and reviewers receive focused, bounded chunks rather than a full draft. Focus is now purely on expression; content and order are already resolved. Announce section delivery dates to co-authors: the social commitment reduces drift and keeps the pipeline moving.</div>
+        </div>
+      </div>
+      <div class="callout blue"><strong>Why the split matters:</strong> agreeing on the argument and polishing the prose are different cognitive tasks. Mixing them means every structural change forces a rewrite of finished sentences — the single biggest source of wasted revision effort on multi-author papers.</div>
+    </div>
+  </section>
+
+  <!-- ════════ PART II — ARCHITECTURE & NARRATIVE ════════ -->
+  <section class="part" id="p2">
+    <div class="part-head"><span class="part-num">II</span><h2>Architecture &amp; Narrative Spine</h2></div>
+    <p class="part-intro">Before drafting, fix the spine of the paper: the one problem it addresses and the single logical line from question to answer. Every figure, paragraph, and discussion point should map back to it.</p>
+
+    <div class="sub">
+      <h3 class="p"><span class="tick"></span>The focus formula — define the study's spine first</h3>
+      <p class="body">Reduce the paper to one sentence: <em>[Variable / intervention]</em> has an effect on <em>[outcome]</em> in/from <em>[population / sample]</em>. This Variable–Outcome–Population (VOS) triad is the diagnostic that recurs throughout the paper — it should be identifiable in the title, the aim, and the conclusion. When a figure relates to none of the three components, it likely belongs in supplementary material.</p>
+      <div class="diagram-wrap">
+        <svg width="100%" viewBox="0 0 820 122" role="img" aria-label="Three-factor focus framework: Variable has an effect on Outcome in or from Population">
+          <defs><marker id="arrFF" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+          <rect x="20" y="24" width="200" height="72" rx="6" fill="#ece8f6" stroke="#b6acdf" stroke-width="1"/>
+          <text x="120" y="54" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="13" font-weight="600" fill="#3c348a">Variable / Intervention</text>
+          <text x="120" y="73" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11.5" fill="#5b3fa6">What are you investigating?</text>
+          <line x1="222" y1="60" x2="278" y2="60" stroke="#8a8880" stroke-width="1" marker-end="url(#arrFF)"/>
+          <text x="250" y="52" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="10" fill="#8a8880">has an</text>
+          <text x="250" y="64" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="10" fill="#8a8880">effect on</text>
+          <rect x="280" y="24" width="200" height="72" rx="6" fill="#fbeedb" stroke="#f0c585" stroke-width="1"/>
+          <text x="380" y="54" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="13" font-weight="600" fill="#7a4a0e">Outcome(s)</text>
+          <text x="380" y="73" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11.5" fill="#b4600f">What are you measuring?</text>
+          <line x1="482" y1="60" x2="538" y2="60" stroke="#8a8880" stroke-width="1" marker-end="url(#arrFF)"/>
+          <text x="510" y="52" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="10" fill="#8a8880">in or</text>
+          <text x="510" y="64" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="10" fill="#8a8880">from</text>
+          <rect x="540" y="24" width="200" height="72" rx="6" fill="#e1f5ee" stroke="#5dcaa5" stroke-width="1"/>
+          <text x="640" y="54" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="13" font-weight="600" fill="#0a4a38">Population / Sample</text>
+          <text x="640" y="73" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11.5" fill="#0f6e56">Where are measurements from?</text>
+          <text x="120" y="113" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" fill="#8a8880" font-style="italic">e.g. Intermittent fasting</text>
+          <text x="380" y="113" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" fill="#8a8880" font-style="italic">Axonal regeneration</text>
+          <text x="640" y="113" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" fill="#8a8880" font-style="italic">Damaged PNS</text>
+        </svg>
+        <div class="diagram-caption">Use this triad to check whether every section stays on the same problem. All three elements should appear in the title and the conclusion.</div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>The narrative chain — research question, aim, and conclusion must mirror each other</h3>
+      <p class="body">Write the research question, aim, and conclusion as three explicit sentences <strong>before drafting</strong>. The conclusion must be a direct, specific answer to the gap sentence in the introduction — not a paraphrase, not a broadened claim. The aim statement (which closes the introduction) is worded to match the gap and bridges the two. If you cannot trace a logical line from the gap sentence to the conclusion, the narrative is broken somewhere in between.</p>
+      <div class="narrative-chain">
+        <div class="nc-row nc-rq"><div class="nc-tag">Research question</div><div class="nc-text">Whether intermittent fasting (IF) influences the axonal regenerative ability of the PNS remains to be investigated.</div></div>
+        <div class="nc-row nc-aim"><div class="nc-tag">Aim</div><div class="nc-text">We investigated whether IF would prime sensory neurons for enhanced axonal regeneration and recovery in a model of sciatic nerve injury.</div></div>
+        <div class="nc-row nc-conc"><div class="nc-tag">Conclusion</div><div class="nc-text">IF facilitates regeneration and functional recovery of sensory axons through a microbiome-derived metabolite, indole-3-propionic acid.</div></div>
+      </div>
+      <p class="source-note">Example: Serger et al. Nature 2022; 607:585–592</p>
+      <div class="diagram-wrap" style="margin-top:14px;">
+        <svg width="100%" viewBox="0 0 820 104" role="img" aria-label="Narrative arc: research question to aim to conclusion maps onto beginning, middle, end">
+          <path d="M80 80 Q410 12 740 80" fill="none" stroke="#c9c6bd" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <circle cx="80" cy="80" r="6" fill="#c24a1e"/><circle cx="410" cy="30" r="6" fill="#b4600f"/><circle cx="740" cy="80" r="6" fill="#0f6e56"/>
+          <text x="80" y="97" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="12" font-weight="600" fill="#c24a1e">Research question</text>
+          <text x="80" y="111" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" fill="#8a8880">(problem · Introduction)</text>
+          <text x="410" y="20" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="12" font-weight="600" fill="#b4600f">Aim</text>
+          <text x="410" y="34" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" fill="#8a8880">(how to address it)</text>
+          <text x="740" y="97" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="12" font-weight="600" fill="#0f6e56">Conclusion</text>
+          <text x="740" y="111" text-anchor="middle" font-family="'DM Sans',sans-serif" font-size="11" fill="#8a8880">(answer · Discussion)</text>
+        </svg>
+        <div class="diagram-caption">The arc maps onto the paper's sections — <strong>Beginning</strong> (Introduction: set scene, introduce conflict), <strong>Middle</strong> (Results: conflict unfolds), <strong>End</strong> (Discussion/Conclusion: resolution). Editors read for this arc; structurally coherent papers are harder to reject on scope grounds.</div>
+      </div>
+      <div class="callout"><span class="tagword">Pitfall:</span> conclusions that introduce ideas not present in the research question leave reviewers asking "so what did you set out to show?" Keep the conclusion's vocabulary tightly coupled to the research question's. If the conclusion sentence could stand alone as a direct answer to the question sentence, the paper is coherent.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Calibrate background depth to the journal's readership — not to your field</h3>
+      <p class="body">The same finding needs a different introduction depending on how broad the journal's readership is. This is not about simplifying; it is about where in the knowledge funnel your readers already sit. The same senior author published two meningeal-lymphatics papers within two months — one in <em>Nature</em>, one in <em>Nature Neuroscience</em> — whose openings differed substantially in assumed context.</p>
+      <div class="two-col">
+        <div class="cbox">
+          <div class="cbox-head ch-blue">Nature (broad audience)</div>
+          Opens with the CNS as an immune-privileged organ and establishes why immune surveillance in the CNS matters before naming the meninges. Avoids jargon like "perivascular efflux."
+        </div>
+        <div class="cbox">
+          <div class="cbox-head ch-purple">Nature Neuroscience (specialist)</div>
+          Opens directly with "lack of lymphatic drainage" as the prior claim to contest. Uses "intraparenchymal macromolecules," "arachnoid granulations," and "perineural lymphatics" without definition.
+        </div>
+      </div>
+      <div class="callout"><span class="tagword">Practical signal:</span> if you find yourself defining terms your target journal's reviewers would consider foundational, your introduction is written for the wrong audience — and the same problem in reverse if you omit context a neighboring-field reader needs. Read three recent papers in your target journal and count the sentences of background before the first cited gap. Audience dimensions to decide upfront: global vs. regional significance; broad vs. specialist readership; academic vs. clinical/policy application.</div>
+    </div>
+  </section>
+
+  <!-- ════════ PART III — INTRODUCTION ════════ -->
+  <section class="part" id="p3">
+    <div class="part-head"><span class="part-num">III</span><h2>Introduction</h2></div>
+    <p class="part-intro">The introduction follows an inverted funnel. Its goal is to give readers just enough context to understand why your specific research question is important — not a comprehensive review. Over-writing the introduction is among the most common first-submission mistakes.</p>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Funnel architecture — and the editor-critical gap sentence</h3>
+      <p class="body">Wide context → field problem → specific gap → your aim. Every introductory paragraph should narrow scope, and the research question must <em>emerge</em> from the gap you identify — not be stated first and justified afterwards (a common inversion that reads as cherry-picking the literature). The non-obvious part: editors read the gap paragraph first to assess novelty. Write it with the same care as your abstract.</p>
+      <div class="funnel-wrap">
+        <div class="funnel-vis">
+          <div style="width:104px;height:30px;border-radius:4px 4px 0 0;">introduce topic</div>
+          <div style="width:84px;height:30px;opacity:0.85;">what is known</div>
+          <div style="width:62px;height:30px;opacity:0.68;">the gap</div>
+          <div style="width:40px;height:30px;border-radius:0 0 4px 4px;background:#1e5fa8;color:#e6eff8;">aims</div>
+        </div>
+        <div class="funnel-detail">
+          <div class="funnel-step"><strong>Introduce topic</strong> — why this matters, with readers in mind. For broad journals start wide; for specialist journals start with the most recent relevant claim in the field.</div>
+          <div class="funnel-step"><strong>What is known</strong> — use up-to-date references. Cite your own prior work here to establish expertise, not to pad the reference list.</div>
+          <div class="funnel-step gap"><strong style="color:#0c447c;">The gap (editor-critical)</strong> — the structural hinge. Signal with <em>however, yet, despite,</em> or <em>remains unclear</em>. State what is unknown, not just what you did. Write it factually, not evaluatively: <em>"surprisingly little is known about…"</em> invites a reviewer to ask <em>why</em> little is known. Prefer <em>"whether X affects Y in Z has not been established."</em></div>
+          <div class="funnel-step"><strong>Specific aims</strong> — flows from the gap. <em>"Here we show…"</em> or <em>"To address this, we…"</em> — one or two sentences only. Stating findings beyond the abstract removes the narrative tension that makes a reader continue; findings belong in the abstract and results.</div>
+        </div>
+      </div>
+      <div class="callout blue"><strong>The test for each paragraph:</strong> does removing it make the gap less surprising or less significant? If no, it does not belong. Over-packed introductions signal to editors that the authors have not identified what is actually novel.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Literature-review paragraph anatomy — a four-part arc, not "claim then citations"</h3>
+      <p class="body">Opening with citations instead of a claim disrupts logical flow: readers learn what a study found before they know why it is relevant. Each paragraph should follow a four-part arc.</p>
+      <div class="zone-stack">
+        <div class="zone z-red"><span class="z-tag">1 — State claim</span><div class="z-body">Make the scientific assertion first. <em>"Although AD research has been neuron-centric for decades, studies have highlighted the role of non-neuronal cells…"</em></div></div>
+        <div class="zone z-blue"><span class="z-tag">2 — Support with evidence</span><div class="z-body">Cite studies that substantiate the claim. Outdated citations signal that your literature search stopped years ago.</div></div>
+        <div class="zone z-teal"><span class="z-tag">3 — Interpret or extend</span><div class="z-body">Synthesize, don't list. Introduce a second concept that connects to your gap. <em>"Oligodendrocytes (~20% of brain cells) show substantial myelin changes in both patients and mouse models."</em></div></div>
+        <div class="zone z-amber"><span class="z-tag">4 — Emphasize importance / pivot to gap</span><div class="z-body">End with why this matters and what remains unresolved. <em>"However, despite their vital function, it is unclear if and how oligodendrocyte fate is altered in AD."</em></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ PART IV — METHODS ════════ -->
+  <section class="part" id="p4">
+    <div class="part-head"><span class="part-num">IV</span><h2>Methods</h2></div>
+    <p class="part-intro">Write Methods for the reviewer who would have done it differently. The recurring failures are incomplete power calculations, citing methods without enough detail to evaluate execution, and leaving defensible analytical choices unjustified.</p>
+
+    <div class="sub">
+      <h3 class="r"><span class="tick"></span>Power calculations must include all four components</h3>
+      <p class="body">A power calculation missing any one of these is incomplete and will flag in review:</p>
+      <div class="stat-grid">
+        <div class="stat-cell sc-red"><div class="sc-name">Effect size</div><div class="sc-note">Clinically meaningful difference (e.g. 15% improvement)</div></div>
+        <div class="stat-cell sc-blue"><div class="sc-name">Power</div><div class="sc-note">Typically 80–90%</div></div>
+        <div class="stat-cell sc-amber"><div class="sc-name">Alpha (α)</div><div class="sc-note">0.05 two-sided is standard</div></div>
+        <div class="stat-cell sc-teal"><div class="sc-name">Sample size</div><div class="sc-note">N resulting from the calculation</div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Citing vs. describing previous methods</h3>
+      <p class="body">Citation (<em>"as previously described"</em>) is appropriate only when the technique is well-established and your readers will recognize it. When you do cite, follow with <em>"In brief…"</em> and a condensed description — reviewers need enough detail to evaluate execution even if they trust the method.</p>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Justify analytical choices when alternatives exist</h3>
+      <p class="body">Whenever two valid analysis approaches exist, state why you chose yours. Reviewers who would have chosen differently need a reason not to object; without a justification, methodological objections are routine.</p>
+      <div class="callout teal"><strong>Preempt with validation:</strong> if you chose one analysis over another, show equivalence in supplementary/extended data (replots using the alternative). This removes the reviewer objection before it is raised.</div>
+    </div>
+  </section>
+
+  <!-- ════════ PART V — RESULTS ════════ -->
+  <section class="part" id="p5">
+    <div class="part-head"><span class="part-num">V</span><h2>Results</h2></div>
+    <p class="part-intro">Results should guide the reader rather than deposit data. The governing discipline is one figure at a time, each paragraph built to a fixed internal architecture that moves from <em>why</em> to <em>what</em> to <em>so what</em> — while staying strictly observational.</p>
+
+    <div class="sub">
+      <h3 class="p"><span class="tick"></span>Align the aim with the problem — match on every VOS axis</h3>
+      <p class="body">Decompose the research problem into Variable (intervention or exposure), Outcome (what is unknown and must be measured), and Sample (biological or clinical context). The aim must map onto all three with precision — naming the correct outcome <em>domain</em> is not sufficient if the specific phenomenon differs from the gap stated in the problem.</p>
+      <div class="example">
+        <div class="ex-label">Problem (Simmler et al. Nature 2022)</div>
+        Although preliminary studies in rodents suggest that <span class="hl-var">ketamine</span> presents a risk for addiction, the long-term effects of ketamine on <span class="hl-out">mesolimbic reward circuits and behaviour</span> remain elusive in <span class="hl-pop">mice</span>.
+      </div>
+      <div class="three-col">
+        <div class="cbox"><div class="cbox-head ch-purple">Variable</div>Ketamine</div>
+        <div class="cbox"><div class="cbox-head ch-amber">Outcome</div>Mesolimbic circuits &amp; addictive behaviour</div>
+        <div class="cbox"><div class="cbox-head ch-teal">Sample</div>Mice</div>
+      </div>
+      <p class="kicker">Three candidate aims — same method, same sample, different outcome specification</p>
+      <div class="zone-stack">
+        <div class="zone-row zr-red"><span class="zr-name">✗</span><span>…investigate whether ketamine more strongly modulates the <strong>mesolimbic or mesocortical pathways</strong>. <span class="zr-rest">The problem identifies a gap about mesolimbic circuits; it does not ask which pathway is stronger. A comparison aim answers a different question.</span></span></div>
+        <div class="zone-row zr-red"><span class="zr-name">✗</span><span>…investigate whether ketamine modulates the mesolimbic circuit to mediate its <strong>antidepressant effects</strong>. <span class="zr-rest">Antidepressant effects are not part of the stated problem. Same variable and sample, entirely different outcome phenomenon.</span></span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">✓</span><span>…investigate whether ketamine increases <strong>mesolimbic dopamine</strong> and assess its effects on synapses and <strong>addictive behaviour</strong>. <span class="zr-rest">Specifies mesolimbic dopamine as the mechanistic outcome and addictive behaviour as the functional outcome — matching the problem on both its V and O axes.</span></span></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Section architecture — one figure at a time</h3>
+      <p class="body">Organize Results under clear descriptive subheadings, one per experiment cluster. Each subheading corresponds to one figure; the prose fully exhausts that figure before the next subheading begins. Mixing figure references within a paragraph forces the reader to track multiple visual contexts simultaneously — they cannot.</p>
+      <div class="cbox" style="background:var(--shade);">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:12px 16px;align-items:center;font-size:13px;">
+          <div style="border-left:3px solid var(--blue);padding:8px 10px;background:var(--blue-l);border-radius:0 4px 4px 0;"><div style="font-weight:600;color:var(--blue);font-size:12px;">Clear subheading 1</div><div style="font-size:11px;color:var(--ink3);">Rationale → What was done → Key trends → Takeaway</div></div>
+          <div style="font-size:12px;color:var(--ink3);">All panels of <strong style="color:var(--ink);">Figure 1</strong> addressed here before moving on</div>
+          <div style="border-left:3px solid var(--teal);padding:8px 10px;background:var(--teal-l);border-radius:0 4px 4px 0;"><div style="font-weight:600;color:var(--teal);font-size:12px;">Clear subheading 2</div><div style="font-size:11px;color:var(--ink3);">Rationale → What was done → Key trends → Takeaway</div></div>
+          <div style="font-size:12px;color:var(--ink3);">All panels of <strong style="color:var(--ink);">Figure 2</strong> addressed here before moving on</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Results paragraph structure — the four-zone model</h3>
+      <p class="body">Each paragraph follows a fixed four-zone structure. The order reflects how readers build understanding: they need <em>why</em> before <em>what</em>, and <em>what</em> before <em>so what</em>.</p>
+      <div class="zone-stack">
+        <div class="zone z-red"><span class="z-tag">① Rationale</span><div class="z-body">Why this experiment follows from the prior one or from the research question. <em>"To provide more direct support for…"</em> / <em>"To test whether…"</em> This sentence links the paragraph into the paper's logical chain; a paragraph without it reads as disconnected.</div></div>
+        <div class="zone z-blue"><span class="z-tag">② What was done + figure citation</span><div class="z-body">States the approach and cites the figure. Embed brief contextual definitions inline via appositive for any non-obvious measure: <em>"Butyrate, a major end-product of gut bacterial metabolism, was…"</em> — the reader now understands why the molecule was measured without a methods detour. Especially important for biochemical markers specialists use routinely but others may not recognise.</div></div>
+        <div class="zone z-teal"><span class="z-tag">③ Key trends</span><div class="z-body">Direction and significance of each main outcome, with panel references. For multi-panel figures, address each cluster explicitly rather than summarising across them. Use directional keywords — <em>significantly decreased, markedly elevated, no significant difference</em> — to give the reader a read-key before they look at the figure.</div></div>
+        <div class="zone z-outline"><span class="z-tag">④ Takeaway / summary</span><div class="z-body">One sentence consolidating what the figure shows overall. This is a data summary, not a causal interpretation — it stays at the observational level. It can link back to other analyses (<em>"These data support our metagenomic findings…"</em>) but must not assert mechanism.</div></div>
+      </div>
+      <p class="kicker">Trend-verb vocabulary &amp; a worked example</p>
+      <div class="example">
+        <span class="hl-red">We examined whether hippocampal <em>Fshr</em> ablation mimics systemic FSH-Ab (Fig. 3).</span> AAV2-siFshr-injected mice showed <span class="hl-blue">decreases in FSHR, C/EBPβ, AEP, cleaved APP, and phospho-Tau; increases in dendritic spines and synapse number; and dampened neuronal apoptosis</span> (Fig. 3a–d). <span class="hl-teal">Together, these data provide clear evidence for hippocampus-resident neuronal FSHRs mediating FSH's effects on AD pathogenesis.</span>
+        <p class="source-note">Xiong et al. Nature 2022; 603:470–476</p>
+      </div>
+      <div class="callout"><strong>Name the direction, not just "a change":</strong> decreased, increased, enhanced, dampened, abrogated, attenuated, abolished, preceded, converged, elevated. Avoid <em>"there was a change in X."</em> "Notably" and "importantly" mark a paragraph's single most significant finding — use at most once per Results section.</div>
+      <p class="kicker">Summary vs. interpretation — where each belongs</p>
+      <div class="two-col">
+        <div class="cbox" style="background:var(--teal-l);"><div class="cbox-head ch-teal">Results — use this</div>"These data are <strong>consistent with</strong> a decrease in the capacity of the gut microbiome to harvest nutrients during these interventions." <div class="source-note">Observational. Describes the pattern without asserting cause.</div></div>
+        <div class="cbox" style="background:var(--red-l);"><div class="cbox-head ch-red">Discussion — not Results</div>"These data <strong>demonstrate that</strong> underfeeding reduces gut microbiome diversity and impairs host energy extraction." <div class="source-note">Causal claim. Requires prior reasoning to support; belongs in Discussion.</div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>The combined Results–Discussion paragraph — two extra zones</h3>
+      <p class="body">A common format at Nature-portfolio journals: each paragraph carries both data and interpretation. Two additional zones extend the standard Results structure, and the synthesis sentence at the close is the paragraph's highest-stakes move.</p>
+      <div class="zone-stack">
+        <div class="zone-row zr-red"><span class="zr-name">①②</span><span class="zr-rest">Rationale + what was done (as in a separate Results section)</span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">③</span><span class="zr-rest">Key trends, panel by panel</span></div>
+        <div class="zone z-blue"><span class="z-tag">④ Context with previous studies</span><div class="z-body">Link the finding explicitly to prior published work. <em>"Consistent with previous findings that NLGN3 induces synapse-associated gene transcription in high-grade gliomas…"</em> This zone carries bidirectional comparisons: what your model shares with prior work, and what differs. Acknowledging open questions here signals calibrated confidence.</div></div>
+        <div class="zone z-amber-bd"><span class="z-tag">⑤ Synthesis / importance</span><div class="z-body">Makes the inferential move — what do the combined results raise as a possibility? Uses hedging calibrated to what the evidence supports; the hedge is not timidity but an accurate signal of the inferential distance between data and claim. <em>"Taken together, these observations <strong>raise the possibility that</strong> neuronal activity-regulated NLGN3 shedding drives the formation and growth of low-grade glioma."</em></div></div>
+      </div>
+      <p class="kicker">Hedging vocabulary for the synthesis sentence</p>
+      <div class="hedge-wrap">
+        <span class="hedge-chip">raises the possibility that</span><span class="hedge-chip">is consistent with</span><span class="hedge-chip">taken together, suggests</span><span class="hedge-chip">may imply</span><span class="hedge-chip">is likely due to</span><span class="hedge-chip">remains a question for future work</span><span class="hedge-chip">supports the idea that</span>
+        <div style="font-size:12px;color:var(--ink2);line-height:1.6;border-top:1px solid var(--rule);padding-top:9px;margin-top:3px;">Acknowledging open questions explicitly — <em>"Whether X also occurs in Y remains a question for future work"</em> — strengthens rather than weakens the paragraph. It signals that you understand the limits of your data, which reviewers read as a marker of rigour.</div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="r"><span class="tick"></span>Figure captions vs. Results text — different jobs, no duplication</h3>
+      <p class="body">Captions and Results text serve strictly different functions and should not duplicate each other. When they do, the reader reads the same information twice and gains nothing the second time.</p>
+      <div class="two-col">
+        <div class="cbox"><div class="cbox-head ch-red">Figure caption</div>Factually presents the data and analyses: what each panel measured, comparison groups, imaging modalities, scale bars, n values, and statistical tests. A reader should understand the experiment from figure + caption alone.</div>
+        <div class="cbox"><div class="cbox-head ch-blue">Results text</div>Describes the trends and patterns the author wants noticed; provides inline context for non-obvious measures. Does not re-list panel contents — the caption did that. Tells you <em>what to see</em>, not <em>what was done</em>.</div>
+      </div>
+      <p class="kicker">Caption anatomy</p>
+      <div class="zone-stack">
+        <div class="zone-row zr-amber"><span class="zr-name">Caption title</span><span>States the <strong>result</strong>, not the approach. <em>"Targeted Fshr knockdown ameliorates AD neuropathology and impaired spatial memory"</em> — not "Effects of Fshr knockdown on AD." Method-describing titles give the reader nothing before they open the figure.</span></div>
+        <div class="zone-row zr-blue"><span class="zr-name">Per-panel data</span><span>One descriptive entry per labelled panel: what was measured, comparison groups, technical detail required to read the panel (imaging modality, indicator markers). Scale bars go here.</span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">Additional info</span><span>n values per panel as discrete numbers, data presentation format (mean ± s.e.m.), statistical test(s), and explicit one- or two-sided confirmation. Required for reproducibility and audited by editors.</span></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Reporting summaries &amp; compliance</h3>
+      <p class="body">Mandatory for life sciences, behavioural &amp; social sciences, and ecological/evolutionary/environmental research at Nature-portfolio journals. Submitted during peer review and <strong>published alongside the accepted manuscript</strong> — not internal only. Field-specific variants exist (solar cells, lasers, etc.); check the target journal's author guidelines.</p>
+      <div class="reporting-stack">
+        <div class="rep-item"><div class="rep-name">Statistics</div><div class="rep-body">Exact n as discrete numbers (not ≈20 or "several"). All tests named with one/two-sided confirmation. Effect sizes (Cohen's d, Pearson's r) with how they were calculated. For Bayesian analyses: priors and Markov Chain Monte Carlo settings. For complex designs: the appropriate correction level for multiple tests.</div></div>
+        <div class="rep-item"><div class="rep-name">Data availability</div><div class="rep-body">Accession codes, unique identifiers, or working links provided at submission. Any access restrictions explicitly stated. Clinical or third-party datasets require a policy-compliant availability statement even when data cannot be shared.</div></div>
+        <div class="rep-item"><div class="rep-name">Code &amp; software</div><div class="rep-body">Custom code central to the main claims must be available to editors and reviewers on request. Best practice: deposit in a community repository with a persistent identifier (GitHub + Zenodo for a DOI). Editors may decline a manuscript if critical code is unavailable and obstacles cannot be justified.</div></div>
+        <div class="rep-item"><div class="rep-name">Materials &amp; systems checklist</div><div class="rep-body">Every material category declared — including a negative response if not applicable (n/a). Antibodies: supplier, catalogue number, validation references (with PMIDs), and dilution. Animals: strain, source, age, sex, housing conditions.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════ PART VI — DISCUSSION ════════ -->
+  <section class="part" id="p6">
+    <div class="part-head"><span class="part-num">VI</span><h2>Discussion</h2></div>
+    <p class="part-intro">The Introduction mapped existing knowledge and identified the gap; the Results introduced new findings. The Discussion shows how the new piece fits the existing puzzle — and what the fit means for the field. Results <em>introduce</em>; the Discussion <em>contextualizes and expands</em>, moving from specific (your work) toward broad (field consequences) in a triangle that widens toward implications.</p>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>What the Discussion must do</h3>
+      <div class="diagram-wrap">
+        <svg viewBox="0 0 540 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:540px;display:block;margin:0 auto;" aria-label="Discussion pyramid: summarize what you did, interpret your findings, why important to the field">
+          <polygon points="270,18 212,70 328,70" fill="#e1f5ee"/>
+          <polygon points="212,70 328,70 388,122 152,122" fill="#e6eff8"/>
+          <polygon points="152,122 388,122 448,174 92,174" fill="#fbeedb"/>
+          <polygon points="270,18 448,174 92,174" fill="none" stroke="#c9c6bd" stroke-width="1.5"/>
+          <line x1="212" y1="70" x2="328" y2="70" stroke="#c9c6bd" stroke-width="1"/>
+          <line x1="152" y1="122" x2="388" y2="122" stroke="#c9c6bd" stroke-width="1"/>
+          <text x="270" y="47" text-anchor="middle" font-size="11" fill="#0a4a38" font-family="'DM Sans',sans-serif" font-weight="600">Summarize what you did</text>
+          <text x="270" y="61" text-anchor="middle" font-size="9.5" fill="#0f6e56" font-family="'DM Sans',sans-serif">topic · gap · achievements</text>
+          <text x="270" y="97" text-anchor="middle" font-size="11" fill="#0c447c" font-family="'DM Sans',sans-serif" font-weight="600">Interpret your findings</text>
+          <text x="270" y="112" text-anchor="middle" font-size="9.5" fill="#1e5fa8" font-family="'DM Sans',sans-serif">similarities &amp; differences · negative results · limitations</text>
+          <text x="270" y="150" text-anchor="middle" font-size="11" fill="#7a4a0e" font-family="'DM Sans',sans-serif" font-weight="600">Why important to the field</text>
+          <text x="270" y="165" text-anchor="middle" font-size="9.5" fill="#b4600f" font-family="'DM Sans',sans-serif">main conclusion · implications</text>
+        </svg>
+      </div>
+      <div class="callout amber"><strong>Commonest editor critique</strong> (Lu Shi, Sr. Editor, Nature Nanotechnology): "The author failed to connect the interpretation of their findings in response to the research objective that they proposed in the introductory part." The Discussion must close the loop the Introduction opened — answering, specifically, the gap the Introduction posed.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Audience calibration — context and implications move in opposite directions</h3>
+      <p class="body">Two calibration decisions shape the Discussion: how much context to provide, and how broadly to draw implications. Both pivot on the study's aims — context funnels <em>down</em> toward what the study directly addresses; implications expand <em>outward</em> from what it directly demonstrated.</p>
+      <div class="two-col">
+        <div class="cbox" style="background:var(--blue-l);"><div class="cbox-head ch-blue">Context ▽</div>Broad-readership journals need the field-level stakes restated; specialist journals do not — assume the reader knows why the question matters. Unnecessary context signals a mismatch between paper and venue.</div>
+        <div class="cbox" style="background:var(--amber-l);"><div class="cbox-head ch-amber">Implications △</div>Broad-readership journals reward implications drawn outward to clinical relevance or cross-disciplinary application; specialist journals expect implications grounded narrowly in the subfield. Drawing too broadly for a specialist venue reads as overreach.</div>
+      </div>
+      <div class="callout">Writing the same Discussion for a general and a specialist journal is a common resubmission error. Recalibrate both context depth and implication scope when switching targets.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Opening the Discussion — three beats</h3>
+      <div class="zone-stack">
+        <div class="zone-row zr-red"><span class="zr-name">Re-introduce topic</span><span class="zr-rest">field-level importance statement; can invoke a paradigm shift or scale problem</span></div>
+        <div class="zone-row zr-blue"><span class="zr-name">Re-state the problem</span><span class="zr-rest">echo the Introduction gap: "Although X was demonstrated… Y has yet to be achieved"</span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">Summarize achievements</span><span class="zr-rest">"Here, we…" signals the paper's direct contribution; summarizes what was done and found</span></div>
+      </div>
+      <div class="example">
+        <span class="hl-red">Single-cell transcriptomics enables systematic characterization of cellular diversity in the brain, allowing a paradigm shift in neuroscience from anatomical to molecular classification of cell types.</span> <span class="hl-blue">Although dense sampling of mouse cortex demonstrated great cellular diversity, similar coverage of human cortex has yet to be achieved.</span> <span class="hl-teal">Here, similar dense sampling defined 75 cell types in human MTG, achieving robust cell typing despite increased biological and technical variability across individual human brains.</span>
+        <p class="source-note">Hodge et al. Nature 2019; 573:61–68</p>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>Body-paragraph architecture — four layers, data before interpretation</h3>
+      <p class="body">Each substantive Discussion paragraph follows four layers. Opening with a stated finding before its interpretation anchors the claim in data — interpretations unmoored from a finding read as speculation. The synthesis sentence should not merely restate the finding but make explicit what it collectively demonstrates or settles.</p>
+      <div class="zone-stack">
+        <div class="zone-row zr-red"><span class="zr-name">1 · Summarize key findings</span><span class="zr-rest">one to two sentences; what the data showed</span></div>
+        <div class="zone-row zr-blue"><span class="zr-name">2 · Interpretation</span><span class="zr-rest">what this likely means; hedged; can offer multiple competing explanations</span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">3 · Context with previous studies</span><span class="zr-rest">how this aligns with, extends, or contradicts prior literature</span></div>
+        <div class="zone-row zr-amber"><span class="zr-name">4 · Synthesize to highlight value</span><span class="zr-rest">what this collectively confirms, demonstrates, or enables</span></div>
+      </div>
+      <div class="example">
+        <span class="hl-red">Subpopulations that progressed faster on MDS-UPDRS Part III did not progress faster on Parts II and I.</span> <span class="hl-blue">This may suggest that motor sign progression precedes notable changes in both motor and nonmotor symptoms. A difference in clinical rating versus patient self-awareness of motor symptoms can also explain this discrepancy<sup>12</sup>.</span> Much longer studies may be required to test disease-modifying treatments on patient-reported symptoms. <span class="hl-amber">Moreover, this confirms that motor signs remain the most reliable endpoint of disease progression in early-stage PD, as also shown in studies on prodromal PD<sup>13</sup>.</span>
+        <p class="source-note">Pagano et al. Nat Med 2024; 30:1096–1103</p>
+      </div>
+      <div class="callout">The layer sequence is logical, not mechanical — context can appear at both layers 2 and 4, as above. What must not shift: data before interpretation, interpretation before synthesis. Interleaving citations at the interpretation step is appropriate when prior work motivates the specific inference offered.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Negative results — report plainly, reason analytically</h3>
+      <p class="body">Transparent reporting of negative results prevents duplication of failed approaches, generates testable hypotheses, and strengthens the scientific record. The negative finding should open the paragraph plainly — not buried in a subordinate clause or softened by qualification. The body is analytical reasoning, not apology; multiple competing explanations, each individually hedged, are expected. False certainty about why something failed is worse than offering several possibilities.</p>
+      <div class="zone-stack">
+        <div class="zone-row zr-red"><span class="zr-name">Report negative result</span><span class="zr-rest">stated plainly at the opening; do not soften with syntactic burial</span></div>
+        <div class="zone-row zr-blue"><span class="zr-name">Interpretation</span><span class="zr-rest">multiple plausible explanations, each hedged; cite supporting evidence per explanation</span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">Generate hypotheses</span><span class="zr-rest">what future experimental design would test or resolve the finding</span></div>
+        <div class="zone-row zr-amber"><span class="zr-name">Impact on study validity</span><span class="zr-rest">explicitly addresses whether and how this limits conclusions</span></div>
+      </div>
+      <div class="example">
+        <span class="hl-red">We did not observe objective responses in this cohort of heavily treated patients.</span> <span class="hl-blue">Several factors may account for the low response rate, including insufficient T cell expansion, lack of antigen specificity, and/or tumor cells not being PD-L1 dependent. While all enrolled patients had PD-L1⁺ tumors, PD-L1 expression by immunohistochemistry does not necessarily correlate with PD-L1 dependency. The lack of tumor response could be related to T cell anergy or exhaustion from chronic antigen exposure<sup>28</sup>.</span> <span class="hl-teal">Future clinical trials should use improved quantities of tumor-reactive or tumor antigen-specific T cells.</span>
+        <p class="source-note">Lu et al. Nat Med 2020; 26:732–740</p>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>Limitations — convert a vulnerability into a demonstration of depth</h3>
+      <p class="body">A well-written limitations paragraph demonstrates technical mastery: it shows the author understands the constraints of their own experimental system well enough to reason about them with specificity. It follows the same four-layer pattern, with one key difference from a negative result — limitations require establishing that the author has engaged seriously with the published evidence bearing on the constraint. Reviewers will raise limitations not addressed; raising them first converts a vulnerability into a demonstration of depth.</p>
+      <div class="zone-stack">
+        <div class="zone-row zr-red"><span class="zr-name">Report limitation</span><span class="zr-rest">stated plainly; both real and perceived limitations warrant inclusion</span></div>
+        <div class="zone-row zr-blue"><span class="zr-name">Establish expertise through evidence</span><span class="zr-rest">discuss published evidence bearing on the limitation; demonstrate command of the constraint</span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">Generate future directions</span><span class="zr-rest">what experimental work would resolve or circumvent the limitation</span></div>
+        <div class="zone-row zr-amber"><span class="zr-name">Impact on validity</span><span class="zr-rest">whether this constrains the generalizability of the conclusions</span></div>
+      </div>
+      <div class="example">
+        <span class="hl-red">Unilateral and unimodal optogenetic stimulation sustained over 30s does not represent a physiological mode of LC–NA system operation.</span> <span class="hl-blue">Exact firing patterns of LC neurons under environmental challenges are unknown due to the difficulty of recording large populations in freely moving animals. The highest-density recordings to date suggest highly variable, predominantly asynchronous firing — only 15% of neurons showed synchronous phasic discharge even to noxious stimuli<sup>58</sup>. It is conceivable this fraction might increase in vivo where multimodal stress signals converge and accumulate over hours.</span> <span class="hl-teal">A challenge for future work will be deciphering the natural firing properties of LC neurons over longer timescales and refining stimulation protocols to closely resemble naturally occurring activity patterns.</span>
+        <p class="source-note">Grimm et al. Nat Neurosci 2024</p>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Hedging vocabulary — epistemic accuracy, not diffidence</h3>
+      <p class="body">Interpretations in the Discussion are inferences from data, not conclusions the data directly prove. The key practice is to separate the observation (unhedged data) from the interpretation (introduced by a hedging modal or verb). Over-hedging produces vagueness; under-hedging overclaims — both are editorial liabilities.</p>
+      <div class="two-col">
+        <div class="cbox"><div class="cbox-head" style="color:var(--ink3);">For interpretations</div><div style="line-height:2;">This <strong>may suggest</strong> that…<br><strong>Likely</strong> reflects…<br>It is <strong>possible</strong> that…<br>It is <strong>conceivable</strong> that…<br>…<strong>could</strong> be related to…<br>…<strong>might</strong> increase in vivo…</div></div>
+        <div class="cbox"><div class="cbox-head" style="color:var(--ink3);">For recommendations</div><div style="line-height:2;">Future studies <strong>should</strong> examine…<br>…<strong>may be required</strong> to test…<br>A challenge <strong>will be</strong> to…<br>These findings <strong>suggest</strong> that…<br>…warrants further investigation.</div></div>
+      </div>
+      <div class="callout"><strong>The separation pattern:</strong> state the data-level finding without a hedge, then introduce the inference explicitly. "Motor sign progression was faster than symptom progression. <em>This may suggest</em> that measurable motor changes precede patient-perceptible symptoms." The phrase "this may suggest" is the switch from observation to inference — and a signal that the interpretive register has changed.</div>
+    </div>
+  </section>
+
+  <!-- ════════ PART VII — CONCLUSION, TITLE & KEYWORDS ════════ -->
+  <section class="part" id="p7">
+    <div class="part-head"><span class="part-num">VII</span><h2>Conclusion, Title &amp; Keywords</h2></div>
+    <p class="part-intro">The conclusion, title, and keywords are the highest-leverage surfaces of the paper: the conclusion is the last passage a reader retains, and the title and keywords determine whether the paper is found at all.</p>
+
+    <div class="sub">
+      <h3 class="r"><span class="tick"></span>The conclusion answers the problem — it does not enumerate or speculate</h3>
+      <p class="body">The conclusion's job is to directly resolve the problem stated in the introduction — not to enumerate findings (that is a results summary) and not to speculate on implications (that belongs in the discussion). The introduction's problem frame is the scoring rubric.</p>
+      <div class="example" style="background:var(--blue-l);">
+        <div class="ex-label" style="color:var(--blue-d);">The stated problem (introduction)</div>
+        Although microglia have been shown to participate in motor neuron degeneration in ALS, the contributions of <strong>peripheral macrophages</strong> in ALS pathogenesis remain <strong>unclear</strong>.
+      </div>
+      <div class="zone-stack">
+        <div class="zone z-red" style="border-left:3px solid var(--red);"><span class="z-tag">A — three-finding enumeration · results summary, not a conclusion</span><div class="z-body">…gene modulation of the ROS pathway in peripheral macrophages <strong style="color:var(--red-d);">reduced</strong> activation, <strong style="color:var(--red-d);">delayed</strong> symptoms, and <strong style="color:var(--red-d);">increased</strong> survival. <span class="source-note" style="display:inline;">Three findings in parallel — the signature of a results section. Doesn't address the stated gap at all.</span></div></div>
+        <div class="zone z-red" style="border-left:3px solid var(--red);"><span class="z-tag">B — therapeutic implication · oversteps the data</span><div class="z-body">…modulating macrophages accessible at the periphery <strong style="color:var(--red-d);">could lead to a new therapeutic strategy</strong> to treat ALS. <span class="source-note" style="display:inline;">Speculative "could lead to" is future-work language. The data support a mechanistic claim, not a therapeutic one.</span></div></div>
+        <div class="zone z-teal" style="border-left:3px solid var(--teal);"><span class="z-tag">C — solution to the stated problem ✓</span><div class="z-body">…peripheral macrophages can <strong style="color:var(--teal-d);">influence disease progression</strong>, and their modulation can improve survival in an ALS mouse model. <span class="source-note" style="display:inline;">Directly answers the gap — do peripheral macrophages contribute? Yes. Claim scoped to the actual data (mouse model).</span></div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>Four functional components of the conclusion paragraph</h3>
+      <p class="body">The conclusion is the last passage a reader encounters and the one most likely to be retained. Design it around four components. The main conclusion is not a summary of findings — it is the answer to the question the Introduction posed. Key findings are selective (1–2), not exhaustive. Implications name the immediate, concrete contribution. The final forward-looking sentence shows how this study shapes what the field does next — distinct from implications, which name what the field can now understand.</p>
+      <div class="zone-stack">
+        <div class="zone-row zr-red"><span class="zr-name">Main conclusion</span><span class="zr-rest">the solution to the problem; directly answers the Introduction's question</span></div>
+        <div class="zone-row zr-blue"><span class="zr-name">Key findings</span><span class="zr-rest">1–2 most important specific results; resist listing everything</span></div>
+        <div class="zone-row zr-teal"><span class="zr-name">Implications</span><span class="zr-rest">what the field can now understand or do that it couldn't before</span></div>
+        <div class="zone-row zr-amber"><span class="zr-name">Thought leadership</span><span class="zr-rest">forward-looking statement: how this shapes the field's next questions</span></div>
+      </div>
+      <div class="example">
+        <span class="hl-red">In summary, we provide a comprehensive dataset of cell-type-specific age-associated genes and pathways in the human OFC.</span> <span class="hl-blue">We identify inhibitory LAMP5⁺LHX6⁺ neurons as transcriptionally most affected by aging; numerous gradual age-related changes overlap on the cell-type level with changes observed in AD. Additionally, we pinpoint genes with opposite regulation as potential therapeutic targets, and find evidence for accelerated transcriptomic aging in psychiatric disorders at the single-cell level.</span> <span class="hl-teal">We envision that these data will provide a starting point for furthering our understanding of the aging process</span> <span class="hl-amber">and the development of new therapeutic targets for aging-associated pathologies.</span>
+        <p class="source-note">Fröhlich et al. Nat Neurosci 2024; 27:2021–2032</p>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="p"><span class="tick"></span>Effective titles — the three-component formula</h3>
+      <p class="body">Dropping any one of the three components forces the reader to open the abstract just to understand scope — friction that costs citation events. All three should be identifiable at a glance, in under 20 words.</p>
+      <div class="focus-formula">
+        <div class="ff-node ff-var"><div class="ff-label">Variable</div><div class="ff-val">What you're investigating</div></div>
+        <div class="ff-arrow"><span class="ff-arrow-icon">→</span></div>
+        <div class="ff-node ff-out"><div class="ff-label">Outcome</div><div class="ff-val">What you measured / found</div></div>
+        <div class="ff-arrow"><span class="ff-arrow-icon">→</span></div>
+        <div class="ff-node ff-pop"><div class="ff-label">Population</div><div class="ff-val">Participants, tissue, model</div></div>
+      </div>
+      <p class="kicker">Declarative vs. non-declarative</p>
+      <p class="body">Declarative titles include an active verb and state the direction of effect — the reader knows the result without opening the abstract. Non-declarative titles (outcomes <em>of</em> variable <em>in</em> population) are conventional in clinical medicine, where the study design is appended as a subtitle, but they leave effect direction ambiguous.</p>
+      <div class="two-col">
+        <div class="cbox"><div class="cbox-head ch-blue">Declarative (basic science)</div><p style="font-size:12px;font-style:italic;color:var(--ink3);margin-bottom:8px;">Variable [active verb] Outcome in Population</p><div style="background:var(--card);border-radius:4px;padding:8px 10px;line-height:1.6;"><span class="hl-var">PGBD5</span> <strong style="color:var(--blue);">promotes</strong> <span class="hl-out">site-specific oncogenic mutations</span> in <span class="hl-pop">human tumors</span></div><div class="source-note">Effect direction is immediate: PGBD5 <em>promotes</em>, not merely "affects".</div></div>
+        <div class="cbox"><div class="cbox-head ch-amber">Non-declarative (clinical)</div><p style="font-size:12px;font-style:italic;color:var(--ink3);margin-bottom:8px;">Outcomes of Variable in Population: study design</p><div style="background:var(--card);border-radius:4px;padding:8px 10px;line-height:1.6;"><span class="hl-out">Cardioprotective and prognostic effects</span> of <span class="hl-var">remote ischaemic preconditioning</span> in <span class="hl-pop">patients undergoing CABG</span>: a randomised controlled trial</div><div class="source-note">Effect direction unknown from title alone — accepted convention in clinical journals.</div></div>
+      </div>
+      <p class="kicker">What to avoid</p>
+      <div class="two-col">
+        <div class="cbox" style="background:var(--red-l);"><div style="color:var(--red-d);font-weight:600;margin-bottom:4px;">Questions or clever titles</div><div style="font-size:12px;color:var(--ink2);">A question omits the answer. A pun or cultural reference ("Charming penguins strike back") sacrifices information for wit. Neither survives a database search.</div></div>
+        <div class="cbox" style="background:var(--red-l);"><div style="color:var(--red-d);font-weight:600;margin-bottom:4px;">Vague scope (missing outcome)</div><div style="font-size:12px;color:var(--ink2);"><em>"Evaluation of PGBD5 in human tumors"</em> has Variable + Population but no Outcome. The reader cannot know what was measured without opening the abstract.</div></div>
+        <div class="cbox" style="background:var(--red-l);"><div style="color:var(--red-d);font-weight:600;margin-bottom:4px;">Abbreviations</div><div style="font-size:12px;color:var(--ink2);">Abbreviations block discoverability in database queries and exclude readers outside the immediate subfield at first contact.</div></div>
+        <div class="cbox" style="background:var(--red-l);"><div style="color:var(--red-d);font-weight:600;margin-bottom:4px;">"New" or "novel"</div><div style="font-size:12px;color:var(--ink2);">Circular by definition — all published work is novel. These words consume word budget the result should occupy. Hard ceiling: <strong>20 words</strong>.</div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Keywords — 2–3-word phrases, calibrated by search volume</h3>
+      <p class="body">"Keywords" means <strong>2–3-word phrases</strong> in practice. Single-word terms produce orders-of-magnitude more false matches, drowning your article in a result set no reader will sort through. The goal is a phrase specific enough to be diagnostic for your topic, broad enough to match how researchers actually search.</p>
+      <div class="kw-stat">
+        <div class="kw-cell kw-bad"><div class="kw-num">819,412</div><div class="kw-meta">PubMed results · 5-year window</div><div class="kw-term">"tumor"</div><div class="kw-verdict">single word — unusable signal-to-noise</div></div>
+        <div class="kw-cell kw-good"><div class="kw-num">27,413</div><div class="kw-meta">PubMed results · 5-year window</div><div class="kw-term">"tumor microenvironment"</div><div class="kw-verdict">phrase — specific enough to matter</div></div>
+      </div>
+      <p class="kicker">Identification strategy</p>
+      <div class="num-list">
+        <div class="num-item"><span class="num-badge">1</span><span><strong>Generate 15 candidates</strong> from three sources: MeSH controlled vocabulary, keyword sections of 5–10 closely related published papers, and field-specific review articles.</span></div>
+        <div class="num-item"><span class="num-badge">2</span><span><strong>Test each phrase in PubMed</strong> over a 5-year window. Target a result count large enough to show active activity in the field, small enough that your article could realistically surface near the top. No universal magic number — calibrate to field breadth and whether the topic is international or regional.</span></div>
+        <div class="num-item"><span class="num-badge">3</span><span><strong>Submit 8–10</strong>, spread across specificity levels — a few broader terms for cross-disciplinary discoverability, several narrow phrases for precision matching with core readers.</span></div>
+      </div>
+      <div class="callout">Keywords that duplicate words already in the title add no discoverability value — databases index the title separately. Use keyword slots for synonyms, related subfield terms, and broader categorical concepts your title doesn't contain.</div>
+    </div>
+  </section>
+
+  <!-- ════════════ PART VIII · FIGURES & DATA VISUALIZATION ════════════ -->
+  <section class="part" id="p8">
+    <div class="part-head"><span class="part-num">VIII</span><h2>Figures &amp; Data Visualization</h2></div>
+    <p class="part-intro">Figures are read before the text and remembered after it. Two failure modes dominate: image manipulation that crosses from presentation into misrepresentation, and graph choices that encode a claim the data do not support. The governing principle throughout — <strong>the way you display data is itself a scientific assertion</strong>, subject to the same scrutiny as any sentence in the Results.</p>
+
+    <div class="sub">
+      <h3><span class="tick"></span>Image processing — the line between presentation and fabrication</h3>
+      <p class="body">Adjustments are permitted when they are <strong>linear</strong> (applied to the whole image) and <strong>disclosed</strong>. The moment an adjustment is local, selective, or non-linear in a way that alters the data a reader would extract, it becomes manipulation — regardless of intent.</p>
+      <div class="diagram-wrap">
+        <svg width="100%" viewBox="0 0 840 150" role="img" aria-label="Seven-step image processing workflow from acquisition to figure assembly">
+          <defs><marker id="arrIMG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+          <!-- 7 nodes; highlight 1,2,5,6,7 as integrity-critical (red), 3,4 neutral -->
+          <g font-family="'DM Sans',sans-serif">
+          <rect x="8" y="40" width="104" height="58" rx="6" fill="#f7ece6" stroke="#e6a78f"/><text x="60" y="63" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7c2c18">1 · Acquire</text><text x="60" y="78" text-anchor="middle" font-size="9" fill="#c24a1e">raw, max bit-depth</text><text x="60" y="90" text-anchor="middle" font-size="9" fill="#c24a1e">keep originals</text>
+          <line x1="113" y1="69" x2="129" y2="69" stroke="#8a8880" marker-end="url(#arrIMG)"/>
+          <rect x="130" y="40" width="104" height="58" rx="6" fill="#f7ece6" stroke="#e6a78f"/><text x="182" y="63" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7c2c18">2 · Work on copy</text><text x="182" y="78" text-anchor="middle" font-size="9" fill="#c24a1e">TIFF, never JPEG</text><text x="182" y="90" text-anchor="middle" font-size="9" fill="#c24a1e">non-destructive</text>
+          <line x1="235" y1="69" x2="251" y2="69" stroke="#8a8880" marker-end="url(#arrIMG)"/>
+          <rect x="252" y="40" width="104" height="58" rx="6" fill="#f1efe9" stroke="#c9c6bd"/><text x="304" y="63" text-anchor="middle" font-size="10.5" font-weight="600" fill="#46443e">3 · Crop</text><text x="304" y="78" text-anchor="middle" font-size="9" fill="#8a8880">framing only</text><text x="304" y="90" text-anchor="middle" font-size="9" fill="#8a8880">not to hide data</text>
+          <line x1="357" y1="69" x2="373" y2="69" stroke="#8a8880" marker-end="url(#arrIMG)"/>
+          <rect x="374" y="40" width="104" height="58" rx="6" fill="#f1efe9" stroke="#c9c6bd"/><text x="426" y="63" text-anchor="middle" font-size="10.5" font-weight="600" fill="#46443e">4 · Resize</text><text x="426" y="78" text-anchor="middle" font-size="9" fill="#8a8880">preserve aspect</text><text x="426" y="90" text-anchor="middle" font-size="9" fill="#8a8880">ratio</text>
+          <line x1="479" y1="69" x2="495" y2="69" stroke="#8a8880" marker-end="url(#arrIMG)"/>
+          <rect x="496" y="40" width="104" height="58" rx="6" fill="#f7ece6" stroke="#e6a78f"/><text x="548" y="60" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7c2c18">5 · Adjust</text><text x="548" y="74" text-anchor="middle" font-size="9" fill="#c24a1e">linear · whole image</text><text x="548" y="86" text-anchor="middle" font-size="9" fill="#c24a1e">brightness/contrast</text><text x="548" y="96" text-anchor="middle" font-size="9" fill="#c24a1e">disclose in legend</text>
+          <line x1="601" y1="69" x2="617" y2="69" stroke="#8a8880" marker-end="url(#arrIMG)"/>
+          <rect x="618" y="40" width="104" height="58" rx="6" fill="#f7ece6" stroke="#e6a78f"/><text x="670" y="63" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7c2c18">6 · Annotate</text><text x="670" y="78" text-anchor="middle" font-size="9" fill="#c24a1e">scale bar, arrows</text><text x="670" y="90" text-anchor="middle" font-size="9" fill="#c24a1e">on a new layer</text>
+          <line x1="723" y1="69" x2="739" y2="69" stroke="#8a8880" marker-end="url(#arrIMG)"/>
+          <rect x="740" y="40" width="92" height="58" rx="6" fill="#f7ece6" stroke="#e6a78f"/><text x="786" y="63" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7c2c18">7 · Export</text><text x="786" y="78" text-anchor="middle" font-size="9" fill="#c24a1e">flatten · 300+ dpi</text><text x="786" y="90" text-anchor="middle" font-size="9" fill="#c24a1e">keep layered file</text>
+          <text x="420" y="22" text-anchor="middle" font-size="11" font-style="italic" fill="#8a8880">Steps in terracotta carry data-integrity obligations; steps 3–4 are framing only</text>
+          </g>
+        </svg>
+        <div class="diagram-caption">After Schmied &amp; Jambor, <em>F1000Research</em> 2021, 9:1373 — a practical image-integrity workflow.</div>
+      </div>
+      <div class="points">
+        <div class="point"><span class="point-label">Linear only</span><span class="point-body">Brightness, contrast, and gamma may be changed only across the <em>entire</em> image, never on a selected region. Adjusting one band, one cell, or one quadrant differently from the rest is manipulation even if no pixel is "added".</span></div>
+        <div class="point"><span class="point-label">Preserve originals</span><span class="point-body">Acquire at maximum bit depth, archive the untouched original, and process a <strong>copy</strong>. Save working files as TIFF; JPEG re-compression discards data irreversibly with every save. Journals increasingly request the raw acquisition file.</span></div>
+        <div class="point"><span class="point-label">Disclose in legend</span><span class="point-body">If any adjustment was made, say so in the figure legend. "Brightness and contrast were adjusted linearly across the entire image" is a one-line insurance policy against a misconduct query years later.</span></div>
+        <div class="point"><span class="point-label">Annotate &amp; inset deliberately</span><span class="point-body">Scale bars, arrows, and labels belong on a separate layer so the underlying image stays untouched. Insets magnifying a region must state the magnification and not be silently brightness-matched to the parent.</span></div>
+      </div>
+      <div class="callout"><strong>Colorblindness — design for ~8% of male readers.</strong> Red/green encodings are invisible to the most common form of color vision deficiency. Use colorblind-safe pairs (<strong>magenta/green</strong> or <strong>cyan/red</strong>) for two-channel fluorescence, and verify the figure with a simulator such as Color Oracle before submission. Never let color be the <em>only</em> carrier of meaning — pair it with shape, position, or label.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Immunoblots &amp; gels — the most scrutinized panels in biology</h3>
+      <p class="body">Blot and gel panels are where misconduct screens concentrate, because splicing and selective contrast are both easy and consequential. The standards below are now enforced at acceptance by most life-science journals.</p>
+      <div class="points">
+        <div class="point"><span class="point-label">~5 band-widths margin</span><span class="point-body">Show roughly five band-widths above and below each band. A tightly cropped band hides whether neighbouring lanes contradict the claim and whether the antibody is specific; generous margins demonstrate there is nothing to hide.</span></div>
+        <div class="point"><span class="point-label">Same-gel controls</span><span class="point-body">Loading controls must come from the <em>same</em> gel. A housekeeping band run on a different gel cannot validate equal loading. If the membrane was stripped and reprobed, state it explicitly.</span></div>
+        <div class="point"><span class="point-label">Demarcate splicing</span><span class="point-body">Lanes assembled from non-adjacent positions, or from different gels, must be separated by a visible white line or gap. Undeclared splicing is a retraction trigger.</span></div>
+        <div class="point"><span class="point-label">Retain uncropped</span><span class="point-body">Nature Portfolio and most journals require the full uncropped image, with molecular-weight markers visible, supplied at acceptance and published in the Supplementary Information.</span></div>
+      </div>
+      <div class="source-note">Provide the full uncropped blot at acceptance, not only when queried — it is faster to assemble before submission than to reconstruct under an integrity investigation.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Line art &amp; schematics — tool choice signals craft</h3>
+      <p class="body">Schematics are judged on visual literacy. The tool leaves fingerprints, and editors recognize them.</p>
+      <div class="chip-row">
+        <span class="chip red">Avoid: PowerPoint native shapes</span>
+        <span class="chip red">BioRender free tier — not licensed for publication</span>
+        <span class="chip teal">Adobe Illustrator</span>
+        <span class="chip teal">Affinity Designer</span>
+        <span class="chip teal">Inkscape (free, vector)</span>
+        <span class="chip blue">AJE / professional illustration services</span>
+      </div>
+      <div class="points">
+        <div class="point"><span class="point-label">Design for orientation</span><span class="point-body">A schematic should orient the reader to the experiment at a glance — flow left-to-right or top-to-bottom, group related elements, and keep one visual grammar (one arrow style, one box style) across all panels.</span></div>
+        <div class="point"><span class="point-label">Vector, not raster</span><span class="point-body">Build line art as vector (SVG/PDF/EPS) so it stays crisp at any print size. Rasterized diagrams pixelate and signal amateurism.</span></div>
+        <div class="point"><span class="point-label">Licensing is real</span><span class="point-body">BioRender's free tier explicitly forbids publication use; submitting those exports risks a copyright query at proof stage. Confirm the license before you rely on any asset library.</span></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>Graph type is a scientific claim, not a style choice</h3>
+      <p class="body">Each graph type encodes an assumption about the data's structure. Choosing the wrong one asserts a relationship that may not exist — and can mislead the authors themselves, not just readers.</p>
+      <div class="diagram-wrap">
+        <svg width="100%" viewBox="0 0 840 150" role="img" aria-label="Six graph types and what each one asserts about the data">
+          <g font-family="'DM Sans',sans-serif">
+          <!-- line -->
+          <rect x="8" y="14" width="128" height="96" rx="6" fill="#ffffff" stroke="#e4e2db"/>
+          <polyline points="24,92 50,70 76,78 102,40 120,52" fill="none" stroke="#1e5fa8" stroke-width="2"/>
+          <text x="72" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#1e5fa8">Line</text><text x="72" y="142" text-anchor="middle" font-size="9" fill="#8a8880">continuous, ordered x</text>
+          <!-- bar -->
+          <rect x="144" y="14" width="128" height="96" rx="6" fill="#ffffff" stroke="#e4e2db"/>
+          <rect x="162" y="60" width="20" height="42" fill="#b4600f"/><rect x="190" y="44" width="20" height="58" fill="#b4600f"/><rect x="218" y="72" width="20" height="30" fill="#b4600f"/>
+          <text x="208" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#b4600f">Bar</text><text x="208" y="142" text-anchor="middle" font-size="9" fill="#8a8880">counts / discrete categories</text>
+          <!-- scatter -->
+          <rect x="280" y="14" width="128" height="96" rx="6" fill="#ffffff" stroke="#e4e2db"/>
+          <g fill="#0f6e56"><circle cx="300" cy="92" r="3"/><circle cx="318" cy="80" r="3"/><circle cx="332" cy="84" r="3"/><circle cx="350" cy="62" r="3"/><circle cx="366" cy="56" r="3"/><circle cx="384" cy="44" r="3"/></g>
+          <text x="344" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#0f6e56">Scatter</text><text x="344" y="142" text-anchor="middle" font-size="9" fill="#8a8880">two continuous variables</text>
+          <!-- box -->
+          <rect x="416" y="14" width="128" height="96" rx="6" fill="#ffffff" stroke="#e4e2db"/>
+          <line x1="458" y1="28" x2="458" y2="98" stroke="#5b3fa6" stroke-width="1.5"/><rect x="446" y="46" width="24" height="34" fill="#ece8f6" stroke="#5b3fa6" stroke-width="1.5"/><line x1="446" y1="64" x2="470" y2="64" stroke="#5b3fa6" stroke-width="1.5"/>
+          <line x1="500" y1="34" x2="500" y2="92" stroke="#5b3fa6" stroke-width="1.5"/><rect x="488" y="50" width="24" height="28" fill="#ece8f6" stroke="#5b3fa6" stroke-width="1.5"/><line x1="488" y1="62" x2="512" y2="62" stroke="#5b3fa6" stroke-width="1.5"/>
+          <text x="480" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#5b3fa6">Box</text><text x="480" y="142" text-anchor="middle" font-size="9" fill="#8a8880">distribution summary</text>
+          <!-- violin -->
+          <rect x="552" y="14" width="128" height="96" rx="6" fill="#ffffff" stroke="#e4e2db"/>
+          <path d="M596 30 C578 44 578 60 596 66 C614 72 614 92 596 98 C578 92 578 72 596 66 C614 60 614 44 596 30 Z" fill="#e1f5ee" stroke="#0f6e56" stroke-width="1.3"/>
+          <path d="M644 34 C628 48 628 58 644 64 C660 70 660 88 644 94 C628 88 628 70 644 64 C660 58 660 48 644 34 Z" fill="#e1f5ee" stroke="#0f6e56" stroke-width="1.3"/>
+          <text x="616" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#0f6e56">Violin</text><text x="616" y="142" text-anchor="middle" font-size="9" fill="#8a8880">distribution + density</text>
+          <!-- pie (cautioned) -->
+          <rect x="688" y="14" width="128" height="96" rx="6" fill="#ffffff" stroke="#e4e2db"/>
+          <circle cx="740" cy="62" r="32" fill="#f7ece6" stroke="#e6a78f"/><path d="M740 62 L740 30 A32 32 0 0 1 768 78 Z" fill="#e6a78f"/>
+          <text x="752" y="128" text-anchor="middle" font-size="11" font-weight="600" fill="#c24a1e">Pie</text><text x="752" y="142" text-anchor="middle" font-size="9" fill="#c24a1e">parts of one whole — use sparingly</text>
+          </g>
+        </svg>
+        <div class="diagram-caption">Match the geometry to the data structure. The geometry <em>is</em> the claim.</div>
+      </div>
+
+      <p class="kicker">The cautionary case — a line graph asserting a trend that isn't there</p>
+      <div class="example">
+        <div class="ex-label lbl-bad">Misleading: connecting unordered categories</div>
+        <p class="body" style="margin-bottom:8px;">Manyanga et al. (<em>BMC Public Health</em> 2014) plotted obesity prevalence across countries as a <strong>line graph</strong>, producing a visible "downward trend". But the x-axis was a set of <em>unordered countries</em>, not a continuous or time variable — the line implies a progression that does not exist. Reordering the countries would invert the "trend" entirely.</p>
+        <div class="source-note">A line connects points the reader is invited to interpolate between. If interpolation is meaningless, the line asserts a relationship the data cannot support — the authors were misled by their own figure.</div>
+      </div>
+
+      <p class="kicker">Data-to-ink ratio — Tufte's discipline</p>
+      <p class="body">Maximize the proportion of ink that encodes data; delete everything that doesn't. Gridlines, heavy borders, background fills, drop shadows, and redundant legends are <strong>chartjunk</strong> — they compete with the signal. A clean figure is not a stylistic preference; it lowers the cognitive cost of extracting the result.</p>
+
+      <p class="kicker">Bar graphs fail for continuous data</p>
+      <div class="example">
+        <div class="ex-label lbl-bad">The bar-graph problem (Weissgerber et al., <em>PLoS Biology</em> 2015)</div>
+        <div class="points" style="margin-top:6px;">
+          <div class="point"><span class="point-label">Zone of irrelevance</span><span class="point-body">A bar fills the entire range from zero to the mean, drawing the eye to a region where <em>no data points exist</em>. The reader's attention is anchored to empty space.</span></div>
+          <div class="point"><span class="point-label">Within-the-bar bias</span><span class="point-body">Readers systematically judge points plotted inside the bar as "more likely to belong" than identical points above it — a documented perceptual distortion.</span></div>
+          <div class="point"><span class="point-label">Hidden distributions</span><span class="point-body">Bimodal data, outliers, and unequal n all vanish behind a mean ± SE bar. Two radically different datasets can produce identical bars. Show the points — dot plots, box, or violin — for any continuous measurement.</span></div>
+        </div>
+      </div>
+      <div class="callout"><strong>Y-axis must start at zero for bar graphs — non-negotiable.</strong> A bar's length is its quantity; truncating the axis multiplies apparent differences. (Spreadsheet defaults frequently violate this — Excel will auto-truncate; the <em>JCI</em> and others reject truncated-axis bars outright.) Axis truncation can be defensible for line/scatter where position, not length, carries meaning — but label the break explicitly.</div>
+
+      <p class="kicker">Three further encoding errors</p>
+      <div class="points">
+        <div class="point"><span class="point-label">3-D effects</span><span class="point-body">Perspective distorts area and length, making comparison impossible. There is no legitimate use of a 3-D bar or pie in a results figure.</span></div>
+        <div class="point"><span class="point-label">Pie charts for comparison</span><span class="point-body">Humans compare angles poorly. A pie works only for "parts of a single whole" at a glance; for comparing magnitudes across categories, use a bar.</span></div>
+        <div class="point"><span class="point-label">Qualitative adverbs for quantitative effects</span><span class="point-body">"Markedly increased" is not a number. Replace with the effect size and its uncertainty — e.g. <em>"increased by 38.5% (p = 0.015)"</em>. The adverb hides whether the effect is meaningful.</span></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="p"><span class="tick"></span>Data organisation — three tiers, planned before collection</h3>
+      <p class="body">Decide what lives in the main text, what goes to Supplementary, and what becomes machine-readable Source Data — and decide it <strong>before</strong> you collect, because retrofitting the structure at submission is where authors discover their raw files were never organized to support it.</p>
+      <div class="diagram-wrap">
+        <svg width="100%" viewBox="0 0 820 132" role="img" aria-label="Decision flow for placing a result in main, supplementary, or source data">
+          <defs><marker id="arrSUP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M2 1L8 5L2 9" fill="none" stroke="#8a8880" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+          <g font-family="'DM Sans',sans-serif">
+          <rect x="14" y="46" width="150" height="46" rx="6" fill="#f1efe9" stroke="#c9c6bd"/><text x="89" y="66" text-anchor="middle" font-size="11" font-weight="600" fill="#46443e">A result / dataset</text><text x="89" y="81" text-anchor="middle" font-size="9.5" fill="#8a8880">where does it belong?</text>
+          <line x1="165" y1="69" x2="195" y2="69" stroke="#8a8880" marker-end="url(#arrSUP)"/>
+          <rect x="196" y="14" width="180" height="46" rx="6" fill="#e6eff8" stroke="#b5d4f4"/><text x="286" y="33" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0c447c">Supports the central claim?</text><text x="286" y="48" text-anchor="middle" font-size="9.5" fill="#1e5fa8">→ Main figure / table</text>
+          <rect x="196" y="78" width="180" height="46" rx="6" fill="#fbeedb" stroke="#f0c585"/><text x="286" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#7a4a0e">Validates / extends, not central?</text><text x="286" y="112" text-anchor="middle" font-size="9.5" fill="#b4600f">→ Supplementary</text>
+          <line x1="377" y1="37" x2="407" y2="37" stroke="#8a8880" marker-end="url(#arrSUP)"/>
+          <line x1="377" y1="101" x2="407" y2="101" stroke="#8a8880" marker-end="url(#arrSUP)"/>
+          <rect x="408" y="40" width="190" height="58" rx="6" fill="#e1f5ee" stroke="#5dcaa5"/><text x="503" y="62" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0a4a38">Underlying numeric values?</text><text x="503" y="78" text-anchor="middle" font-size="9.5" fill="#0f6e56">→ Source Data file</text><text x="503" y="91" text-anchor="middle" font-size="9" fill="#0f6e56">(machine-readable, per panel)</text>
+          <line x1="599" y1="69" x2="629" y2="69" stroke="#8a8880" marker-end="url(#arrSUP)"/>
+          <rect x="630" y="40" width="176" height="58" rx="6" fill="#ffffff" stroke="#e4e2db"/><text x="718" y="62" text-anchor="middle" font-size="10" fill="#46443e">Raw acquisition →</text><text x="718" y="77" text-anchor="middle" font-size="10" fill="#46443e">repository / archive</text><text x="718" y="90" text-anchor="middle" font-size="9" fill="#8a8880">CSV + native format</text>
+          </g>
+        </svg>
+        <div class="diagram-caption">Main carries the argument; Supplementary validates; Source Data makes every plotted point recomputable.</div>
+      </div>
+      <div class="points">
+        <div class="point"><span class="point-label">Source Data, per panel</span><span class="point-body">Provide the numbers behind each graph as a spreadsheet keyed to the figure — e.g. a workbook with tabs labelled <em>"Source Data Fig 4a, c, d"</em>. Nature journals (<em>Nature Biomedical Engineering</em>, <em>Nature Cell Biology</em>, and others) require this for primary quantitative figures.</span></div>
+        <div class="point"><span class="point-label">Raw ≠ processed</span><span class="point-body">Source Data is the values <em>plotted</em>. Raw acquisition (sequencing reads, microscopy stacks, flow files) goes to a domain repository. Keep both; they answer different reproducibility questions.</span></div>
+        <div class="point"><span class="point-label">Plan the architecture first</span><span class="point-body">Name files and folders to a panel-mapped scheme on day one. Authors who improvise this at submission routinely cannot reconstruct which CSV produced which bar — and that is the moment an editor asks.</span></div>
+        <div class="point"><span class="point-label">Archive in two formats</span><span class="point-body">Store data as both an open format (CSV) and the native instrument format. Check the target journal's data-availability policy <em>before</em> submission — requirements differ sharply by publisher and data type.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════ PART IX · SENTENCE-LEVEL CRAFT ════════════ -->
+  <section class="part" id="p9">
+    <div class="part-head"><span class="part-num">IX</span><h2>Sentence-Level Craft</h2></div>
+    <p class="part-intro">The architecture decides whether the paper is sound; the sentences decide whether it is readable. These techniques are mechanical and portable — they apply identically to a grant, a cover letter, or a Results paragraph. The single highest-leverage move is controlling <em>where</em> in the sentence information lands.</p>
+
+    <div class="sub">
+      <h3><span class="tick"></span>Stress &amp; topic positions — the most underused control in scientific prose</h3>
+      <p class="body">Readers grant two positions special weight: the <span class="topic">topic position</span> (the opening — what the sentence is "about", linking back to prior context) and the <span class="stress">stress position</span> (the end — what the reader remembers and carries forward). Placing your most important information anywhere else buries it. The same words, reordered, can reverse a sentence's emphasis entirely.</p>
+      <div class="stc">
+        <div class="stc-label">Same content, opposite emphasis</div>
+        <div class="stc-row"><span class="stc-len">version A</span><span><span class="topic">The board approved the raise</span> because revenue had recovered in <span class="stress">the third quarter</span>.</span></div>
+        <div class="stc-row"><span class="stc-len">version B</span><span><span class="topic">Because revenue had recovered</span>, the board approved <span class="stress">the raise</span>.</span></div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-pip" style="background:var(--blue-l);border:1px solid #b5d4f4;"></span>topic — what the sentence is about</div>
+          <div class="legend-item"><span class="legend-pip" style="background:var(--red-l);border:1px solid #e6a78f;"></span>stress — what the reader remembers</div>
+        </div>
+      </div>
+      <p class="body">Version A leaves the reader holding <em>the third quarter</em>; version B leaves them holding <em>the raise</em>. Neither is wrong — but only one matches what you want emphasized. Decide, then position deliberately.</p>
+
+      <p class="kicker">Chaining: stress → topic builds momentum</p>
+      <p class="body">Across consecutive sentences, the information you place in the <span class="stress">stress position</span> of one sentence should become the <span class="topic">topic position</span> of the next. This "old-to-new" linkage is what makes a paragraph feel like an argument rather than a list. A worked four-sentence chain on a tumor-antagonist finding:</p>
+      <div class="stc">
+        <div class="stc-label">Stress → topic chain · word counts kept tight and even</div>
+        <div class="stc-row"><span class="stc-len">13 words</span><span>Tumors evade immune clearance by exploiting <span class="stress">a checkpoint receptor on T cells</span>.</span></div>
+        <div class="stc-row"><span class="stc-len">13 words</span><span><span class="topic">This receptor</span> suppresses cytotoxic activity, allowing <span class="stress">malignant cells to proliferate unchecked</span>.</span></div>
+        <div class="stc-row"><span class="stc-len">14 words</span><span><span class="topic">Unchecked proliferation</span> generates the bulk we sought to limit with <span class="stress">a small-molecule antagonist</span>.</span></div>
+        <div class="stc-row"><span class="stc-len">16 words</span><span><span class="topic">This antagonist</span> restored T-cell killing and reduced tumor volume by 60% in <span class="stress">treated mice</span>.</span></div>
+      </div>
+      <div class="source-note">Each sentence opens on the previous sentence's payload. The reader is never asked to hold a thread across a gap — the thread is handed forward explicitly. Note the even, tight length (13–16 words): the chain carries the momentum, not long sentences.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Filler — delete, don't soften</h3>
+      <p class="body">Two operations. First, phrases that can be <strong>deleted entirely</strong> with zero loss of meaning. Second, phrases that should be <strong>replaced by a single word</strong>.</p>
+      <div class="two-col">
+        <div class="cbox"><div class="cbox-head ch-red">Delete entirely</div><div style="font-size:13px;line-height:2;color:var(--ink2);"><span class="bad">It is important to note that</span><br><span class="bad">It should be mentioned that</span><br><span class="bad">As is well known,</span><br><span class="bad">In order to</span> → <span class="good">to</span><br><span class="bad">It is interesting that</span><br><span class="bad">Needless to say,</span></div></div>
+        <div class="cbox"><div class="cbox-head ch-blue">Replace with one word</div><div style="font-size:13px;line-height:2;color:var(--ink2);"><span class="bad">due to the fact that</span> → <span class="good">because</span><br><span class="bad">a large number of</span> → <span class="good">many</span><br><span class="bad">in the event that</span> → <span class="good">if</span><br><span class="bad">at this point in time</span> → <span class="good">now</span><br><span class="bad">has the ability to</span> → <span class="good">can</span><br><span class="bad">in close proximity to</span> → <span class="good">near</span></div></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Nominalizations — turn the buried verb back into a verb</h3>
+      <p class="body">A nominalization hides an action inside a noun, then needs a weak verb (<em>conduct, perform, carry out, make</em>) to prop it up. The presence of those weak verbs is the diagnostic tell. Releasing the verb shortens the sentence and restores agency.</p>
+      <div class="two-col">
+        <div class="nom-table"><div class="nom-grid"><div class="nom-h-from">Nominalized noun</div><div></div><div class="nom-h-to">Released verb</div><div>an estimate of</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>estimate</strong></div><div>made a decision</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>decided</strong></div><div>confirmation of</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>confirm</strong></div><div>a correlation with</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>correlated with</strong></div></div></div>
+        <div class="example" style="margin-top:0;"><div class="ex-label lbl-bad">Before — 24 words</div><p style="margin-bottom:10px;">We <span class="bad">conducted an assessment of</span> the expression of TREM2 and <span class="bad">performed a comparison of</span> the levels between the two groups.</p><div class="ex-label lbl-good">After — 12 words</div><p>We <span class="good">assessed</span> TREM2 expression and <span class="good">compared</span> levels between the two groups.</p></div>
+      </div>
+      <div class="callout"><strong>The weak-verb tell:</strong> if a sentence leans on <em>conducted, performed, carried out, undertook, made,</em> or <em>provided</em> + a noun, the real verb is almost always hiding in that noun. Pull it out.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>Precision — say the specific thing</h3>
+      <div class="points">
+        <div class="point"><span class="point-label">Quantify vague comparators</span><span class="point-body"><span class="bad">"minimal overlap"</span> is an opinion; <span class="good">"&lt;10% of CpG sites were differentially methylated in both datasets"</span> is a result. If you have the number, the number replaces the adjective.</span></div>
+        <div class="point"><span class="point-label">Resolve ambiguous pronouns</span><span class="point-body">A pronoun must point to exactly one antecedent. In <em>"the arachnoidea borders the CSF, and <span class="bad">it</span> regulates solute exchange,"</span> name the agent — the arachnoidea or the CSF — rather than forcing the reader to guess.</span></div>
+        <div class="point"><span class="point-label">Ration subjective evaluators</span><span class="point-body">Words that tell the reader how to feel — <em>interestingly, surprisingly, notably, strikingly, remarkably</em> — carry weight only if rare. Budget roughly <strong>one per paper</strong>. Used on every result, they signal nothing and read as padding.</span></div>
+      </div>
+      <div class="example">
+        <div class="ex-label lbl-bad">Stacks two weaknesses in one clause</div>
+        <p><span class="bad">"It is interesting to note that</span> expression was <span class="bad">significantly</span> reduced."</p>
+        <div class="source-note">"It is interesting to note that" is deletable filler <em>and</em> a subjective evaluator; "significantly" without a p-value or effect size is an unquantified claim. The repaired sentence states the effect size and lets the reader judge whether it is interesting.</div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="p"><span class="tick"></span>Active voice — the default, with three principled exceptions</h3>
+      <p class="body">Aim for roughly <strong>75% active / 25% passive</strong>. Active voice names the agent, shortens the sentence, and assigns responsibility — which is why <strong>AMA, APA, Chicago, IEEE,</strong> and <strong>Nature</strong> all now recommend it as the default. Passive is a deliberate tool for three specific jobs, not a register to write in by habit.</p>
+      <div class="points">
+        <div class="point"><span class="point-label">1 · Agent is irrelevant or obvious</span><span class="point-body">In Methods, who performed a step rarely matters. <span class="good">"Samples were processed blinded to genotype"</span> keeps focus on the procedure. Compare the needless active <span class="bad">"models were evaluated by our team"</span> — the agent ("our team") adds nothing.</span></div>
+        <div class="point"><span class="point-label">2 · Avoiding false agency / causation</span><span class="point-body">Passive can prevent overclaiming. <span class="bad">"The Mediterranean diet lowered LDL"</span> asserts causation an observational design can't support; <span class="good">"lower LDL was observed in the Mediterranean-diet group"</span> reports the association without the causal claim.</span></div>
+        <div class="point"><span class="point-label">3 · Maintaining the topic thread</span><span class="point-body">When the stress→topic chain requires a given noun to open the sentence, passive may be the only way to put it there. <span class="good">"Economic growth was driven by the reforms"</span> keeps <em>economic growth</em> in the topic slot if that is the running thread — active would force the reforms to the front.</span></div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>Sentence length — deliberate variation, 10–20 words</h3>
+      <p class="body">Hold most sentences in the <strong>10–20 word</strong> range, and <em>vary</em> deliberately: a short sentence after several long ones lands a point; uniform length — even uniformly short — produces monotony that tires the reader regardless of how strong the content is. Length is a rhythm control, not a quota.</p>
+      <p class="body">As the chief editor of <em>Nature Cancer</em> has observed, two of the most common reasons a paper reads as less concise than it is are unnecessary repetition and habitually long sentences — both are rhythm failures before they are content failures.</p>
+      <div class="source-note">Diagnostic: read a paragraph aloud. Where you run out of breath, the sentence is too long; where the cadence flattens, the lengths are too uniform.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="t"><span class="tick"></span>Connectors — choose by logical relation, then rotate within the category</h3>
+      <p class="body">A connector is a promise about the logical relationship to what came before. Using one that names the wrong relation (a contrast word where the logic is additive) actively misleads. First pick the <em>category</em> the logic demands; then rotate <em>within</em> it so the same word doesn't repeat and flatten the prose.</p>
+      <div class="signpost-grid">
+        <div class="sp-box sp-contrast"><div class="sp-head">Contrast</div>however · whereas · by contrast · conversely · nonetheless · yet · although</div>
+        <div class="sp-box sp-similar"><div class="sp-head">Similarity</div>similarly · likewise · in the same way · correspondingly · equally</div>
+        <div class="sp-box sp-addition"><div class="sp-head">Addition</div>moreover · furthermore · in addition · also · beyond this · what is more</div>
+        <div class="sp-box sp-result"><div class="sp-head">Result</div>therefore · consequently · as a result · thus · hence · accordingly</div>
+      </div>
+      <div class="callout">The error is not repetition of a word so much as repetition that <em>flattens logical signposting</em>: if every paragraph opens with "However," the reader stops registering contrast as meaningful. Rotate within the correct category; never reach across categories for variety.</div>
+    </div>
+
+    <div class="sub">
+      <h3 class="a"><span class="tick"></span>Vocabulary reduction — plain words, deliberately chosen</h3>
+      <p class="body">Latinate display vocabulary signals effort, not rigor. Plain equivalents read faster and translate better — Nature's guidance explicitly favors plain words for an adjacent-discipline and non-native-English readership. This is not dumbing down; it is removing a comprehension tax.</p>
+      <div class="two-col">
+        <div class="nom-table"><div class="nom-grid"><div class="nom-h-from">Ornate</div><div></div><div class="nom-h-to">Plain</div>
+          <div>Ameliorate</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Improve</strong></div>
+          <div>Commence</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Begin, start</strong></div>
+          <div>Corroborate</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Confirm, validate</strong></div>
+          <div>Elucidate</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Explain, clarify</strong></div>
+          <div>Endeavour</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Try, aim</strong></div>
+          <div>Exacerbate</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Worsen, heighten</strong></div>
+          <div>Facilitate</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Help, enable, aid</strong></div>
+        </div></div>
+        <div class="nom-table"><div class="nom-grid"><div class="nom-h-from">Ornate</div><div></div><div class="nom-h-to">Plain</div>
+          <div>Modality</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Way, approach</strong></div>
+          <div>Nascent</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Emerging</strong></div>
+          <div>Obfuscate</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Hide, confuse</strong></div>
+          <div>Paradigm</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Theory, model</strong></div>
+          <div>Ramification</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Consequence</strong></div>
+          <div>Superfluous</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Unnecessary</strong></div>
+          <div>Utilise</div><div style="text-align:center;color:var(--ink4);">→</div><div><strong>Use</strong></div>
+        </div></div>
+      </div>
+      <div class="example">
+        <div class="ex-label lbl-bad">Before</div>
+        <p style="margin-bottom:10px;">"We observed a <span class="bad">precocious manifestation of spontaneous carcinogenesis</span> in the knockout cohort."</p>
+        <div class="ex-label lbl-good">After</div>
+        <p>"We observed <span class="good">early development of spontaneous tumors</span> in the knockout cohort."</p>
+        <div class="source-note">After Chini et al., <em>Aging Cell</em> 2024 — the plain version is shorter, unambiguous, and loses no precision.</div>
+      </div>
+      <div class="callout"><strong>Manchester Academic Phrasebank</strong> (phrasebank.manchester.ac.uk) — a free, function-organized bank of vetted academic phrasings (for describing methods, reporting results, signalling limitations). The reference of choice when a sentence's <em>content</em> is clear but its conventional <em>phrasing</em> is not, and a particularly useful scaffold for non-native English writers.</div>
+    </div>
+  </section>
+
+  <!-- ════════════ PART X · REPORTING COMPLIANCE & AI POLICY ════════════ -->
+  <section class="part" id="p10">
+    <div class="part-head"><span class="part-num">X</span><h2>Reporting Compliance &amp; AI Policy</h2></div>
+    <p class="part-intro">Two compliance regimes now sit at the submission gate: structured reporting of statistics, data, code, and materials (covered in Part V), and disclosure of any AI involvement in the writing. Both are checked before review in a growing number of journals, and both have produced retractions where authors got them wrong.</p>
+
+    <div class="sub">
+      <h3><span class="tick"></span>AI / LLM disclosure — by publisher</h3>
+      <p class="body">The policies converge on two non-negotiables — <strong>an LLM cannot be an author</strong>, and <strong>a human is accountable for every word</strong> — but differ on <em>where</em> and <em>whether</em> use must be disclosed. Verify the target journal's current policy before submission; these are revised frequently.</p>
+      <div class="points">
+        <div class="point"><span class="point-label">Elsevier</span><span class="point-body">Disclose AI use in the manuscript; the disclosure statement appears in the published work.</span></div>
+        <div class="point"><span class="point-label">Science journals</span><span class="point-body">The strictest: report the <strong>full prompt, tool name, and version in the Methods section</strong>, and additionally note use in the cover letter and acknowledgements.</span></div>
+        <div class="point"><span class="point-label">Springer Nature <em>(revised)</em></span><span class="point-body">AI-assisted <em>copy editing</em> (grammar, style, readability) <strong>no longer requires disclosure</strong>; generative content creation still does. Springer Nature also prohibits generative-AI images and asks peer reviewers not to upload manuscripts to AI tools.</span></div>
+        <div class="point"><span class="point-label">Universal</span><span class="point-body">Human accountability for the final text is required in all cases — responsibility cannot be attributed to an LLM, which is why an LLM can never be listed as an author.</span></div>
+      </div>
+      <div class="example">
+        <div class="ex-label lbl-bad">Documented failure — Boder et al., <em>Radiology Case Reports</em> 2024</div>
+        <p class="body" style="margin-bottom:8px;">The published article contained a verbatim LLM refusal, printed mid-sentence: <span style="font-style:italic;color:var(--red-d);">"…the management of bilateral iatrogenic — I'm very sorry, but I don't have access to real-time…"</span></p>
+        <div class="source-note">The paper was retracted primarily for missing patient consent; the undisclosed AI use was flagged separately as a policy breach that peer review failed to catch. The visible artifact is the tell — but the consent failure was the substantive violation. Both passed review.</div>
+      </div>
+    </div>
+
+    <div class="sub">
+      <h3 class="b"><span class="tick"></span>LLM-assisted editing — what it does well, and where it fails</h3>
+      <p class="body">Used deliberately, an LLM reliably improves sentence-level clarity and grammar. It improves <em>paragraph structure</em> only when given enough context to infer the section's purpose. Without that context, it fixes surface problems and leaves the underlying organisation untouched.</p>
+      <p class="kicker">A useful prompt names three things</p>
+      <div class="num-list">
+        <div class="num-item"><span class="num-badge">1</span><span><strong>Who you are</strong> — field and role. <em>"I am a neuroscience researcher…"</em></span></div>
+        <div class="num-item"><span class="num-badge">2</span><span><strong>Context</strong> — the section and its purpose. <em>"…writing the introduction of an article on [X]"</em></span></div>
+        <div class="num-item"><span class="num-badge">3</span><span><strong>The task</strong> — the specific ask. <em>"Improve the clarity and grammar of the following paragraph."</em></span></div>
+      </div>
+      <div class="two-col">
+        <div class="cbox"><div class="cbox-head ch-red">No context</div><p style="font-size:12.5px;color:var(--ink2);"><em>"Please improve the following paragraph:"</em> → grammar and readability improve, but the paragraph stays one block. The model has no basis to split it by logical function (topic → problem → agents).</p></div>
+        <div class="cbox"><div class="cbox-head ch-teal">With context</div><p style="font-size:12.5px;color:var(--ink2);"><em>"I am a biomedical researcher writing the introduction of an article on [topic]. Improve the clarity and grammar of…"</em> → grammar, readability, <strong>and structure</strong> improve; a run-on becomes three paragraphs with distinct roles.</p></div>
+      </div>
+      <div class="callout"><strong>Critical limits — treat all AI text as an unverified first draft.</strong> LLMs hallucinate: independently verify every number, citation, and mechanistic claim against primary sources. <strong>Zhang et al.</strong> (<em>Surfaces and Interfaces</em>, 2024) was retracted in part because the introduction was published beginning <span style="font-style:italic;color:var(--red-d);">"Certainly, here is a possible introduction for your topic:"</span> — proof the generated text was pasted without being read, let alone verified.</div>
+    </div>
+  </section>
+
+  <!-- ════════════ PART XI · SYNTHESIS (dark) ════════════ -->
+  <section class="takeaways" id="p11">
+    <div class="tk-head"><span class="tk-num">XI</span><h2>Synthesis &amp; Highest-Leverage Principles</h2></div>
+
+    <div class="tk-point">
+      <div class="tk-title">1 · The stress→topic chain is the most mechanically specific technique in the entire corpus</div>
+      <div class="tk-body">Most writing advice is directional ("be concise", "be active"). The Gopen &amp; Swan reader-expectation model is different: it tells you <strong>exactly where</strong> in a sentence to put information and how to thread sentences together. It doubles as a debugging tool — when a paragraph reads as a disconnected list, the fix is almost always that one sentence's stress payload was not carried into the next sentence's topic slot. It is the highest-leverage, most teachable, and most consistently underused move in scientific prose.</div>
+    </div>
+
+    <div class="tk-point">
+      <div class="tk-title">2 · Graph-type choice is a reproducibility issue, not an aesthetic one</div>
+      <div class="tk-body">A bar graph hiding a bimodal distribution, or a line connecting unordered categories, doesn't just look wrong — it <strong>encodes a claim the data cannot support</strong>, and the first people misled are usually the authors themselves. The Manyanga obesity "trend" and the Weissgerber bar-graph critique are the same lesson from two directions: the geometry you choose <em>is</em> an inference. Treat figure design with the scrutiny you give a statistical test.</div>
+    </div>
+
+    <div class="tk-point">
+      <div class="tk-title">3 · Source data and unprocessed images must be architected before collection, not at submission</div>
+      <div class="tk-body">The per-panel Source Data file, the uncropped blot with visible markers, the raw-vs-processed distinction — none of these can be reconstructed after the fact if the files were never organized to support them. The recurring failure mode is discovering at <strong>acceptance</strong> that the data architecture the journal now requires was never built. Name files to a panel-mapped scheme on day one; the cost of doing it early is trivial against the cost of doing it under an integrity query.</div>
+    </div>
+
+    <div class="tk-point">
+      <div class="tk-title">4 · The original materials assumed clean results — Parts V and VI now close that gap</div>
+      <div class="tk-body">The source Masterclass content is strongest on papers with tidy, confirmatory findings and offers little for the messier reality of mixed, negative, or unexpected results. That gap is now filled: the <strong>negative-results framing</strong> (report what the absence rules out), the <strong>limitations construction</strong> (state the constraint, then its bounded consequence), the <strong>aim–problem alignment</strong> diagnostic, and the <strong>hedging vocabulary</strong> (calibrate certainty to evidence) together give the tools for findings that don't resolve cleanly. Real datasets rarely do; this consolidated reference is built to handle that.</div>
+    </div>
+
+    <div class="tk-point">
+      <div class="tk-title">5 · "Interestingly" is a per-paper budget, and most writers overspend it on line one</div>
+      <div class="tk-body">Subjective evaluators (<em>interestingly, surprisingly, notably, strikingly</em>) are the cheapest possible way to tell a reader something matters — which is exactly why they stop working when overused. Rationed to roughly one per paper, the word genuinely flags the result that broke your prior. Sprayed across every paragraph, it reads as filler and trains the reader to ignore it. Spend it once, on the finding that earned it.</div>
+    </div>
+
+    <div class="tk-point">
+      <div class="tk-title">Cross-cutting · One discipline unifies the whole manuscript: make the claim and its support legible at every scale</div>
+      <div class="tk-body">The same principle recurs from title to pixel. The <strong>VOS title</strong> makes the contribution legible in 20 words; the <strong>gap paragraph</strong> makes it legible in the introduction; the <strong>four-zone Results paragraph</strong> makes each finding legible in sequence; the <strong>figure</strong> makes the data legible at a glance; the <strong>stress position</strong> makes it legible in a single sentence. A manuscript fails not usually because the science is weak but because the contribution is <em>illegible</em> at one of these scales. Every technique in this reference is, ultimately, a legibility instrument — and the VOS Outcome slot, the gap sentence, and the stress position are the three places it most often breaks.</div>
+    </div>
+  </section>
+
+  <!-- ════════ FOOTER ════════ -->
+  <footer class="doc-footer">
+    <span>Scientific Writing &amp; Manuscript Preparation — Consolidated Master Reference</span>
+    <span>Synthesised from Nature Masterclasses materials · University of Copenhagen</span>
+  </footer>
+
+</div>
+</body>
+</html>

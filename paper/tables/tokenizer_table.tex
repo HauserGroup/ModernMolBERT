@@ -8,7 +8,7 @@
   \small
   \begin{tabular}{l r}
     \toprule
-    \textbf{Tokenizer property} & \textbf{Value} \\
+    \textbf{Tokeniser property} & \textbf{Value} \\
     \midrule
     \multicolumn{2}{l}{\textit{Vocabulary}} \\
     Training molecules          & \num{2000000} \\
@@ -28,14 +28,14 @@
     \bottomrule
   \end{tabular}
   \caption{%
-    Summary statistics for the \selfies{}-adapted \ape{} tokenizer.
+    Summary statistics for the \selfies{}-adapted \ape{} tokeniser.
     The base vocabulary is learned by APE merge training on 2M randomly
     sampled \chembl{}~36 \selfies{} strings; 42 additional \selfies{} primitives
     observed in downstream benchmark molecules are appended after merge
     learning but before model pretraining, giving a final vocabulary of
-    631 tokens on which all model weights are initialized and trained.
+    631 tokens on which all model weights are initialised and trained.
     Sequence statistics and coverage are evaluated on 10\,000 held-out
     \chembl{}~36 molecules.
   }%
-  \label{tab:tokenizer-stats}
+  \label{tab:tokeniser-stats}
 \end{table}

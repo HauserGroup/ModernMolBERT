@@ -949,7 +949,7 @@ and trails MoLFormer, which is pre-trained on roughly $400\times$ more
 molecules~\citep{rossLargescaleChemicalLanguage2022}. The contribution is
 therefore a compact, reproducible
 \selfies{} encoder that approaches fixed-fingerprint quality while substantially
-improving on prior string-based language models at comparable scale. 
+improving on prior string-based language models at comparable scale.
 
 A practical advantage of \model{} is accessibility. ModernMolBERT is released in the standard Hugging Face Transformers format and can be used with the current Python ecosystem without model-specific runtime dependencies, legacy Python versions, custom inference kernels, or external chemistry toolkits at embedding time once inputs are provided as SELFIES strings. Frozen embeddings can therefore be extracted with a few lines of standard Transformers code, making the model easier to incorporate into existing screening, retrieval, and benchmark pipelines than models requiring specialised environments. Likewise, the standalone tokeniser is straightforward to use in a similar fashion.
 

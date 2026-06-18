@@ -1,7 +1,6 @@
 ---
 title: Scientific Writing & Manuscript Preparation — Master Reference
 subtitle: The full arc of a manuscript, distilled for researchers who already know the basics
-source: Synthesised from Nature Masterclasses materials
 context: University of Copenhagen — Practitioner Reference
 audience: Experienced researchers (practitioner-grade synthesis, not novice instruction)
 ---

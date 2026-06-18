@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E402
 """
 make_paper_figures.py
 
@@ -8,14 +9,15 @@ Outputs (PDF) into the manuscript figures directory:
   Fig_2.pdf            four-model internal comparison (paired scatter, 3 panels)
   Fig_baselines.pdf    best model vs four baselines (paired scatter, 4 panels)
   Fig_groupbars.pdf    per-task-group mean ROC-AUC grouped bar chart
+  Fig_task_group_distributions.pdf
+                       per-task distributions from packaged source data
 
 Main-analysis exclusions:
-- ogbg-moltox21
-- ogbg-molmuv
-- ogbg-moltoxcast
+- ogbg-moltoxcast  (26th MoleculeNet set; no Praski baseline)
 """
 
 from pathlib import Path
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -25,9 +27,15 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 ROOT = Path(__file__).resolve().parents[2]
+SRC_DIR = ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from modernmolbert.visualize.regen_groupfig import generate_group_distribution_figure
+
 MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
-FIGDIR = Path("/Users/skn506/Documents/Claude/Projects/ModernMolBERT pre-print manuscript/figures")
-EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}
+FIGDIR = ROOT / "paper/figures"
+EXCLUDED_DATASETS = {"ogbg-moltoxcast"}
 
 GROUP_COLORS = {
     "TDC-ADME": "#4C72B0",
@@ -183,4 +191,12 @@ fig.tight_layout()
 fig.savefig(FIGDIR / "Fig_groupbars.pdf", bbox_inches="tight")
 plt.close(fig)
 
-print("Wrote Fig_2.pdf, Fig_baselines.pdf, Fig_groupbars.pdf to", FIGDIR)
+generate_group_distribution_figure(
+    output_path=FIGDIR / "Fig_task_group_distributions.pdf",
+    verbose=False,
+)
+
+print(
+    "Wrote Fig_2.pdf, Fig_baselines.pdf, Fig_groupbars.pdf, Fig_task_group_distributions.pdf to",
+    FIGDIR,
+)

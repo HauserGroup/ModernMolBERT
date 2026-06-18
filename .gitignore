@@ -599,5 +599,9 @@ TSWLatexianTemp*
 # Uncomment the next line to have this generated file ignored.
 #*Notes.bib
 
-figures/
-paper/comments/
+/paper/figures/*.pptx
+/paper/papers/
+/paper/comments/
+
+# Other
+/figures/

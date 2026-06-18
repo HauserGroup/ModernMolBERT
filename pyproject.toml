@@ -75,6 +75,9 @@ cuda = [
     "flash-attn",
 ]
 
+[project.scripts]
+modernmolbert-regen-groupfig = "modernmolbert.visualize.regen_groupfig:main"
+
 [tool.uv.extra-build-dependencies]
 flash-attn = ["torch"]
 

@@ -20,7 +20,7 @@ paper. No model training. Tested scripts have unit tests under `tests/`.
 | `compute_property_regression.py` | Ridge regression of mean-pooled embeddings → 9 ChEMBL physicochemical descriptors; reports test R² | ✓ |
 | `make_ape_token_table.py` | Supplementary table of the most frequent APE merged tokens (Appendix B) | ✓ |
 | `make_appendix_table.py` | Per-task full ROC-AUC table (Appendix C / S3) from the main-analysis matrix | |
-| `make_paper_figures.py` | Paper figures (Fig 2 internal comparison, baselines scatter) from the 25-task matrix | |
+| `make_paper_figures.py` | Paper figures (Fig 2 internal comparison, baselines scatter, group summaries) from the 25-task matrix and `paper/source_data/` | |
 | `make_loss_curves.py` | Training/validation loss curves from a run's `trainer_state.json` | |
 | `align_sweep_result_csvs.py` | Reconcile old/new schema sweep CSVs under `results/` into one aligned table | |
 | `arrange_panes.py` | Compose a labeled overview image from the QED PaCMAP PNG panes | |

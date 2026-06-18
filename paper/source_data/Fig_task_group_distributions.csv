@@ -1,0 +1,151 @@
+task_group,task,model,roc_auc_x100
+TDC-ADME,Bioavailability,ECFP4,65.3
+TDC-ADME,Bioavailability,ChemBERTa-2,65.2
+TDC-ADME,Bioavailability,SELFormer,64.1
+TDC-ADME,Bioavailability,MoLFormer,72.2
+TDC-ADME,Bioavailability,MMB-small,63.1
+TDC-ADME,Bioavailability,MMB-base,65.1
+TDC-ADME,HIA,ECFP4,93.9
+TDC-ADME,HIA,ChemBERTa-2,88.7
+TDC-ADME,HIA,SELFormer,88.4
+TDC-ADME,HIA,MoLFormer,98.1
+TDC-ADME,HIA,MMB-small,97.8
+TDC-ADME,HIA,MMB-base,98.0
+TDC-ADME,Pgp,ECFP4,91.6
+TDC-ADME,Pgp,ChemBERTa-2,84.3
+TDC-ADME,Pgp,SELFormer,83.3
+TDC-ADME,Pgp,MoLFormer,92.9
+TDC-ADME,Pgp,MMB-small,91.5
+TDC-ADME,Pgp,MMB-base,93.0
+TDC-ADME,PAMPA,ECFP4,77.4
+TDC-ADME,PAMPA,ChemBERTa-2,67.9
+TDC-ADME,PAMPA,SELFormer,70.8
+TDC-ADME,PAMPA,MoLFormer,71.6
+TDC-ADME,PAMPA,MMB-small,73.9
+TDC-ADME,PAMPA,MMB-base,75.5
+TDC-ADME,CYP1A2,ECFP4,91.9
+TDC-ADME,CYP1A2,ChemBERTa-2,87.6
+TDC-ADME,CYP1A2,SELFormer,86.5
+TDC-ADME,CYP1A2,MoLFormer,91.4
+TDC-ADME,CYP1A2,MMB-small,90.4
+TDC-ADME,CYP1A2,MMB-base,91.3
+TDC-ADME,CYP2C19,ECFP4,86.8
+TDC-ADME,CYP2C19,ChemBERTa-2,81.8
+TDC-ADME,CYP2C19,SELFormer,76.5
+TDC-ADME,CYP2C19,MoLFormer,85.5
+TDC-ADME,CYP2C19,MMB-small,84.2
+TDC-ADME,CYP2C19,MMB-base,84.9
+TDC-ADME,CYP2C9,ECFP4,86.7
+TDC-ADME,CYP2C9,ChemBERTa-2,82.1
+TDC-ADME,CYP2C9,SELFormer,80.5
+TDC-ADME,CYP2C9,MoLFormer,86.6
+TDC-ADME,CYP2C9,MMB-small,84.9
+TDC-ADME,CYP2C9,MMB-base,84.9
+TDC-ADME,CYP2D6,ECFP4,86.3
+TDC-ADME,CYP2D6,ChemBERTa-2,78.2
+TDC-ADME,CYP2D6,SELFormer,79.1
+TDC-ADME,CYP2D6,MoLFormer,85.5
+TDC-ADME,CYP2D6,MMB-small,83.3
+TDC-ADME,CYP2D6,MMB-base,85.2
+TDC-ADME,CYP3A4,ECFP4,86.3
+TDC-ADME,CYP3A4,ChemBERTa-2,80.5
+TDC-ADME,CYP3A4,SELFormer,78.7
+TDC-ADME,CYP3A4,MoLFormer,85.0
+TDC-ADME,CYP3A4,MMB-small,83.1
+TDC-ADME,CYP3A4,MMB-base,83.6
+TDC-ADME,CYP2C9 (substrate),ECFP4,62.1
+TDC-ADME,CYP2C9 (substrate),ChemBERTa-2,65.6
+TDC-ADME,CYP2C9 (substrate),SELFormer,60.4
+TDC-ADME,CYP2C9 (substrate),MoLFormer,62.5
+TDC-ADME,CYP2C9 (substrate),MMB-small,62.0
+TDC-ADME,CYP2C9 (substrate),MMB-base,62.6
+TDC-ADME,CYP2D6 (substrate),ECFP4,79.0
+TDC-ADME,CYP2D6 (substrate),ChemBERTa-2,78.7
+TDC-ADME,CYP2D6 (substrate),SELFormer,71.4
+TDC-ADME,CYP2D6 (substrate),MoLFormer,83.0
+TDC-ADME,CYP2D6 (substrate),MMB-small,79.2
+TDC-ADME,CYP2D6 (substrate),MMB-base,82.0
+TDC-ADME,CYP3A4 (substrate),ECFP4,65.4
+TDC-ADME,CYP3A4 (substrate),ChemBERTa-2,67.2
+TDC-ADME,CYP3A4 (substrate),SELFormer,61.2
+TDC-ADME,CYP3A4 (substrate),MoLFormer,63.1
+TDC-ADME,CYP3A4 (substrate),MMB-small,62.1
+TDC-ADME,CYP3A4 (substrate),MMB-base,62.4
+TDC-Tox,AMES,ECFP4,84.7
+TDC-Tox,AMES,ChemBERTa-2,74.7
+TDC-Tox,AMES,SELFormer,70.5
+TDC-Tox,AMES,MoLFormer,81.7
+TDC-Tox,AMES,MMB-small,78.3
+TDC-Tox,AMES,MMB-base,78.2
+TDC-Tox,DILI,ECFP4,88.2
+TDC-Tox,DILI,ChemBERTa-2,73.9
+TDC-Tox,DILI,SELFormer,74.3
+TDC-Tox,DILI,MoLFormer,92.0
+TDC-Tox,DILI,MMB-small,92.3
+TDC-Tox,DILI,MMB-base,89.3
+TDC-Tox,hERG,ECFP4,80.2
+TDC-Tox,hERG,ChemBERTa-2,64.3
+TDC-Tox,hERG,SELFormer,79.1
+TDC-Tox,hERG,MoLFormer,83.1
+TDC-Tox,hERG,MMB-small,81.6
+TDC-Tox,hERG,MMB-base,84.9
+TDC-Tox,hERG (Karim),ECFP4,87.1
+TDC-Tox,hERG (Karim),ChemBERTa-2,79.5
+TDC-Tox,hERG (Karim),SELFormer,74.5
+TDC-Tox,hERG (Karim),MoLFormer,84.1
+TDC-Tox,hERG (Karim),MMB-small,82.4
+TDC-Tox,hERG (Karim),MMB-base,82.8
+TDC-HTS,SARS-CoV-2 3CLPro,ECFP4,76.1
+TDC-HTS,SARS-CoV-2 3CLPro,ChemBERTa-2,67.6
+TDC-HTS,SARS-CoV-2 3CLPro,SELFormer,66.6
+TDC-HTS,SARS-CoV-2 3CLPro,MoLFormer,74.9
+TDC-HTS,SARS-CoV-2 3CLPro,MMB-small,70.7
+TDC-HTS,SARS-CoV-2 3CLPro,MMB-base,73.2
+TDC-HTS,SARS-CoV-2 (Vitro),ECFP4,61.0
+TDC-HTS,SARS-CoV-2 (Vitro),ChemBERTa-2,64.9
+TDC-HTS,SARS-CoV-2 (Vitro),SELFormer,55.7
+TDC-HTS,SARS-CoV-2 (Vitro),MoLFormer,58.7
+TDC-HTS,SARS-CoV-2 (Vitro),MMB-small,58.9
+TDC-HTS,SARS-CoV-2 (Vitro),MMB-base,55.6
+MoleculeNet,BACE,ECFP4,86.2
+MoleculeNet,BACE,ChemBERTa-2,80.8
+MoleculeNet,BACE,SELFormer,78.4
+MoleculeNet,BACE,MoLFormer,83.7
+MoleculeNet,BACE,MMB-small,78.4
+MoleculeNet,BACE,MMB-base,81.5
+MoleculeNet,BBBP,ECFP4,70.2
+MoleculeNet,BBBP,ChemBERTa-2,70.7
+MoleculeNet,BBBP,SELFormer,65.4
+MoleculeNet,BBBP,MoLFormer,71.5
+MoleculeNet,BBBP,MMB-small,69.3
+MoleculeNet,BBBP,MMB-base,68.3
+MoleculeNet,ClinTox,ECFP4,73.1
+MoleculeNet,ClinTox,ChemBERTa-2,55.9
+MoleculeNet,ClinTox,SELFormer,79.0
+MoleculeNet,ClinTox,MoLFormer,88.4
+MoleculeNet,ClinTox,MMB-small,79.2
+MoleculeNet,ClinTox,MMB-base,82.1
+MoleculeNet,HIV,ECFP4,78.4
+MoleculeNet,HIV,ChemBERTa-2,75.3
+MoleculeNet,HIV,SELFormer,75.9
+MoleculeNet,HIV,MoLFormer,78.0
+MoleculeNet,HIV,MMB-small,76.2
+MoleculeNet,HIV,MMB-base,73.3
+MoleculeNet,MUV,ECFP4,72.4
+MoleculeNet,MUV,ChemBERTa-2,56.6
+MoleculeNet,MUV,SELFormer,57.7
+MoleculeNet,MUV,MoLFormer,79.8
+MoleculeNet,MUV,MMB-small,74.0
+MoleculeNet,MUV,MMB-base,72.1
+MoleculeNet,SIDER,ECFP4,67.4
+MoleculeNet,SIDER,ChemBERTa-2,61.6
+MoleculeNet,SIDER,SELFormer,56.6
+MoleculeNet,SIDER,MoLFormer,66.6
+MoleculeNet,SIDER,MMB-small,64.7
+MoleculeNet,SIDER,MMB-base,64.3
+MoleculeNet,Tox21,ECFP4,75.9
+MoleculeNet,Tox21,ChemBERTa-2,69.4
+MoleculeNet,Tox21,SELFormer,69.0
+MoleculeNet,Tox21,MoLFormer,75.0
+MoleculeNet,Tox21,MMB-small,73.9
+MoleculeNet,Tox21,MMB-base,74.2

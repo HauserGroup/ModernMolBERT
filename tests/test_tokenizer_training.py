@@ -19,6 +19,39 @@ def test_ape_train_terminates_on_tiny_corpus():
     assert len(tokenizer.vocabulary) > len(tokenizer.special_tokens)
 
 
+def test_ape_train_skips_malformed_rows_without_crashing():
+    tokenizer = APEPreTrainedTokenizer()
+    # A stray non-bracket row must be skipped, not abort the whole run.
+    corpus = ["[C][C][O]", "not selfies", "[C][O][C]", "[C][C][C]"] * 20
+
+    tokenizer.train(corpus=corpus, max_vocab_size=32, min_freq_for_merge=2)
+
+    assert len(tokenizer.vocabulary) > len(tokenizer.special_tokens)
+
+
+def test_ape_tokenize_maps_malformed_selfies_to_unk():
+    tokenizer = APEPreTrainedTokenizer()
+
+    ids = tokenizer.encode("totally not selfies", add_special_tokens=False)
+
+    assert ids == [tokenizer.unk_token_id]
+
+
+def test_ape_train_freq_debits_merged_constituents():
+    tokenizer = APEPreTrainedTokenizer()
+    corpus = ["[C][C]"] * 10
+
+    tokenizer.train(corpus=corpus, max_vocab_size=32, min_freq_for_merge=2)
+
+    freq = tokenizer.vocabulary_frequency
+    # The merge consumes every [C] (20 occurrences across 10 merges of [C]+[C]).
+    assert freq["[C][C]"] == 10
+    assert freq["[C]"] == 0
+    # Debited primitive stays in the vocab so single-atom coverage survives.
+    assert "[C]" in tokenizer.vocabulary
+    assert all(count >= 0 for count in freq.values())
+
+
 def test_ape_train_rejects_empty_corpus() -> None:
     tokenizer = APEPreTrainedTokenizer()
 

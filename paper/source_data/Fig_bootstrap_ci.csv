@@ -1,0 +1,5 @@
+model_A,model_B,n,wins,ties,losses,mean_delta_x100,ci_low,ci_high
+MMB-base,SELFormer,23,21,0,2,5.43,3.9,7.1
+MMB-base,ChemBERTa-2,23,17,0,6,4.55,1.6,7.9
+MMB-base,ECFP4,23,7,0,16,-1.02,-2.5,0.5
+MMB-base,MoLFormer,23,4,0,19,-1.67,-2.6,-0.7

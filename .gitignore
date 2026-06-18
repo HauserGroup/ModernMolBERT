@@ -605,3 +605,6 @@ TSWLatexianTemp*
 
 # Other
 /figures/
+
+# Mac
+.DS_Store

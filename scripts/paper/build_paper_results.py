@@ -15,9 +15,7 @@ Produces:
 No model runs, no new benchmarking. Pure wrangling of existing eval output.
 
 Main-analysis dataset exclusions:
-- ogbg-moltox21
-- ogbg-molmuv
-- ogbg-moltoxcast
+- ogbg-moltoxcast  (26th MoleculeNet set; no Praski baseline)
 """
 
 from pathlib import Path
@@ -33,8 +31,9 @@ OUT = ROOT / "outputs/eval/paper"
 OUT.mkdir(parents=True, exist_ok=True)
 
 # ---- Task -> group map for manuscript main analysis ----
-# Note: tox21/muv/toxcast are excluded from the main analysis by design.
-EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}
+# Canonical benchmark = 25 datasets (18 TDC + 7 MoleculeNet). Only ogbg-moltoxcast
+# (a 26th MoleculeNet set) is excluded: no Praski baseline exists for it.
+EXCLUDED_DATASETS = {"ogbg-moltoxcast"}
 
 TDC_ADME = [
     "Bioavailability_Ma",
@@ -57,7 +56,9 @@ MOLNET = [
     "ogbg-molbbbp",
     "ogbg-molclintox",
     "ogbg-molhiv",
+    "ogbg-molmuv",
     "ogbg-molsider",
+    "ogbg-moltox21",
 ]
 GROUPS = {
     **{t: "TDC-ADME" for t in TDC_ADME},

@@ -146,7 +146,7 @@ Both released variants (\emph{small} and \emph{base}) are pre-trained with
 masked language modelling on $\sim$\num{2.4}M unique \selfies{} strings from
 \chembl{}~36 and evaluated as frozen molecular embedders on 25 binary
 classification benchmarks.
-\model{}-base attains a mean ROC-AUC of 77.4,
+\model{}-base attains a mean ROC-AUC of 77.9,
 competitive with a strong fingerprint baseline and improving on comparable
 pre-trained string encoders by roughly four to five points.
 \model{} provides a compact, reproducible, open-source foundation for
@@ -715,7 +715,7 @@ results for all models are given in \cref{tab:pertask}.
   \includegraphics[width=0.82\linewidth]{figures/bootstrap_ci_forest}
   \caption{%
     \textbf{Paired bootstrap confidence intervals for \model{}-base
-    vs.\ each baseline ($n = 23$ jointly evaluated datasets).}
+    vs.\ each baseline ($n = 25$ datasets).}
     Each row shows the mean $\Delta$ ROC-AUC ($\times$100) between
     \model{}-base and one baseline (positive = \model{}-base higher),
     with 95\% bootstrap confidence intervals ($B = 10{,}000$ resamples)
@@ -730,9 +730,9 @@ results for all models are given in \cref{tab:pertask}.
 
 \input{tables/main_results_table}
 
-\model{}-base attains a mean ROC-AUC of 77.4 across 24 evaluated benchmark
-datasets (Tox21 is omitted for \model{}-base; see \cref{tab:pertask}), and
-\model{}-small attains 77.3 across all 25 datasets
+\model{}-base attains a mean ROC-AUC of 77.9 across all 25 benchmark
+datasets, and
+\model{}-small attains 77.4 across all 25 datasets
 (per-dataset results in \cref{tab:pertask}). For comparison, ECFP4 reaches 78.9, MoLFormer
 79.8, ChemBERTa-2 72.9, and SELFormer 72.1. Both \model{} variants therefore
 land between the strong fixed-fingerprint and large-scale \smiles{} baselines
@@ -746,7 +746,7 @@ competitive with ECFP4 on ADME (\model{}-base 80.7 vs.\ 81.1) and toxicity
 (83.8 vs.\ 85.0), the endpoints most closely tied to physicochemical structure
 (\cref{fig:group-bars}). Its weakest group is the two-task TDC-HTS set (64.4),
 where all neural embedders trail ECFP4. On MoleculeNet, MoLFormer shows its
-clearest advantage (77.6 vs.\ \model{}-base 70.7), consistent with its much
+clearest advantage (77.6 vs.\ \model{}-base 73.7), consistent with its much
 larger and more chemically diverse pretraining corpus. This pattern is
 consistent with frozen learned embeddings transferring best to tasks governed by
 global physicochemical character rather than rare substructure recognition, an
@@ -754,11 +754,11 @@ interpretation in line with broader analyses of when learned molecular
 representations help~\citep{yangAnalyzingLearnedMolecular2019,dengSystematicStudyKey2023}.
 
 Relative to ECFP4, \model{} approaches but does not surpass the fingerprint
-baseline. \model{}-base exceeds ECFP4 on 7 of the 23 jointly evaluated datasets,
+baseline. \model{}-base exceeds ECFP4 on 7 of the 25 datasets,
 with a mean $\Delta$ ROC-AUC of $-1.0$ and a 95\% bootstrap confidence
-interval of $[-2.5,\;+0.5]$ (\cref{tab:bootstrap-cis}); the interval
+interval of $[-2.3,\;+0.4]$ (\cref{tab:bootstrap-cis}); the interval
 spans zero, consistent with neither a reliable advantage nor a reliable
-deficit at this scale. \model{}-small wins on 5 of 25. As such,
+deficit at this scale. \model{}-small wins on 6 of 25. As such,
 \model{} is approaching, rather than surpassing, ECFP4 under the frozen-embedding
 protocol, consistent with the continued strength of circular fingerprints in
 low-data property prediction.
@@ -766,16 +766,16 @@ low-data property prediction.
 The comparison most diagnostic of \model{}'s design is SELFormer, the closest
 prior \selfies{} encoder (a RoBERTa-era backbone on the same representation).
 Here \model{} improves clearly and consistently: \model{}-base exceeds
-SELFormer on 21 of 23 jointly evaluated datasets (mean $\Delta$ ROC-AUC
-$+5.4$; 95\% CI $[+3.9,\;+7.1]$; \cref{tab:bootstrap-cis}), and
+SELFormer on 23 of 25 datasets (mean $\Delta$ ROC-AUC
+$+5.8$; 95\% CI $[+4.2,\;+7.5]$; \cref{tab:bootstrap-cis}), and
 \model{}-small on 24 of 25. Because both models consume \selfies{} inputs, this
 gap is consistent with the combined benefit of \modernbert{}-era architectural
 choices, \ape{} tokenisation, and differences in the training recipe; matched
 single-axis ablations would be required to assign the gain to individual
-components. \model{} likewise exceeds the \smiles{}-based ChemBERTa-2 by 4.6
-points on 23 jointly evaluated datasets (mean $\Delta$ $+4.6$; 95\% CI
-$[+1.6,\;+7.9]$). It does not reach MoLFormer, which is pre-trained on roughly
-$400\times$ more molecules (mean $\Delta$ $-1.7$; 95\% CI $[-2.6,\;-0.7]$).
+components. \model{} likewise exceeds the \smiles{}-based ChemBERTa-2 by 5.0
+points on the 25 datasets (mean $\Delta$ $+5.0$; 95\% CI
+$[+2.1,\;+8.1]$). It does not reach MoLFormer, which is pre-trained on roughly
+$400\times$ more molecules (mean $\Delta$ $-1.9$; 95\% CI $[-2.9,\;-0.9]$).
 
 A qualitative view of the learned representation is given in
 \cref{fig:embedding-space}: PaCMAP projections of the frozen \model{}-base
@@ -805,7 +805,7 @@ conclusions from the projected coordinates themselves.
     TDC-Tox, TDC-HTS, MoleculeNet), tasks with a gap $>0.05$ ROC-AUC are
     labelled, and each inset gives the number of tasks on which \model{}-base
     wins. All encoders are evaluated as frozen embedders under an identical
-    protocol; Tox21 is omitted for \model{}-base (\cref{tab:pertask}).
+    protocol.
   }%
   \label{fig:baseline-paired}
 \end{figure}
@@ -863,12 +863,14 @@ masking consistently weakest; for the base model, $2\!\times\!10^{-4}$ and
 $4\!\times\!10^{-4}$ behave similarly while $8\!\times\!10^{-4}$ diverges. These
 differences largely do not carry through to downstream property prediction:
 relative to the released small model, the small-to-base size increase changes
-mean ROC-AUC by $+0.1$ point (across 24 jointly evaluated datasets), span masking
-by $+0.1$ (23 datasets), and heteroatom-biased span masking by $-0.7$
-(22 datasets), all within the dataset-to-dataset scatter. The heteroatom-biased deficit is a genuine negative
-result: enriching masking around heteroatom tokens is insufficient to improve
-frozen embeddings, suggesting the gap to the explicit functional-group masking
-of \citet{pengPretrainedMolecularLanguage2025} matters in practice.
+mean ROC-AUC by $+0.5$ point, span masking by $-0.3$, and heteroatom-biased
+span masking by $+0.5$ (all across the full 25 datasets), all within the
+dataset-to-dataset scatter. Notably, the validation-MLM ranking does not carry
+through to downstream performance: heteroatom-biased span masking is weakest on
+the validation objective yet matches \model{}-base downstream, while span masking
+is strongest on validation MLM yet marginally trails standard masking. Under the
+frozen-embedding protocol we therefore find no reliable downstream effect of
+masking strategy.
 
 Frozen-embedding quality is therefore largely insensitive to masking strategy
 and to the small-to-base size increase. This supports releasing the simplest
@@ -1036,8 +1038,8 @@ for \selfies{} molecular language modelling. The models combine the
 and are pre-trained from scratch on a curated \chembl{}~36 corpus using the
 masked language modelling objective.
 
-On 24 completed benchmark datasets evaluated under the frozen embedding
-protocol, \model{}-base achieves a mean ROC-AUC of 77.4. This is competitive
+On all 25 benchmark datasets evaluated under the frozen embedding
+protocol, \model{}-base achieves a mean ROC-AUC of 77.9. This is competitive
 with the strong ECFP4 fingerprint baseline (78.9) and trails the much larger
 MoLFormer (79.8), while clearly exceeding the closest prior \selfies{} and
 \smiles{} string encoders, SELFormer (72.1) and ChemBERTa-2 (72.9), by four
@@ -1219,9 +1221,8 @@ This appendix reports per-task benchmark results, together with
 auxiliary analyses used to assess robustness of the frozen-feature evaluation.
 \Cref{tab:pertask} gives the full per-task test ROC-AUC for every model,
 including the span- and heteroatom-span masking variants of \model{}-small.
-Results not available for a given model--dataset combination are marked ``--'':
-Tox21 for \model{}-base; HIV and MUV for the span-masking variant; and MUV,
-SIDER, and Tox21 for the heteroatom-span variant.
+All four \model{} checkpoints and the four baselines are evaluated on the
+full set of 25 datasets.
 
 \input{tables/pertask_table}
 
@@ -1242,9 +1243,7 @@ SIDER, and Tox21 for the heteroatom-span variant.
     \textbf{(c)}~\model{}-small versus the heteroatom-biased span-masking
     variant. The dashed line is the identity $y=x$, points are coloured by task
     group, and each inset reports the number of tasks on which the $y$-axis
-    model wins. Panel a is evaluated on 24 jointly evaluated datasets
-    (\model{}-base lacks Tox21) and panels b and c only on the tasks available
-    for the respective variant (23 and 22 of 25; see \cref{tab:pertask}).
+    model wins. All three panels are evaluated on the full 25 datasets.
   }%
   \label{fig:four-model}
 \end{figure}

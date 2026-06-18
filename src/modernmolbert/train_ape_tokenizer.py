@@ -165,9 +165,13 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 # p95_len:  <60
 # unk_rate: 0
 # truncation_rate@128: ~0
-# Red flag: inspect actual token strings — if tokens contain half-open
-# parentheses like 'C(=O' or unclosed ring digits, max_merge_pieces is
-# crossing structural character boundaries inappropriately.
+# Note: SMILES APE tokens routinely straddle structural boundaries —
+# half-open parens like 'C(=O', leading bonds like '#N)', or partial ring
+# openers are EXPECTED, not a defect. APE merges adjacent SMILES symbol
+# pieces by frequency (BPE-style), with no awareness of paren/ring balance;
+# the paper's APE behaves the same. The shipped max6 vocab already contains
+# such tokens. Watch instead for mean_len collapsing below ~8 (too few
+# attention positions) or any nonzero unk_rate (coverage gap).
 
 
 # Validate

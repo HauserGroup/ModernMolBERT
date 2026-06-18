@@ -23,8 +23,14 @@ VOCAB_FILES_NAMES = {
     "smiles_vocab_file": "smiles_vocab.json",
 }
 SELFIES_RE = re.compile(r"\[[^\]]+\]")
+# Only the organic subset (B C N O P S F Cl Br I) may appear unbracketed in
+# canonical SMILES; two-letter metals (Si, Se, Na, Mg, Al, Ca, Fe, Zn, ...) are
+# always bracketed and matched by the leading \[[^\]]+\] branch. The previous
+# pattern listed those metals as optional-second-letter alternatives (Si?, Na?,
+# ...), which could match bare invalid single letters (L, M, A, Z) and was dead
+# weight for valid input. Keep only Br?/Cl? (B, C, Br, Cl all valid bare).
 SMILES_RE = re.compile(
-    r"(\[[^\]]+\]|Br?|Cl?|Si?|Se?|Li?|Na?|Mg?|Al?|Ca?|Fe?|Zn?|"
+    r"(\[[^\]]+\]|Br?|Cl?|"
     r"N|O|S|P|F|I|K|B|C|H|"
     r"b|c|n|o|s|p|"
     r"\%\d{2}|\d|"
@@ -128,7 +134,24 @@ def ape_tokenize(
     unk_token: str = "<unk>",
     max_piece_span: int | None = None,
 ) -> list[str]:
-    pieces = pre_tokenize_molecule(text, representation)
+    """Segment a molecule against the APE vocabulary by greedy longest match.
+
+    Note this is *not* a replay of the training merges in learned order: train()
+    learns which substrings become vocab entries, but decoding here just takes
+    the longest vocab token at each position (up to ``max_piece_span`` pieces).
+    The two can disagree on segmentation. That is fine and intended — both
+    pretraining and fine-tuning encode through this same function, so the model
+    only ever sees greedy-longest-match output and stays internally consistent.
+    The learned merge *order* is intentionally discarded; only the vocab set is
+    used at inference.
+    """
+    # A single malformed SELFIES (stray text outside bracket tokens) must not
+    # crash encoding. Map the whole string to <unk> so it stays detectable via
+    # the validator's unk_rate gate instead of raising mid-batch.
+    try:
+        pieces = pre_tokenize_molecule(text, representation)
+    except ValueError:
+        return [unk_token]
     if not pieces:
         return [unk_token]
 
@@ -572,9 +595,16 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         tokenized_corpus = []
         vocabulary_frequency: defaultdict[str, int] = defaultdict(int)
         saw_tokens = False
+        skipped_malformed = 0
 
         for sentence in corpus:
-            tokens = self.pre_tokenize(str(sentence))
+            # One malformed row must not abort a multi-hour training run. Skip and
+            # count it; surface the total so a corrupt corpus is still visible.
+            try:
+                tokens = self.pre_tokenize(str(sentence))
+            except ValueError:
+                skipped_malformed += 1
+                continue
             if not tokens:
                 continue
             saw_tokens = True
@@ -582,6 +612,8 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                 vocabulary_frequency[token] += 1
             if len(tokens) > 1:
                 tokenized_corpus.append(tokens)
+        if skipped_malformed:
+            print(f"Skipped {skipped_malformed} malformed sequences", flush=True)
         print(
             f"Pretokenization complete, found {len(vocabulary_frequency)} tokens",
             flush=True,
@@ -620,7 +652,6 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
 
                     pair_counts[pair] += 1
 
-            self.pair_counts = dict(pair_counts)
             if not pair_counts:
                 return ("", ""), 0
 
@@ -686,14 +717,35 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                     flush=True,
                 )
                 merged_counter += 1
+            # Each merged occurrence consumes one left + one right piece, so debit
+            # both constituents to keep vocabulary_frequency (the *_freq.json
+            # diagnostic) an accurate post-merge count. Keys are never removed —
+            # a primitive merged to zero must stay in vocab for coverage.
             vocabulary_frequency[merged_word] += freq
+            vocabulary_frequency[left_token] = max(0, vocabulary_frequency[left_token] - freq)
+            vocabulary_frequency[right_token] = max(0, vocabulary_frequency[right_token] - freq)
 
             new_tokenized_corpus = []
+            append_seq = new_tokenized_corpus.append
             for tokens in tokenized_corpus:
+                token_count = len(tokens)
+
+                # Fast path: a sequence with no adjacent (left, right) is
+                # unchanged by this merge. Keep the existing list by reference
+                # instead of reallocating + re-appending every token. Most
+                # sequences are untouched per merge, so this avoids the bulk of
+                # the per-iteration allocation without altering the output.
+                has_pair = any(
+                    tokens[i] == left_token and tokens[i + 1] == right_token
+                    for i in range(token_count - 1)
+                )
+                if not has_pair:
+                    append_seq(tokens)
+                    continue
+
                 new_tokens = []
                 append_token = new_tokens.append
                 i = 0
-                token_count = len(tokens)
                 while i < token_count:
                     if (
                         i < token_count - 1
@@ -707,7 +759,7 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
                         i += 1
 
                 if len(new_tokens) > 1:
-                    new_tokenized_corpus.append(new_tokens)
+                    append_seq(new_tokens)
 
             tokenized_corpus = new_tokenized_corpus
 

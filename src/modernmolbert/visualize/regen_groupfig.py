@@ -37,12 +37,12 @@ MODEL_LABELS = {
     "MMB-base": "ModernMolBERT-base",
 }
 MODEL_COLORS = {
-    "ECFP4": "#0072B2",
-    "ChemBERTa-2": "#E69F00",
-    "SELFormer": "#56B4E9",
-    "MoLFormer": "#009E73",
-    "MMB-small": "#D55E00",
-    "MMB-base": "#CC79A7",
+    "ECFP4": "#1B9E77",
+    "ChemBERTa-2": "#D95F02",
+    "SELFormer": "#7570B3",
+    "MoLFormer": "#E7298A",
+    "MMB-small": "#66A61E",
+    "MMB-base": "#E6AB02",
 }
 DEFAULT_OUTPUT_RELATIVE = Path("paper/figures/Fig_task_group_distributions.pdf")
 
@@ -174,7 +174,7 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
             ax.scatter(
                 np.full(len(vals), xi) + jitter,
                 vals,
-                s=26,
+                s=42,
                 color=MODEL_COLORS[model],
                 alpha=0.75,
                 edgecolor="white",
@@ -186,7 +186,7 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
                     vals.mean(),
                     xi - 0.32,
                     xi + 0.32,
-                    color=MODEL_COLORS[model],
+                    color="black",
                     linewidth=2.6,
                     zorder=4,
                 )
@@ -205,7 +205,7 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
             ax.spines[spine].set_visible(False)
 
     axes[0].set_ylabel(r"ROC-AUC ($\times$100)", fontsize=11)
-    axes[0].set_ylim(50, 100)
+    axes[0].set_ylim(0, 100)
 
     handles = [
         plt.Line2D(
@@ -222,14 +222,14 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
     ]
     fig.legend(
         handles=handles,
-        loc="upper center",
+        loc="lower center",
         ncol=len(MODELS),
         frameon=False,
         fontsize=8.5,
-        bbox_to_anchor=(0.5, 1.04),
+        bbox_to_anchor=(0.5, -0.02),
     )
 
-    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
+    fig.tight_layout(rect=(0.0, 0.08, 1.0, 1.0))
     fig.savefig(output_path, bbox_inches="tight")
     plt.close(fig)
     return group_means(df)

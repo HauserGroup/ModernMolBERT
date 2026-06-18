@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -59,7 +60,7 @@ def test_generate_group_distribution_figure_accepts_external_csv(tmp_path: Path)
     )
 
     assert out.exists()
-    assert means.loc["TDC-ADME", "MMB-small"] > 79
+    assert cast(float, means.loc["TDC-ADME", "MMB-small"]) > 79
 
 
 def test_validate_rejects_incomplete_coverage() -> None:

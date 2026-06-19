@@ -161,6 +161,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected_vocab_size", type=int, default=631)
     parser.add_argument("--expected_max_position_embeddings", type=int, default=128)
     parser.add_argument(
+        "--representation",
+        choices=["SELFIES", "SMILES"],
+        default="SELFIES",
+        help="Representation of the swept checkpoints (selects the default validation column).",
+    )
+    parser.add_argument(
+        "--molecule_column",
+        default=None,
+        help="Validation parquet column (default: selfies / smiles_canonical_clean by representation).",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -323,11 +334,13 @@ def load_tokenizer(tokenizer_dir: Path):
     return AutoTokenizer.from_pretrained(str(tokenizer_dir), trust_remote_code=True)
 
 
-def load_valid_full(valid_parquet: Path, *, limit: int | None) -> list[str]:
+def load_valid_full(
+    valid_parquet: Path, *, limit: int | None, molecule_column: str = "selfies"
+) -> list[str]:
     if not valid_parquet.exists():
         raise FileNotFoundError(f"Missing validation parquet: {valid_parquet}")
-    frame = pd.read_parquet(valid_parquet, columns=["selfies"])
-    seqs = [str(value).strip() for value in frame["selfies"] if str(value).strip()]
+    frame = pd.read_parquet(valid_parquet, columns=[molecule_column])
+    seqs = [str(value).strip() for value in frame[molecule_column] if str(value).strip()]
     return seqs[:limit] if limit is not None else seqs
 
 
@@ -337,6 +350,7 @@ def load_valid_train_matched(
     n_examples: int,
     seed: int,
     shuffle_buffer_size: int,
+    molecule_column: str = "selfies",
 ) -> list[str]:
     ds = load_dataset(
         "parquet",
@@ -347,7 +361,7 @@ def load_valid_train_matched(
     ds = ds.shuffle(seed=seed, buffer_size=shuffle_buffer_size)
     seqs: list[str] = []
     for row in ds:
-        seq = str(row.get("selfies", "")).strip()
+        seq = str(row.get(molecule_column, "")).strip()
         if not seq:
             continue
         seqs.append(seq)
@@ -605,14 +619,20 @@ def main() -> None:
     ids_to_tokens = dict(getattr(tokenizer, "ids_to_tokens", {}))
     log.info("  vocab_size=%d  pad=%d  mask=%d", vocab_size, pad_token_id, mask_token_id)
 
+    molecule_column = args.molecule_column or (
+        "smiles_canonical_clean" if args.representation == "SMILES" else "selfies"
+    )
     train_matched_n = min(4096, args.limit) if args.limit is not None else 4096
     eval_sets = {
-        "valid_full": load_valid_full(args.valid_parquet, limit=args.limit),
+        "valid_full": load_valid_full(
+            args.valid_parquet, limit=args.limit, molecule_column=molecule_column
+        ),
         "valid_4096_train_matched": load_valid_train_matched(
             args.valid_parquet,
             n_examples=train_matched_n,
             seed=242,
             shuffle_buffer_size=100_000,
+            molecule_column=molecule_column,
         ),
     }
     for name, seqs in eval_sets.items():

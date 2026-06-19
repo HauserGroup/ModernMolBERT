@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from argparse import Namespace
 
@@ -142,6 +143,7 @@ def test_write_run_metadata_writes_hub_model_card(tmp_path: Path):
         output_dir=str(output_dir),
         dataset_name="data/pretrain/chembl36_selfies",
         selfies_column="selfies",
+        representation="SELFIES",
         train_split="train",
         validation_split=None,
         use_validation_split=False,
@@ -184,6 +186,59 @@ def test_write_run_metadata_writes_hub_model_card(tmp_path: Path):
     assert "AutoTokenizer.from_pretrained" in text
     assert 'subfolder="ape_tokenizer"' in text
     assert "trust_remote_code=True" in text
+
+
+def test_write_run_metadata_smiles_model_card(tmp_path: Path):
+    metadata_path = tmp_path / "smiles_ape_tokenizer.metadata.json"
+    write_tokenizer_metadata(
+        metadata_path,
+        {
+            "representation": "SMILES",
+            "tokenizer_sha256": "def456",
+            "tokenizer_path": "tokenizer/smiles_ape_tokenizer.json",
+        },
+    )
+    output_dir = tmp_path / "run"
+    args = Namespace(
+        output_dir=str(output_dir),
+        dataset_name="data/pretrain/chembl36_selfies",
+        selfies_column="smiles_canonical_clean",
+        representation="SMILES",
+        train_split="train",
+        validation_split=None,
+        use_validation_split=False,
+        max_seq_length=128,
+        mlm_probability=0.3,
+        masking_strategy="span",
+        model_size="small",
+    )
+
+    write_run_metadata(
+        args=args,
+        backend="cpu",
+        vocab_size=8,
+        special_ids={
+            "pad_token": 1,
+            "bos_token": 0,
+            "eos_token": 2,
+            "unk_token": 3,
+            "mask_token": 4,
+        },
+        n_params=1234,
+        tokenizer_stats={"unk_rate": 0.0},
+        tokenizer_vocab_path=tmp_path / "smiles_ape_tokenizer.json",
+        tokenizer_metadata_path=metadata_path,
+    )
+
+    text = (output_dir / "final_model" / "README.md").read_text(encoding="utf-8")
+    assert "SELFIES strings only" not in text
+    assert "canonical SMILES strings" in text
+    assert "`SMILES`" in text
+    assert "smiles_vocab.json" in text
+
+    metadata = json.loads((output_dir / "ape_tokenizer_metadata.json").read_text())
+    assert metadata["representation"] == "SMILES"
+    assert metadata["molecule_column"] == "smiles_canonical_clean"
 
 
 def test_copy_tokenizer_metadata_from_anywhere_with_tokenizer_metadata_only(tmp_path: Path) -> None:

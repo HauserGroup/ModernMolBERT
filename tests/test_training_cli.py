@@ -10,6 +10,7 @@ from modernmolbert.train_selfies_ape_modernbert import (
     make_eval_dataset,
     make_train_iterable_dataset,
     parse_args as parse_train_args,
+    resolve_dataset_args,
     sequence_bucket,
     validate_args,
 )
@@ -66,6 +67,42 @@ def test_validate_args_rejects_unsupported_cuda_bf16(monkeypatch):
 
     with pytest.raises(ValueError, match="Use --no-bf16"):
         validate_args(args, backend="cuda")
+
+
+def test_representation_defaults_to_selfies():
+    with _Argv("--output_dir", "tmp/run"):
+        args = resolve_dataset_args(parse_train_args())
+
+    assert args.representation == "SELFIES"
+    # Column is dataset-inferred; molecule_column mirrors the resolved column.
+    assert args.molecule_column == args.selfies_column
+    assert str(args.tokenizer_vocab_path).endswith("selfies_ape_tokenizer.json")
+
+
+def test_representation_smiles_resolves_column_and_tokenizer():
+    with _Argv(
+        "--output_dir",
+        "tmp/run",
+        "--representation",
+        "SMILES",
+        "--molecule_column",
+        "smiles_canonical_clean",
+        "--dataset_name",
+        "data/pretrain/chembl36_selfies",
+    ):
+        args = resolve_dataset_args(parse_train_args())
+
+    assert args.representation == "SMILES"
+    assert args.selfies_column == "smiles_canonical_clean"
+    assert args.molecule_column == "smiles_canonical_clean"
+    assert str(args.tokenizer_vocab_path).endswith("smiles_ape_tokenizer.json")
+
+
+def test_selfies_column_alias_still_resolves():
+    with _Argv("--output_dir", "tmp/run", "--selfies_column", "my_col"):
+        args = resolve_dataset_args(parse_train_args())
+
+    assert args.selfies_column == "my_col"
 
 
 def test_pretokenized_rows_use_stable_hash_split(monkeypatch):

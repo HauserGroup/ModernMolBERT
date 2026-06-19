@@ -38,25 +38,26 @@ from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
+    SMILES_REPRESENTATION,
     assert_metadata_representation,
     assert_representation_compatible,
     assert_special_ids,
     compute_tokenization_stats,
     copy_tokenizer_artifacts,
-    default_selfies_tokenizer_path,
+    default_tokenizer_path,
     eligible_token_ids,
     encode_sequence,
     file_sha256,
     find_local_dataset,
     get_streaming_dataset,
-    infer_selfies_column,
+    infer_molecule_column,
     infer_validation_split,
     load_tokenizer_metadata,
     metadata_path_for_vocab,
     normalize_sequence,
     resolve_special_ids,
     tokenizer_vocab_size,
-    validate_selfies_sample_shape,
+    validate_sample_shape,
 )
 
 DATASET_NAME = PUBCHEM10M_DATASET
@@ -74,8 +75,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tokenizer_vocab_path",
         type=str,
-        default=str(default_selfies_tokenizer_path()),
-        help="SELFIES tokenizer vocabulary JSON.",
+        default=None,
+        help="Tokenizer vocabulary JSON. Defaults to the per-representation tokenizer.",
+    )
+    parser.add_argument(
+        "--representation",
+        type=str,
+        choices=[SELFIES_REPRESENTATION, SMILES_REPRESENTATION],
+        default=SELFIES_REPRESENTATION,
+        help="Molecular string representation the tokenizer and dataset column use.",
     )
     parser.add_argument(
         "--tokenizer_metadata_path",
@@ -87,10 +95,19 @@ def parse_args() -> argparse.Namespace:
     # Dataset
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
+        "--molecule_column",
+        type=str,
+        default=None,
+        help=(
+            "Dataset column containing the molecular strings for --representation. "
+            "Defaults by dataset/representation."
+        ),
+    )
+    parser.add_argument(
         "--selfies_column",
         type=str,
         default=None,
-        help=("Column containing SELFIES strings. Defaults by dataset."),
+        help="Deprecated alias for --molecule_column (kept for back-compat).",
     )
     parser.add_argument(
         "--train_split",
@@ -366,7 +383,15 @@ def adjust_args_for_backend(args: argparse.Namespace, backend: str) -> argparse.
 
 
 def resolve_dataset_args(args: argparse.Namespace) -> argparse.Namespace:
-    args.selfies_column = infer_selfies_column(args.dataset_name, args.selfies_column)
+    if args.tokenizer_vocab_path is None:
+        args.tokenizer_vocab_path = str(default_tokenizer_path(args.representation))
+    column_override = args.molecule_column or args.selfies_column
+    # Keep selfies_column as the internal resolved-column name so downstream
+    # dataset code stays representation-agnostic.
+    args.selfies_column = infer_molecule_column(
+        args.dataset_name, args.representation, column_override
+    )
+    args.molecule_column = args.selfies_column
     args.validation_split = infer_validation_split(
         args.dataset_name,
         args.validation_split,
@@ -407,7 +432,7 @@ def preview_dataset_and_tokenizer(
 
     local = find_local_dataset(args.data_dir, dataset_name=args.dataset_name)
     log(f"Dataset: {args.dataset_name}")
-    log(f"SELFIES column: {args.selfies_column}")
+    log(f"Molecule column: {args.selfies_column}")
     log(f"Train split: {args.train_split}")
     log(f"Validation split: {args.validation_split}")
     log(f"Use validation split: {args.use_validation_split}")
@@ -417,7 +442,7 @@ def preview_dataset_and_tokenizer(
         log(f"Dataset mode: local dataset at {local}")
     else:
         log("Dataset mode: streaming from HuggingFace Hub")
-    log(f"Representation: {SELFIES_REPRESENTATION}")
+    log(f"Representation: {args.representation}")
 
     for i, seq in enumerate(examples, start=1):
         encoded = encode_sequence(tokenizer, seq, args.max_seq_length)
@@ -527,7 +552,7 @@ def load_and_validate_tokenizer(
         )
 
     metadata = load_tokenizer_metadata(metadata_path)
-    assert_metadata_representation(metadata, expected_representation=SELFIES_REPRESENTATION)
+    assert_metadata_representation(metadata, expected_representation=args.representation)
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)
@@ -539,7 +564,7 @@ def load_and_validate_tokenizer(
             f"metadata={recorded_sha}, file={actual_sha}"
         )
 
-    tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
+    tokenizer = APEPreTrainedTokenizer(representation=args.representation)
     tokenizer.load_vocabulary_file(vocab_path)
 
     vocab_size = tokenizer_vocab_size(tokenizer)
@@ -552,10 +577,10 @@ def load_and_validate_tokenizer(
     validation_sequences = _sample_train_partition_sequences(
         args, n=args.tokenizer_validation_samples
     )
-    validate_selfies_sample_shape(validation_sequences)
+    validate_sample_shape(validation_sequences, args.representation)
 
     assert_representation_compatible(
-        tokenizer, special_ids, SELFIES_REPRESENTATION, args.max_seq_length
+        tokenizer, special_ids, args.representation, args.max_seq_length
     )
 
     stats = compute_tokenization_stats(
@@ -832,17 +857,24 @@ def write_run_metadata(
     tokenizer_metadata = load_tokenizer_metadata(tokenizer_metadata_path)
     tokenizer_sha256 = str(tokenizer_metadata.get("tokenizer_sha256", "unknown"))
 
+    is_smiles = args.representation == SMILES_REPRESENTATION
+    expected_input = (
+        "Canonical SMILES strings."
+        if is_smiles
+        else (
+            "SELFIES strings only. Convert SMILES before inference using a helper such "
+            "as smiles_to_selfies()."
+        )
+    )
     metadata = {
         "dataset_name": args.dataset_name,
         "selfies_column": args.selfies_column,
+        "molecule_column": args.selfies_column,
         "train_split": args.train_split,
         "validation_split": args.validation_split,
         "use_validation_split": args.use_validation_split,
-        "representation": SELFIES_REPRESENTATION,
-        "expected_input": (
-            "SELFIES strings only. Convert SMILES before inference using a helper such "
-            "as smiles_to_selfies()."
-        ),
+        "representation": args.representation,
+        "expected_input": expected_input,
         "tokenizer_vocab_path": str(tokenizer_vocab_path),
         "tokenizer_metadata_path": str(tokenizer_metadata_path),
         "backend": backend,
@@ -877,6 +909,13 @@ def write_run_metadata(
         json.dump(metadata, f, indent=2)
 
     final_eval_metrics_text = json.dumps(final_eval_metrics or {}, indent=2, sort_keys=True)
+    repr_tag = "smiles" if is_smiles else "selfies"
+    repr_vocab_file = "smiles_vocab.json" if is_smiles else "selfies_vocab.json"
+    repr_expected = (
+        "This checkpoint expects canonical SMILES strings."
+        if is_smiles
+        else "This checkpoint expects SELFIES strings only. Convert SMILES before tokenization."
+    )
     model_card = f"""---
 license: mit
 library_name: transformers
@@ -884,20 +923,20 @@ pipeline_tag: fill-mask
 tags:
 - chemistry
 - molecules
-- selfies
+- {repr_tag}
 - modernbert
 - masked-language-modeling
 ---
 
-# ModernMolBERT SELFIES Masked Language Model
+# ModernMolBERT {args.representation} Masked Language Model
 
-This checkpoint was trained from scratch with ModernBERT for SELFIES masked language modeling.
+This checkpoint was trained from scratch with ModernBERT for {args.representation} masked language modeling.
 
 ## Representation
 
-`{SELFIES_REPRESENTATION}`
+`{args.representation}`
 
-This checkpoint expects SELFIES strings only. Convert SMILES before tokenization.
+{repr_expected}
 
 ## Tokenizer
 
@@ -909,7 +948,7 @@ remote tokenizer code is disabled for root ModernBERT configs.
 Keep these files with the checkpoint:
 
 - `vocab.json`
-- `selfies_vocab.json`
+- `{repr_vocab_file}`
 - `tokenizer_metadata.json`
 - `tokenizer_config.json`
 - `special_tokens_map.json`
@@ -919,7 +958,7 @@ Keep these files with the checkpoint:
 
 `{args.dataset_name}`
 
-SELFIES column: `{args.selfies_column}`
+Molecule column: `{args.selfies_column}`
 
 ## Model
 
@@ -996,7 +1035,8 @@ def main() -> None:
     log(f"Backend: {backend}")
     log(f"bf16={args.bf16}, fp16={args.fp16}")
     log(f"Dataset: {args.dataset_name}")
-    log(f"SELFIES column: {args.selfies_column}")
+    log(f"Representation: {args.representation}")
+    log(f"Molecule column: {args.selfies_column}")
     log(f"Train split: {args.train_split}")
     log(f"Validation split: {args.validation_split}")
     log(f"Use validation split: {args.use_validation_split}")

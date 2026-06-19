@@ -22,12 +22,31 @@ import sys
 from pathlib import Path
 
 # ─── Fixed across all runs ────────────────────────────────────────────────────
+# The prepared chembl36 dataset carries both a `selfies` and a `smiles_canonical_clean`
+# column, so both representations reuse the same dataset directory read-only.
 DATASET_DIR = "data/pretrain/chembl36_selfies"
-SELFIES_COLUMN = "selfies"
 TRAIN_SPLIT = "train"
 VALIDATION_SPLIT = "valid"
-TOKENIZER_PATH = "tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"
-TOKENIZER_METADATA_PATH = "tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json"
+
+# Per-representation tokenizer, dataset column, and masking grid. SELFIES keeps the
+# historical defaults; SMILES points at the SMILES APE tokenizer and drops hetero_span
+# (its heteroatom bias is SELFIES-bracket-specific and degrades to plain span on SMILES).
+REPRESENTATION_DEFAULTS = {
+    "SELFIES": {
+        "tokenizer_path": "tokenizer/chembl36_selfies_2m_ape_max2_min3000.json",
+        "tokenizer_metadata_path": "tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json",
+        "molecule_column": "selfies",
+        "masking": ["standard", "span", "hetero_span"],
+        "run_root_tag": "",
+    },
+    "SMILES": {
+        "tokenizer_path": "tokenizer/chembl36_smiles_2m_ape_max6_mf3000.json",
+        "tokenizer_metadata_path": "tokenizer/chembl36_smiles_2m_ape_max6_mf3000.metadata.json",
+        "molecule_column": "smiles_canonical_clean",
+        "masking": ["standard", "span"],
+        "run_root_tag": "smiles_",
+    },
+}
 
 MAX_SEQ_LENGTH = 128
 MAX_STEPS = 30000
@@ -70,11 +89,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--model-size", choices=sorted(PRESETS), required=True)
     parser.add_argument(
+        "--representation",
+        choices=sorted(REPRESENTATION_DEFAULTS),
+        default="SELFIES",
+        help="Molecular string representation (default: SELFIES).",
+    )
+    parser.add_argument(
         "--masking",
         nargs="+",
         choices=ALL_MASKING,
-        default=ALL_MASKING,
-        help="Masking strategies to sweep (default: all three).",
+        default=None,
+        help=(
+            "Masking strategies to sweep (default: per representation; "
+            "SELFIES uses all three, SMILES uses standard+span)."
+        ),
     )
     parser.add_argument(
         "--mlm-probs",
@@ -96,8 +124,21 @@ def parse_args() -> argparse.Namespace:
         help="Output root (default: runs/chembl36_<model-size>_mask_mlm_lr_sweep).",
     )
     parser.add_argument("--dataset-dir", default=DATASET_DIR)
-    parser.add_argument("--tokenizer-path", default=TOKENIZER_PATH)
-    parser.add_argument("--tokenizer-metadata-path", default=TOKENIZER_METADATA_PATH)
+    parser.add_argument(
+        "--molecule-column",
+        default=None,
+        help="Dataset column (default: per representation).",
+    )
+    parser.add_argument(
+        "--tokenizer-path",
+        default=None,
+        help="Tokenizer vocabulary JSON (default: per representation).",
+    )
+    parser.add_argument(
+        "--tokenizer-metadata-path",
+        default=None,
+        help="Tokenizer metadata JSON (default: per representation).",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -144,8 +185,10 @@ def build_command(
         "modernmolbert.train_selfies_ape_modernbert",
         "--dataset_name",
         args.dataset_dir,
-        "--selfies_column",
-        SELFIES_COLUMN,
+        "--representation",
+        args.representation,
+        "--molecule_column",
+        args.molecule_column,
         "--train_split",
         TRAIN_SPLIT,
         "--use_validation_split",
@@ -222,7 +265,24 @@ def main() -> None:
     args = parse_args()
     preset = PRESETS[args.model_size]
     learning_rates = args.learning_rates or preset["learning_rates"]
-    run_root = args.run_root or Path(f"runs/chembl36_{args.model_size}_mask_mlm_lr_sweep")
+
+    # Fill representation-dependent defaults for anything not overridden on the CLI.
+    rep = REPRESENTATION_DEFAULTS[args.representation]
+    args.tokenizer_path = args.tokenizer_path or rep["tokenizer_path"]
+    args.tokenizer_metadata_path = args.tokenizer_metadata_path or rep["tokenizer_metadata_path"]
+    args.molecule_column = args.molecule_column or rep["molecule_column"]
+    args.masking = args.masking or rep["masking"]
+
+    invalid = [m for m in args.masking if m not in rep["masking"]]
+    if invalid:
+        sys.exit(
+            f"ERROR: masking {invalid} not valid for representation {args.representation}; "
+            f"allowed: {rep['masking']}"
+        )
+
+    run_root = args.run_root or Path(
+        f"runs/chembl36_{rep['run_root_tag']}{args.model_size}_mask_mlm_lr_sweep"
+    )
 
     if not args.dry_run:
         preflight(args)

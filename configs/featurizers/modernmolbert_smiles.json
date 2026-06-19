@@ -1,0 +1,11 @@
+{
+  "batch_size": 32,
+  "device": "auto",
+  "max_seq_length": 128,
+  "model_dir": "runs/best_chembl36_smiles_small/final_model",
+  "name": "modernmolbert_smiles",
+  "pooling": "mean",
+  "representation": "SMILES",
+  "tokenizer_path": "runs/best_chembl36_smiles_small/final_model",
+  "type": "modernmolbert_smiles"
+}

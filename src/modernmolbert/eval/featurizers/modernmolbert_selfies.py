@@ -12,6 +12,7 @@ from transformers import AutoModel, AutoTokenizer
 from modernmolbert.eval.featurizers.base import FeatureBatch
 from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+from modernmolbert.utils import SELFIES_REPRESENTATION, SMILES_REPRESENTATION
 
 
 @dataclass
@@ -23,6 +24,7 @@ class ModernMolBERTSelfiesFeaturizer:
     pooling: Literal["mean", "cls"] = "mean"
     device: str = "auto"
     batch_size: int = 32
+    representation: Literal["SELFIES", "SMILES"] = SELFIES_REPRESENTATION
 
     def __post_init__(self) -> None:
         self.model_dir = Path(self.model_dir)
@@ -35,8 +37,12 @@ class ModernMolBERTSelfiesFeaturizer:
         if self.pooling not in {"mean", "cls"}:
             raise ValueError(f"Unsupported pooling strategy: {self.pooling!r}")
 
+        self.representation = str(self.representation).upper()
+        if self.representation not in {SELFIES_REPRESENTATION, SMILES_REPRESENTATION}:
+            raise ValueError(f"Unsupported representation: {self.representation!r}")
+
         self._device = self._resolve_device(self.device)
-        self.tokenizer = _load_ape_tokenizer(self.tokenizer_path)
+        self.tokenizer = _load_ape_tokenizer(self.tokenizer_path, self.representation)
         self.model = AutoModel.from_pretrained(self.model_dir)
         self.model.to(self._device)
         self.model.eval()
@@ -47,37 +53,46 @@ class ModernMolBERTSelfiesFeaturizer:
         *,
         batch_size: int | None = None,
     ) -> FeatureBatch:
-        import selfies as sf
-
         effective_batch_size = self.batch_size if batch_size is None else batch_size
         if effective_batch_size <= 0:
             raise ValueError("batch_size must be positive")
 
-        selfies_strings: list[str] = []
+        # Build the strings the model actually consumes: for a SMILES checkpoint the
+        # input SMILES pass through unchanged; for a SELFIES checkpoint each SMILES is
+        # converted to SELFIES first (rows that fail conversion are marked invalid).
+        model_strings: list[str] = []
         valid_mask = np.zeros(len(smiles), dtype=bool)
 
-        for i, smi in enumerate(smiles):
-            if smi is None:
-                continue
+        if self.representation == SMILES_REPRESENTATION:
+            for i, smi in enumerate(smiles):
+                if smi is None:
+                    continue
+                text = str(smi).strip()
+                if not text:
+                    continue
+                model_strings.append(text)
+                valid_mask[i] = True
+        else:
+            import selfies as sf
 
-            text = str(smi).strip()
-            if not text:
-                continue
-
-            try:
-                encoded = sf.encoder(text)
-            except Exception:
-                continue
-
-            if not encoded:
-                continue
-
-            selfies_strings.append(encoded)
-            valid_mask[i] = True
+            for i, smi in enumerate(smiles):
+                if smi is None:
+                    continue
+                text = str(smi).strip()
+                if not text:
+                    continue
+                try:
+                    encoded = sf.encoder(text)
+                except Exception:
+                    continue
+                if not encoded:
+                    continue
+                model_strings.append(encoded)
+                valid_mask[i] = True
 
         hidden_size = int(getattr(self.model.config, "hidden_size", 0))
 
-        if not selfies_strings:
+        if not model_strings:
             out = FeatureBatch(
                 X=np.zeros((0, hidden_size), dtype=np.float32),
                 valid_mask=valid_mask,
@@ -89,7 +104,7 @@ class ModernMolBERTSelfiesFeaturizer:
             out.check(n_inputs=len(smiles))
             return out
 
-        n_valid = len(selfies_strings)
+        n_valid = len(model_strings)
         X = np.empty((n_valid, hidden_size), dtype=np.float32)
         n_batches = math.ceil(n_valid / effective_batch_size)
         row = 0
@@ -102,9 +117,9 @@ class ModernMolBERTSelfiesFeaturizer:
                 unit="batch",
                 leave=False,
             ):
-                batch_strings = selfies_strings[start : start + effective_batch_size]
+                batch_strings = model_strings[start : start + effective_batch_size]
 
-                batch = self._tokenize_selfies_batch(batch_strings)
+                batch = self._tokenize_batch(batch_strings)
                 batch = {key: value.to(self._device) for key, value in batch.items()}
 
                 outputs = self.model(**batch)
@@ -146,7 +161,8 @@ class ModernMolBERTSelfiesFeaturizer:
     def _metadata(self, *, n_inputs: int, n_valid: int) -> dict[str, object]:
         return {
             "featurizer": self.name,
-            "backend": "modernmolbert_selfies",
+            "backend": f"modernmolbert_{self.representation.lower()}",
+            "representation": self.representation,
             "model_dir": str(self.model_dir),
             "tokenizer_path": str(self.tokenizer_path),
             "pooling": self.pooling,
@@ -186,23 +202,23 @@ class ModernMolBERTSelfiesFeaturizer:
 
         return {int(x) for x in ids if x is not None}
 
-    def _tokenize_selfies_batch(
+    def _tokenize_batch(
         self,
-        selfies_strings: list[str],
+        strings: list[str],
     ) -> dict[str, torch.Tensor]:
-        """Tokenize a batch of SELFIES strings with the APE tokenizer."""
+        """Tokenize a batch of molecular strings with the APE tokenizer."""
 
-        if isinstance(selfies_strings, str):
-            raise TypeError("_tokenize_selfies_batch expects list[str], not str")
+        if isinstance(strings, str):
+            raise TypeError("_tokenize_batch expects list[str], not str")
 
-        if not selfies_strings:
-            raise ValueError("Cannot tokenize an empty SELFIES batch")
+        if not strings:
+            raise ValueError("Cannot tokenize an empty batch")
 
         # Batch tokenization: one call for the whole list instead of a per-string
         # loop + manual padding. On MPS the model forward is fast enough that the
         # old Python loop became the bottleneck.
         encoded = self.tokenizer(
-            selfies_strings,
+            strings,
             padding=True,
             truncation=True,
             max_length=self.max_seq_length,
@@ -215,7 +231,9 @@ class ModernMolBERTSelfiesFeaturizer:
         }
 
 
-def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
+def _load_ape_tokenizer(
+    path: str | Path, representation: str = SELFIES_REPRESENTATION
+) -> APEPreTrainedTokenizer:
     """Load APE tokenizer from a file or checkpoint directory.
 
     Supported inputs:
@@ -228,7 +246,7 @@ def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
     path = Path(path)
 
     if path.is_file():
-        tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+        tokenizer = APEPreTrainedTokenizer(representation=representation)
         tokenizer.load_vocabulary_file(path)
         return tokenizer
 
@@ -246,7 +264,7 @@ def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
         vocab_json = path / "vocab.json"
 
         if vocab_json.exists():
-            tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+            tokenizer = APEPreTrainedTokenizer(representation=representation)
             tokenizer.load_vocabulary_file(vocab_json)
             return tokenizer
 

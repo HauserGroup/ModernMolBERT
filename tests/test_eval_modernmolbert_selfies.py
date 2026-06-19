@@ -101,7 +101,7 @@ def tiny_modernmolbert_dir(tmp_path: Path, monkeypatch) -> Path:
     monkeypatch.setattr(
         mm_selfies,
         "_load_ape_tokenizer",
-        lambda path: TinyTokenizer(),
+        lambda path, representation="SELFIES": TinyTokenizer(),
     )
     monkeypatch.setattr(
         "modernmolbert.eval.featurizers.modernmolbert_selfies.AutoModel.from_pretrained",

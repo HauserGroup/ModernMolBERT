@@ -44,6 +44,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--max-seq-length", type=int, default=256)
     parser.add_argument("--pooling", choices=["mean", "cls"], default="mean")
+    parser.add_argument(
+        "--representation",
+        choices=["SELFIES", "SMILES"],
+        default="SELFIES",
+        help="Checkpoint's molecular representation (SMILES skips SMILES->SELFIES conversion).",
+    )
     parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     return parser.parse_args()
 
@@ -101,6 +107,7 @@ def make_featurizer(args: argparse.Namespace):
         pooling=args.pooling,
         device=args.device,
         batch_size=args.batch_size,
+        representation=args.representation,
     )
 
 

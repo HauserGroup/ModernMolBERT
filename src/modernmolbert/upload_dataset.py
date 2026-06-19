@@ -77,38 +77,120 @@ def _fmt_int(value: object) -> str:
     return f"{value:,}" if isinstance(value, int) else str(value)
 
 
-def build_readme(metadata: dict) -> str:
-    stats = metadata.get("preparation_stats", {})
-    counts = metadata.get("row_counts", {})
-    config = metadata.get("config", {})
-    versions = metadata.get("versions", {})
+# Ordered (column, group, description). Only columns present in metadata are
+# rendered, so the table never claims a field the parquet does not contain.
+COLUMN_DOCS: list[tuple[str, str, str]] = [
+    ("selfies", "Primary input", "SELFIES string — the pre-training input."),
+    (
+        "smiles_canonical_clean",
+        "Primary input",
+        "RDKit-canonicalized SMILES the SELFIES was encoded from.",
+    ),
+    ("chembl_id", "Identifier", "ChEMBL compound identifier."),
+    ("canonical_smiles", "Identifier", "Original ChEMBL canonical SMILES."),
+    ("standard_inchi", "Identifier", "Standard InChI."),
+    ("standard_inchi_key", "Identifier", "InChIKey — used for deduplication and splitting."),
+    ("molecule_type", "Identifier", "ChEMBL molecule type."),
+    ("mw_freebase", "Descriptor", "Molecular weight of the free base."),
+    ("alogp", "Descriptor", "Calculated logP."),
+    ("hba", "Descriptor", "Hydrogen-bond acceptors."),
+    ("hbd", "Descriptor", "Hydrogen-bond donors."),
+    ("psa", "Descriptor", "Polar surface area."),
+    ("rtb", "Descriptor", "Rotatable bonds."),
+    ("aromatic_rings", "Descriptor", "Aromatic ring count."),
+    ("heavy_atoms", "Descriptor", "Heavy-atom count."),
+    ("qed_weighted", "Descriptor", "QED drug-likeness score."),
+    ("num_ro5_violations", "Descriptor", "Lipinski rule-of-five violations."),
+    ("max_phase", "Annotation", "Maximum clinical trial phase reached."),
+    ("first_approval", "Annotation", "Year of first approval."),
+    ("oral", "Annotation", "Orally administered flag."),
+    ("prodrug", "Annotation", "Prodrug flag."),
+    ("natural_product", "Annotation", "Natural-product flag."),
+    ("black_box_warning", "Annotation", "Black-box-warning flag."),
+    ("withdrawn_flag", "Annotation", "Withdrawn-from-market flag."),
+    ("therapeutic_flag", "Annotation", "Therapeutic-use flag."),
+    ("is_valid", "Bookkeeping", "Passed sanitization and physicochemical filters."),
+    ("sanitize_error", "Bookkeeping", "Sanitization error tag (empty when valid)."),
+    ("split_key", "Bookkeeping", "Key hashed to assign the train/validation split."),
+]
 
-    frontmatter = (
+EXAMPLE_SELFIES = (
+    "[C][C][=Branch1][C][=O][O][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Branch1][C][=O][O]"
+)
+
+
+def _frontmatter(counts: dict) -> str:
+    total = counts.get("prepared_total")
+    if isinstance(total, int) and 1_000_000 <= total < 10_000_000:
+        size_category = "1M<n<10M"
+    elif isinstance(total, int) and 100_000 <= total < 1_000_000:
+        size_category = "100K<n<1M"
+    else:
+        size_category = "unknown"
+    return (
         "---\n"
+        "pretty_name: ChEMBL 36 SELFIES\n"
         "license: cc-by-4.0\n"
         "task_categories:\n"
         "- fill-mask\n"
-        "language:\n"
-        "- en\n"
+        "size_categories:\n"
+        f"- {size_category}\n"
         "tags:\n"
         "- chemistry\n"
         "- molecules\n"
         "- selfies\n"
         "- chembl\n"
         "- pre-training\n"
+        "configs:\n"
+        "- config_name: default\n"
+        "  data_files:\n"
+        "  - split: train\n"
+        "    path: train.parquet\n"
+        "  - split: validation\n"
+        "    path: valid.parquet\n"
         "---\n"
     )
+
+
+def _columns_table(metadata: dict) -> str:
+    present = set(metadata.get("columns", []))
+    rows = [
+        f"| `{name}` | {group} | {desc} |" for name, group, desc in COLUMN_DOCS if name in present
+    ]
+    if not rows:
+        return ""
+    header = "| column | group | description |\n|--------|-------|-------------|\n"
+    return "## Columns\n\n" + header + "\n".join(rows) + "\n\n"
+
+
+def build_readme(metadata: dict) -> str:
+    stats = metadata.get("preparation_stats", {})
+    counts = metadata.get("row_counts", {})
+    config = metadata.get("config", {})
+    versions = metadata.get("versions", {})
+    split = metadata.get("split_policy", {})
+    sanitize = stats.get("sanitize_error_counts", {})
 
     train_n = counts.get("train", "-")
     valid_n = counts.get("valid", "-")
     total_n = counts.get("prepared_total", "-")
 
+    overlap = metadata.get("split_overlap", {}).get("train_valid", {}).get("n_overlap", 0)
+
+    sanitize_lines = ""
+    if sanitize:
+        sanitize_lines = "\nBreakdown of dropped rows:\n\n" + "".join(
+            f"- {reason}: {_fmt_int(count)}\n"
+            for reason, count in sanitize.items()
+            if reason != "valid"
+        )
+
     return (
-        frontmatter
-        + "\n# ChEMBL 36 SELFIES\n\n"
-        + "Pre-training dataset for [ModernMolBERT](https://github.com/HauserGroup/ModernMolBERT). "
-        "Contains ~2.4M drug-like small molecules from ChEMBL 36 represented as "
-        "[SELFIES](https://github.com/aspuru-guzik-group/selfies) strings.\n\n"
+        _frontmatter(counts) + "\n# ChEMBL 36 SELFIES\n\n" + "Pre-training dataset for "
+        "[ModernMolBERT](https://github.com/HauserGroup/ModernMolBERT): ~2.4M drug-like "
+        "small molecules from ChEMBL 36, deduplicated and physicochemically filtered, "
+        "each represented as a [SELFIES](https://github.com/aspuru-guzik-group/selfies) "
+        "string alongside its source SMILES and ChEMBL descriptors.\n\n"
         "## Dataset details\n\n"
         "| field | value |\n"
         "|-------|-------|\n"
@@ -120,30 +202,57 @@ def build_readme(metadata: dict) -> str:
         f"| min heavy atoms | {config.get('min_heavy_atoms', '-')} |\n"
         f"| max heavy atoms | {config.get('max_heavy_atoms', '-')} |\n"
         f"| max MW | {config.get('max_mw', '-')} |\n"
-        f"| deduplicated by | InChIKey |\n"
-        f"| split method | deterministic hash on InChIKey |\n"
-        f"| valid fraction | {config.get('valid_fraction', '-')} |\n\n"
+        f"| deduplicated by | InChIKey ({config.get('dedupe_column', 'standard_inchi_key')}) |\n\n"
+        "## Splitting\n\n"
+        f"Split by **{split.get('method', 'deterministic hash')}** on `{split.get('key_column', 'split_key')}` "
+        f"(seed {split.get('seed', '-')}), with a validation fraction of "
+        f"{split.get('valid_fraction', config.get('valid_fraction', '-'))} and no test split. "
+        "The split is reproducible: the same molecule always lands in the same split.\n\n"
+        f"Train/validation molecule overlap: **{_fmt_int(overlap)}** "
+        "(residual hash collisions; effectively disjoint).\n\n"
         "## Preparation stats\n\n"
         f"- Input rows: {_fmt_int(stats.get('input_rows', '-'))}\n"
         f"- After deduplication: {_fmt_int(stats.get('rows_after_dedupe', '-'))}\n"
         f"- Valid SELFIES conversions: {_fmt_int(stats.get('rows_valid_after_conversion', '-'))}\n"
         f"- After physicochemical filters: {_fmt_int(stats.get('rows_after_filters', '-'))}\n"
-        f"- Dropped (invalid or filtered): {_fmt_int(stats.get('dropped_invalid_or_filtered', '-'))}\n\n"
-        "## Columns\n\n"
-        "| column | description |\n"
-        "|--------|-------------|\n"
-        "| `selfies` | SELFIES string (primary pre-training input) |\n"
-        "| `canonical_smiles` | original ChEMBL SMILES |\n"
-        "| `smiles_canonical_clean` | RDKit-canonicalized SMILES |\n"
-        "| `standard_inchi_key` | InChIKey used for deduplication and splitting |\n"
-        "| `chembl_id` | ChEMBL compound identifier |\n"
-        "| `qed_weighted` | QED drug-likeness score |\n"
-        "| `heavy_atoms`, `mw_freebase`, `alogp`, ... | Physicochemical descriptors from ChEMBL |\n\n"
-        "## Usage\n\n"
+        f"- Dropped (invalid or filtered): {_fmt_int(stats.get('dropped_invalid_or_filtered', '-'))}\n"
+        + sanitize_lines
+        + "\n"
+        + _columns_table(metadata)
+        + "## Usage\n\n"
         "```python\n"
         "from datasets import load_dataset\n\n"
         f"ds = load_dataset('{DEFAULT_REPO_ID}')\n"
-        "print(ds['train'][0]['selfies'])\n"
+        "train, valid = ds['train'], ds['validation']\n\n"
+        "print(train[0]['selfies'])\n"
+        f"# {EXAMPLE_SELFIES}\n"
+        "```\n\n"
+        "## Citation\n\n"
+        "If you use this dataset, please cite ChEMBL, SELFIES, and ModernMolBERT:\n\n"
+        "```bibtex\n"
+        "@article{zdrazil2024chembl,\n"
+        "  title   = {The ChEMBL Database in 2023: a drug discovery platform spanning multiple bioactivity data types and time periods},\n"
+        "  author  = {Zdrazil, Barbara and others},\n"
+        "  journal = {Nucleic Acids Research},\n"
+        "  volume  = {52},\n"
+        "  number  = {D1},\n"
+        "  pages   = {D1180--D1192},\n"
+        "  year    = {2024}\n"
+        "}\n\n"
+        "@article{krenn2020selfies,\n"
+        "  title   = {Self-referencing embedded strings (SELFIES): A 100% robust molecular string representation},\n"
+        "  author  = {Krenn, Mario and H{\\\"a}se, Florian and Nigam, AkshatKumar and Friederich, Pascal and Aspuru-Guzik, Al{\\'a}n},\n"
+        "  journal = {Machine Learning: Science and Technology},\n"
+        "  volume  = {1},\n"
+        "  number  = {4},\n"
+        "  pages   = {045024},\n"
+        "  year    = {2020}\n"
+        "}\n\n"
+        "@article{madsen_modernmolbert,\n"
+        "  title  = {ModernMolBERT: A ModernBERT Encoder Family for SELFIES Molecular Language Modeling},\n"
+        "  author = {Madsen, Jakob S. and Angelucci, Sara and Hauser, Alexander S.},\n"
+        "  year   = {2026}\n"
+        "}\n"
         "```\n\n"
         "## Versions\n\n" + "\n".join(f"- {k}: {v}" for k, v in versions.items()) + "\n\n"
         "## License\n\n"

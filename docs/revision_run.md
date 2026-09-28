@@ -178,6 +178,48 @@ mixed-provenance source files; update their input mapping and verify baseline
 comparability before using them for the revision. The run above alone does not
 establish that older baseline scores used identical prepared rows or grids.
 
+## 5. Select heads by CV and compare on common test rows
+
+`scripts/paper/build_common_row_benchmark.py` connects the scoring output to
+the paper. It reads the head-level CSVs and prediction archives and never
+modifies them.
+
+For each dataset × embedder it:
+
+- picks the head with the best training-side CV ROC-AUC;
+- checks that the saved predictions reproduce the archived `test_metric`,
+  that their source rows are unique prepared test rows, and that the labels at
+  those rows match the prepared labels;
+- reports test coverage.
+
+For each dataset it then rescores the models that passed those checks on the
+test rows all of them predicted. ROC-AUC, average precision, and positive
+counts come from the same fixed predictions, and average precision never
+influences head selection. Pass every run that should share a comparison in
+one call:
+
+```bash
+uv run python scripts/paper/build_common_row_benchmark.py \
+  --results outputs/eval/revision_clean_small_v1/results.csv \
+            outputs/eval/<baseline_run>/results.csv \
+  --exclude-datasets ogbg-moltoxcast \
+  --output-dir outputs/eval/revision_clean_small_v1/common_rows
+```
+
+It writes four files:
+
+- `head_candidates.csv`: the selection record.
+- `selected_heads.csv`: archive checks, coverage, and file hashes.
+- `common_row_scores.csv`: paired inputs.
+- `manifest.json`: input hashes and code revision.
+
+Archives from before commit `112efc5` have no source-row indices. They are
+reported with status `no_row_ids` and left out of the common-row comparison. A
+results CSV with repeated or conflicting runs for one head stops the script;
+choose the run explicitly first. Baselines join the comparison only after they
+are embedded and scored through the same pipeline, so that their predictions
+also carry row indices.
+
 Before reporting a cross-model comparison, record dataset/split IDs, the
 number of retained rows for each model and baseline, scoring-grid/version
 hashes, and the handling of conversion failures. Report any test-set overlap

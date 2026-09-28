@@ -36,6 +36,8 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 Check the adjacent `.metadata.json`: `extra_vocab_symbols_requested` and
 `extra_vocab_symbols_added` must both be zero, and `corpus_primitive_scan`
 must identify the complete training Parquet with its row count and SHA256.
+The encoder's `--require_corpus_only_vocab` gate compares that hash against
+the exact local `train.parquet` it will stream; it rejects a different corpus.
 Check lossless round-trip for disconnected SELFIES (`[C].[O]`). If any of these
 checks fail, fix the input or tokenizer before model training.
 

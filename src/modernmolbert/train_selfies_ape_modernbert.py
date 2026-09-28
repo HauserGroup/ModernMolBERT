@@ -501,13 +501,30 @@ def _is_validation_row(row: dict[str, Any], args: argparse.Namespace) -> bool:
     return key is not None and sequence_bucket(key, args.val_split_mod) == args.val_split_bucket
 
 
-def assert_corpus_only_vocab(metadata: dict[str, Any]) -> None:
-    """Require recorded full-corpus primitive coverage without extra symbol injection."""
+def corpus_only_training_parquet(args: argparse.Namespace) -> Path:
+    """Identify the exact local Parquet that the revision training will stream."""
+    if args.data_dir is not None:
+        raise ValueError("Corpus-only training requires a local Parquet, not --data_dir")
+    if args.data_files is not None:
+        source = Path(args.data_files)
+    else:
+        source = Path(args.dataset_name) / f"{args.train_split}.parquet"
+    if not source.is_file():
+        raise ValueError(
+            f"Corpus-only training requires one local Parquet file for the training split: {source}"
+        )
+    return source
+
+
+def assert_corpus_only_vocab(metadata: dict[str, Any], training_parquet: Path) -> None:
+    """Require uninjected primitives scanned from this exact training file."""
     scan = metadata.get("corpus_primitive_scan")
     if not isinstance(scan, dict):
         raise ValueError("Corpus-only tokenizer requires corpus_primitive_scan metadata")
     if not scan.get("sha256") or int(scan.get("n_rows", 0)) <= 0:
         raise ValueError("Corpus-only tokenizer scan lacks a source hash or positive row count")
+    if scan["sha256"] != file_sha256(training_parquet):
+        raise ValueError("Corpus-only tokenizer was scanned from a different training Parquet")
     if int(metadata.get("extra_vocab_symbols_requested", 0)) != 0:
         raise ValueError("Corpus-only tokenizer includes requested extra vocabulary symbols")
     if int(metadata.get("extra_vocab_symbols_added", 0)) != 0:
@@ -547,7 +564,7 @@ def load_and_validate_tokenizer(
     metadata = load_tokenizer_metadata(metadata_path)
     assert_metadata_representation(metadata, expected_representation=SELFIES_REPRESENTATION)
     if args.require_corpus_only_vocab:
-        assert_corpus_only_vocab(metadata)
+        assert_corpus_only_vocab(metadata, corpus_only_training_parquet(args))
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)

@@ -5,7 +5,11 @@ import pytest
 
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.train_ape_tokenizer import collect_corpus_primitives, validate_args
-from modernmolbert.train_selfies_ape_modernbert import assert_corpus_only_vocab
+from modernmolbert.train_selfies_ape_modernbert import (
+    assert_corpus_only_vocab,
+    corpus_only_training_parquet,
+)
+from modernmolbert.utils import file_sha256
 
 
 def test_full_corpus_scan_adds_rare_training_symbols_and_component_dots(tmp_path):
@@ -42,14 +46,35 @@ def test_corpus_only_scan_rejects_benchmark_symbol_injection():
         validate_args(args)
 
 
-def test_encoder_requires_scanned_uninjected_tokenizer_metadata():
+def test_encoder_requires_scanned_uninjected_tokenizer_metadata(tmp_path):
+    source = tmp_path / "train.parquet"
+    source.write_bytes(b"frozen training input")
     clean = {
-        "corpus_primitive_scan": {"sha256": "a" * 64, "n_rows": 100},
+        "corpus_primitive_scan": {"sha256": file_sha256(source), "n_rows": 100},
         "extra_vocab_symbols_requested": 0,
         "extra_vocab_symbols_added": 0,
     }
-    assert_corpus_only_vocab(clean)
+    assert_corpus_only_vocab(clean, source)
     with pytest.raises(ValueError, match="corpus_primitive_scan"):
-        assert_corpus_only_vocab({})
+        assert_corpus_only_vocab({}, source)
     with pytest.raises(ValueError, match="requested extra"):
-        assert_corpus_only_vocab({**clean, "extra_vocab_symbols_requested": 1})
+        assert_corpus_only_vocab({**clean, "extra_vocab_symbols_requested": 1}, source)
+    with pytest.raises(ValueError, match="different training Parquet"):
+        assert_corpus_only_vocab(
+            {**clean, "corpus_primitive_scan": {"sha256": "a" * 64, "n_rows": 100}}, source
+        )
+
+
+def test_encoder_identifies_single_local_training_parquet(tmp_path):
+    source = tmp_path / "train.parquet"
+    source.touch()
+    args = Namespace(
+        data_dir=None, data_files=None, dataset_name=str(tmp_path), train_split="train"
+    )
+    assert corpus_only_training_parquet(args) == source
+    args.train_split = "missing"
+    with pytest.raises(ValueError, match="one local Parquet"):
+        corpus_only_training_parquet(args)
+    args.data_dir = tmp_path
+    with pytest.raises(ValueError, match="not --data_dir"):
+        corpus_only_training_parquet(args)

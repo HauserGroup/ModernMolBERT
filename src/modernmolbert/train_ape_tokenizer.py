@@ -205,7 +205,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+from modernmolbert.tokenization_ape import APEPreTrainedTokenizer, pre_tokenize_molecule
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
@@ -269,6 +269,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer_train_size", type=int, default=2_000_000)
     parser.add_argument("--max_vocab_size", type=int, default=5000)
     parser.add_argument("--min_freq_for_merge", type=int, default=2000)
+    parser.add_argument(
+        "--corpus_primitive_parquet",
+        type=Path,
+        default=None,
+        help=(
+            "Optional local training-split Parquet file. After APE merge learning, "
+            "add every primitive observed in its SELFIES column to the vocabulary. "
+            "Use this for corpus-only coverage without benchmark-derived symbols."
+        ),
+    )
     parser.add_argument(
         "--extra_vocab_symbols_path",
         type=Path,
@@ -350,6 +360,34 @@ def load_extra_vocab_symbols(
     return sorted(symbols)
 
 
+def collect_corpus_primitives(path: Path, column: str) -> tuple[list[str], int]:
+    """Collect every SELFIES primitive from a local training split, preserving dots."""
+    import pyarrow.parquet as pq
+
+    if not path.is_file():
+        raise FileNotFoundError(f"Corpus primitive source not found: {path}")
+    parquet = pq.ParquetFile(path)
+    if column not in parquet.schema_arrow.names:
+        raise ValueError(f"Missing {column!r} column in {path}")
+    symbols: set[str] = set()
+    n_rows = 0
+    for batch in parquet.iter_batches(batch_size=32768, columns=[column]):
+        for value in batch.column(0).to_pylist():
+            n_rows += 1
+            if not isinstance(value, str) or not value:
+                raise ValueError(f"Empty or non-string molecule in {path} at row {n_rows}")
+            try:
+                pieces = pre_tokenize_molecule(value, SELFIES_REPRESENTATION)
+            except ValueError as exc:
+                raise ValueError(f"Malformed SELFIES in {path} at row {n_rows}") from exc
+            if "".join(pieces) != value:
+                raise ValueError(f"Tokenizer loses SELFIES content in {path} at row {n_rows}")
+            symbols.update(pieces)
+    if not n_rows:
+        raise ValueError(f"No training molecules in {path}")
+    return sorted(symbols), n_rows
+
+
 def validate_args(args: argparse.Namespace) -> None:
     """Reject obviously invalid training arguments before any data is collected."""
     positive = {
@@ -367,6 +405,14 @@ def validate_args(args: argparse.Namespace) -> None:
             "--extra_vocab_selfies_path extracts SELFIES bracket symbols and is only "
             "valid with --representation SELFIES. Use --extra_vocab_symbols_path for SMILES."
         )
+
+    if args.corpus_primitive_parquet is not None:
+        if args.representation != SELFIES_REPRESENTATION:
+            raise ValueError("--corpus_primitive_parquet currently requires SELFIES")
+        if args.extra_vocab_symbols_path is not None or args.extra_vocab_selfies_path is not None:
+            raise ValueError(
+                "Corpus-only primitive coverage cannot be combined with extra symbol injection"
+            )
 
 
 def validate_selfies_symbols(symbols: list[str]) -> None:
@@ -433,6 +479,21 @@ def main() -> None:
 
     added_extra_symbols = tokenizer.add_tokens_to_vocabulary(extra_symbols)
 
+    corpus_primitive_scan = None
+    if args.corpus_primitive_parquet is not None:
+        corpus_symbols, n_corpus_rows = collect_corpus_primitives(
+            args.corpus_primitive_parquet, resolved_column
+        )
+        n_added = tokenizer.add_tokens_to_vocabulary(corpus_symbols)
+        corpus_primitive_scan = {
+            "path": str(args.corpus_primitive_parquet),
+            "sha256": file_sha256(args.corpus_primitive_parquet),
+            "n_rows": n_corpus_rows,
+            "n_distinct_primitives": len(corpus_symbols),
+            "n_added_after_merge_learning": n_added,
+        }
+        print(f"Corpus primitive coverage: {corpus_primitive_scan}", flush=True)
+
     if extra_symbols:
         print(
             "Extra vocab coverage: "
@@ -480,6 +541,7 @@ def main() -> None:
         ),
         "extra_vocab_symbols_requested": len(extra_symbols),
         "extra_vocab_symbols_added": added_extra_symbols,
+        "corpus_primitive_scan": corpus_primitive_scan,
         "creation_command": "python -m modernmolbert.train_ape_tokenizer",
     }
     write_tokenizer_metadata(metadata_path, metadata)

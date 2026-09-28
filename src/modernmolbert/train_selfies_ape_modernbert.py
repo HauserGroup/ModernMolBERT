@@ -83,6 +83,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Tokenizer metadata JSON. Defaults to <vocab>.metadata.json.",
     )
+    parser.add_argument(
+        "--require_corpus_only_vocab",
+        action="store_true",
+        help="Require a tokenizer scanned over the training corpus without injected symbols.",
+    )
 
     # Dataset
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
@@ -496,6 +501,19 @@ def _is_validation_row(row: dict[str, Any], args: argparse.Namespace) -> bool:
     return key is not None and sequence_bucket(key, args.val_split_mod) == args.val_split_bucket
 
 
+def assert_corpus_only_vocab(metadata: dict[str, Any]) -> None:
+    """Require recorded full-corpus primitive coverage without extra symbol injection."""
+    scan = metadata.get("corpus_primitive_scan")
+    if not isinstance(scan, dict):
+        raise ValueError("Corpus-only tokenizer requires corpus_primitive_scan metadata")
+    if not scan.get("sha256") or int(scan.get("n_rows", 0)) <= 0:
+        raise ValueError("Corpus-only tokenizer scan lacks a source hash or positive row count")
+    if int(metadata.get("extra_vocab_symbols_requested", 0)) != 0:
+        raise ValueError("Corpus-only tokenizer includes requested extra vocabulary symbols")
+    if int(metadata.get("extra_vocab_symbols_added", 0)) != 0:
+        raise ValueError("Corpus-only tokenizer includes added extra vocabulary symbols")
+
+
 def load_and_validate_tokenizer(
     args: argparse.Namespace,
 ) -> tuple[
@@ -528,6 +546,8 @@ def load_and_validate_tokenizer(
 
     metadata = load_tokenizer_metadata(metadata_path)
     assert_metadata_representation(metadata, expected_representation=SELFIES_REPRESENTATION)
+    if args.require_corpus_only_vocab:
+        assert_corpus_only_vocab(metadata)
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)

@@ -5,7 +5,7 @@
 uv run python -m modernmolbert.train_ape_tokenizer \
   --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max4.json \
   --dataset_name data/pretrain/chembl36_selfies \
-  --selfies_column selfies \
+  --molecule_column selfies \
   --representation SELFIES \
   --tokenizer_train_size 500000 \
   --max_vocab_size 5000 \
@@ -17,7 +17,7 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   uv run python -m modernmolbert.train_ape_tokenizer \
   --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max8.json \
   --dataset_name data/pretrain/chembl36_selfies \
-  --selfies_column selfies \
+  --molecule_column selfies \
   --representation SELFIES \
   --tokenizer_train_size 500000 \
   --max_vocab_size 5000 \
@@ -29,7 +29,7 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 uv run python -m modernmolbert.train_ape_tokenizer \
   --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
   --dataset_name data/pretrain/chembl36_selfies \
-  --selfies_column selfies \
+  --molecule_column selfies \
   --representation SELFIES \
   --tokenizer_train_size 2000000 \
   --max_vocab_size 2000 \
@@ -37,14 +37,24 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_merge_pieces 2 \
   --seed 42
 
-# Optional: add missing primitive symbols only when needed.
-# This is disabled by default; pass --extra_vocab_symbols_path or
-# --extra_vocab_selfies_path to force additional tokens into the final vocab.
+# Extra vocab symbols: OFF by default.
+# No tokens are force-added unless --extra_vocab_symbols_path or
+# --extra_vocab_selfies_path is passed. Pass one only when you deliberately
+# want additional primitive tokens in the final vocab.
+#
+# NOTE: the tokenizer currently shipped at
+# tokenizer/chembl36_selfies_2m_ape_max2_min3000.json predates this default.
+# It was built WITH
+#   --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt
+# (42 benchmark-derived symbols added, 631 tokens total; see its .metadata.json).
+# The "Final" command above, as written, does not reproduce that file and will
+# overwrite it. Use a different --output_vocab_path until the shipped tokenizer
+# is retrained.
 
 # Validate
 uv run python -m modernmolbert.validate_tokenizer \
   --dataset_name data/pretrain/chembl36_selfies \
-  --selfies_column selfies \
+  --molecule_column selfies \
   --split train \
   --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
   --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json \

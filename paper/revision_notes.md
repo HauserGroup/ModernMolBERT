@@ -66,3 +66,27 @@ it has now been run. It also addresses critical review item 5
    (analogue exposure, not just exact identity).
 3. Clean-corpus control (critical review item 5): remove benchmark structures
    from the pretraining corpus, retrain, and re-evaluate.
+
+## Tokenizer extra-symbol injection now off by default (2026-09-28)
+
+**Affects:** `main.tex` Methods, "Post-training symbol injection" (~l. 531–544),
+and Appendix tokeniser paragraph (~l. 1276–1283).
+
+- Since commit 060f1b4, `train_ape_tokenizer` force-adds no extra symbols unless
+  `--extra_vocab_symbols_path` / `--extra_vocab_selfies_path` is passed, and the
+  docs recommend leaving it off: benchmark-derived symbol lists put evaluation-set
+  vocabulary into the tokenizer.
+- The shipped tokenizer (`tokenizer/chembl36_selfies_2m_ape_max2_min3000.json`)
+  and all current checkpoints were built **with** injection: 589 learned tokens
+  + 42 benchmark-derived primitives (freq ≥ 10) = 631. The current `main.tex`
+  text is accurate for them.
+- **If the tokenizer and model are retrained with the new default** for the
+  revision:
+  - Drop or rewrite the "Post-training symbol injection" paragraph.
+  - Appendix: vocabulary becomes 589 tokens (verify from the new metadata), not 631.
+  - The "zero unknown-token rate on evaluation molecules" claim no longer holds by
+    construction. Re-measure benchmark `<unk>` rate and report it.
+  - Re-run all benchmark numbers.
+- **If not retrained:** keep the current text, but consider stating explicitly that
+  the injected primitives were selected using benchmark molecules. Reviewers may
+  read this as eval-set leakage into the vocabulary, even without label leakage.

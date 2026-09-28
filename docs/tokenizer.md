@@ -33,13 +33,35 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 2000 \
   --min_freq_for_merge 3000 \
   --max_merge_pieces 2 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 ```
 
 This produces:
 - `tokenizer/chembl36_selfies_2m_ape_max2_min3000.json` — vocabulary
 - `tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json` — training provenance and SHA256
+
+> **Shipped tokenizer predates the current default.** The committed
+> `tokenizer/chembl36_selfies_2m_ape_max2_min3000.json` was built with
+> `--extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt`
+> (42 benchmark-derived symbols added, 631 tokens total; recorded in its
+> `.metadata.json`). The command above does not reproduce that file and will
+> overwrite it. Use a different `--output_vocab_path` until the shipped
+> tokenizer is retrained.
+
+### Extra vocabulary symbols (off by default)
+
+By default no tokens are force-added: the vocabulary is exactly what APE merge
+training learns from the corpus. Two opt-in flags append primitive tokens after
+merge learning:
+
+- `--extra_vocab_symbols_path`: text file with one primitive token per line
+  (SELFIES `[C@@H1]`, SMILES `[Fe+3]`).
+- `--extra_vocab_selfies_path`: text file with one full SELFIES string per line;
+  all bracket symbols are extracted (SELFIES only).
+
+Only use these deliberately. Symbol lists derived from benchmark molecules
+(e.g. `tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt`) put
+evaluation-set information into the vocabulary.
 
 ### Key hyperparameters
 
@@ -49,7 +71,8 @@ This produces:
 | `--max_vocab_size` | 2000 | Stop merging when vocabulary reaches this size |
 | `--min_freq_for_merge` | 3000 | Stop merging when best pair frequency falls below this |
 | `--max_merge_pieces` | 8 | Max primitive tokens a merged token may span. 0/negative = no cap |
-| `--extra_vocab_symbols_path` | — | Text file with one SELFIES bracket token per line; force-added after training |
+| `--extra_vocab_symbols_path` | off (`None`) | Opt-in. Text file with one primitive token per line; force-added after training |
+| `--extra_vocab_selfies_path` | off (`None`) | Opt-in, SELFIES only. Full SELFIES strings; bracket symbols extracted and force-added |
 
 ### Conservative vs. moderate vs. production settings
 
@@ -64,7 +87,6 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
   --max_merge_pieces 4 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 
 # Moderate
@@ -77,7 +99,6 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
   --max_merge_pieces 8 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 ```
 
@@ -130,11 +151,11 @@ Signs of misconfigured tokenizer:
 
 | Symptom | Likely cause |
 |---|---|
-| `unk_rate > 0` | Missing SELFIES primitives; use `--extra_vocab_symbols_path` |
+| `unk_rate > 0` | Missing SELFIES primitives; broaden the tokenizer corpus, or opt in to `--extra_vocab_symbols_path` deliberately |
 | `mean_len < 10` | Over-merged; reduce `--max_merge_pieces` or increase `--min_freq_for_merge` |
 | `mean_len > 100` | Under-merged; fewer training molecules or lower `--min_freq_for_merge` |
 | `truncation_rate > 0.05` | Sequences too long for `max_seq_length`; increase or reduce `max_merge_pieces` |
-| Large gap between ChEMBL validation and benchmark molecules | Add missing symbols with `--extra_vocab_symbols_path` |
+| Large gap between ChEMBL validation and benchmark molecules | Broaden the tokenizer corpus; forcing benchmark-derived symbols via `--extra_vocab_symbols_path` is opt-in and leaks eval-set vocabulary |
 
 ## Saving and loading
 

@@ -40,3 +40,4 @@ def test_prediction_archive_rejects_row_mapping_length_mismatch(tmp_path, monkey
     )
     with pytest.raises(ValueError, match="must match prediction rows"):
         log_predictions(result, "predictions")
+    assert not (tmp_path / "predictions/assay/encoder/ridge.npy").exists()

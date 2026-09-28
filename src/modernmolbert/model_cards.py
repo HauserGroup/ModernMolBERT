@@ -68,13 +68,20 @@ VARIANTS: list[dict[str, Any]] = [
     ),
 ]
 
-# Hetero-span ablation: not part of the manuscript; cards are written only with
+# Hetero-span ablation: exploratory, reported in preprint v1 and kept only as a
+# supplementary column in the revised manuscript. Cards are written only with
 # --include-hetero-span.
 HETERO_SPAN_VARIANT: dict[str, Any] = dict(
     path=RUNS / "modernmolbert_best_hetero_span/README.md",
     title="ModernMolBERT-small-hetero-span",
     repo="HauserGroup/ModernMolBERT-small-hetero-span",
     role="small ablation variant (heteroatom-biased span masking)",
+    note=(
+        "> **Exploratory ablation.** This checkpoint was reported in the ModernMolBERT\n"
+        "> preprint (v1). In the revised manuscript it appears only as a supplementary,\n"
+        "> single-seed result and is not used for any claim. Use\n"
+        "> ModernMolBERT-small or ModernMolBERT-base for general embedding work.\n\n"
+    ),
     size="small",
     params="34.15M",
     hidden=512,
@@ -118,7 +125,7 @@ with a chemically aware **Atom Pair Encoding (APE)** tokenizer and is pre-traine
 from scratch with masked language modeling (MLM) on ~2.4M unique **SELFIES**
 strings from ChEMBL 36. This checkpoint is the **{v["role"]}**.
 
-The model expects **SELFIES** input (not SMILES) and is intended primarily as a
+{v.get("note", "")}The model expects **SELFIES** input (not SMILES) and is intended primarily as a
 *frozen* molecular embedder.
 
 ## Model Details

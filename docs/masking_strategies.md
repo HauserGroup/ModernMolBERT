@@ -10,10 +10,13 @@ Three masking strategies are available via `--masking_strategy`:
 | `span` | Budget-based contiguous APE-token span masking |
 | `hetero_span` | Span masking with span-start positions weighted toward heteroatom-containing tokens |
 
-`standard` is the default. `hetero_span` is an opt-in ablation: it is not part of the next
-manuscript edition, is not swept by `scripts/sweeps/run_sweep.py` unless requested with
-`--masking hetero_span`, and is left out of the paper tables, figures and model cards unless
-the corresponding script is run with `--include-hetero-span`.
+`standard` is the default. `hetero_span` is an opt-in, exploratory ablation. The revised
+manuscript keeps it only as a supplementary per-task column and uses it for no claim.
+- `scripts/sweeps/run_sweep.py` skips it unless asked (`--masking ... hetero_span`).
+- The paper scripts leave it out of Table 2, group means, stats and Fig_2 unless
+  `--include-hetero-span` is passed.
+- `make_appendix_table.py` includes it as a labelled exploratory column; pass
+  `--exclude-hetero-span` to drop it.
 
 ## Motivation: MLM-FG
 

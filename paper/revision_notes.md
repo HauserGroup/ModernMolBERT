@@ -1,9 +1,46 @@
 # Notes for the revised manuscript
 
-## Hetero-span masking dropped (2026-09-28)
+## TODO: re-run benchmark aggregation with CV head selection (2026-09-28)
 
-The hetero-span ablation is removed from the next edition. The section-by-section
-removal plan (text, figures, tables, reworded conclusions) is in
+**Status: not yet re-run. All benchmark numbers in `main.tex` predate this fix.**
+
+`scripts/paper/build_benchmark_results_frames.py` now picks each dataset × embedder's
+downstream head by cross-validation ROC-AUC, not test ROC-AUC (critical review
+item 1). The old version kept the head with the highest *test* score.
+
+- `outputs/eval/best_metric_by_dataset_embedder.csv` was built by the old
+  version. It has no `selection_metric` column, so `build_paper_results.py`
+  refuses to run until it is regenerated.
+- The new script raises an error on repeated runs, conflicting run provenance,
+  or missing or out-of-range CV scores. Existing results may need cleaning
+  before it completes.
+
+Re-run from the repo root, in order:
+
+1. `uv run python scripts/paper/build_benchmark_results_frames.py`
+2. `uv run python scripts/paper/build_paper_results.py`
+3. `uv run python scripts/paper/make_paper_figures.py`
+4. `uv run python scripts/paper/make_appendix_table.py`
+5. `uv run python scripts/paper/compute_bootstrap_cis.py`
+
+**Manuscript impact:** every headline and per-task number may change. Check
+at least:
+
+- Abstract and Conclusion: MMB-base 77.9.
+- Results: the ECFP4/MoLFormer/SELFormer/ChemBERTa-2 means and win counts.
+- `tab:main-results`, `tab:pertask`, `tab:bootstrap-cis`, `fig:bootstrap-ci`.
+- Ablation deltas: size +0.5, span −0.3.
+- Baseline rows are also affected: Praski results are re-selected by CV.
+
+Also align the downstream-head wording. The Table 2 caption generator now says
+"logistic regression", but Methods and the Fig 1 caption say "ridge".
+
+## Hetero-span masking moved to the supplement (2026-09-28)
+
+Hetero-span leaves the main text and all claims. It stays as a labelled
+exploratory column in `tab:pertask`, with a disclosure sentence, because preprint
+v1 reported it and its checkpoint is public. The section-by-section plan (text,
+figures, tables, reworded conclusions, disclosure wording) is in
 [`hetero_span_removal_plan.md`](hetero_span_removal_plan.md).
 
 ## Pretraining/benchmark structure overlap (measured, 2026-09-28)

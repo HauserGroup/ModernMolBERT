@@ -17,8 +17,9 @@ No model runs, no new benchmarking. Pure wrangling of existing eval output.
 Main-analysis dataset exclusions:
 - ogbg-moltoxcast  (26th MoleculeNet set; no Praski baseline)
 
-The hetero-span ablation (MMB-small-hetero) is excluded from the manuscript and
-from all outputs by default; pass --include-hetero-span to add it back.
+The hetero-span ablation (MMB-small-hetero) is exploratory and supplementary-only:
+it is written to the results matrix (for the appendix per-task table) but left out
+of group means, Table 2 and all stats unless --include-hetero-span is passed.
 """
 
 import argparse
@@ -33,7 +34,7 @@ parser = argparse.ArgumentParser(description="Build paper-facing benchmark table
 parser.add_argument(
     "--include-hetero-span",
     action="store_true",
-    help="Include the MMB-small-hetero (hetero_span masking) ablation in all outputs.",
+    help="Also include MMB-small-hetero (hetero_span masking) in group means and stats.",
 )
 ARGS = parser.parse_args()
 
@@ -91,8 +92,11 @@ MODELS = {
     "MMB-base": "modernmolbert_best_base",
     "MMB-small-span": "modernmolbert_best_span",
 }
+# Supplementary-only models: kept in the results matrix for the appendix per-task
+# table, but not used for any aggregate or claim unless explicitly requested.
+SUPPLEMENTARY_MODELS = {"MMB-small-hetero": "modernmolbert_best_hetero_span"}
 if ARGS.include_hetero_span:
-    MODELS["MMB-small-hetero"] = "modernmolbert_best_hetero_span"
+    MODELS.update(SUPPLEMENTARY_MODELS)
 
 df = pd.read_csv(SRC)
 if "selection_metric" not in df or not df["selection_metric"].eq("cv_metric").to_numpy().all():
@@ -106,7 +110,7 @@ df = df.loc[
 # pivot: rows tasks, cols embedder
 pivot = df.pivot(index="dataset", columns="embedder", values="test_metric")
 matrix = pd.DataFrame(index=TASKS_MAIN)
-for label, key in MODELS.items():
+for label, key in {**MODELS, **SUPPLEMENTARY_MODELS}.items():
     matrix[label] = pivot[key].reindex(TASKS_MAIN) if key in pivot.columns else np.nan
 matrix.insert(0, "group", [GROUPS[t] for t in TASKS_MAIN])
 matrix.to_csv(OUT / "results_matrix_25task.csv")

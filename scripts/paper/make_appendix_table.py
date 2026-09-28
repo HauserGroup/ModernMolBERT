@@ -6,8 +6,9 @@ Main-analysis exclusions:
 - ogbg-molmuv
 - ogbg-moltoxcast
 
-The hetero-span ablation (MMB-small-hetero) is excluded by default; pass
---include-hetero-span (and build the matrix with the same flag) to add it back.
+The exploratory hetero-span variant (MMB-small-hetero) is kept here as a
+supplementary column, flagged as exploratory and not used for any claim; pass
+--exclude-hetero-span to drop it.
 """
 
 import argparse
@@ -17,9 +18,9 @@ import pandas as pd
 
 parser = argparse.ArgumentParser(description="Write the per-task appendix ROC-AUC table.")
 parser.add_argument(
-    "--include-hetero-span",
+    "--exclude-hetero-span",
     action="store_true",
-    help="Add the MMB-small-hetero (hetero_span masking) column.",
+    help="Drop the exploratory MMB-small-hetero (hetero_span masking) column.",
 )
 ARGS = parser.parse_args()
 
@@ -73,18 +74,21 @@ LEGEND = (
     r"\emph{MMB-s} = \model{}-small (standard), "
     r"\emph{MMB-b} = \model{}-base, \emph{MMB-sp} = small span masking"
 )
-if ARGS.include_hetero_span:
+if not ARGS.exclude_hetero_span:
     COLS.append("MMB-small-hetero")
     HEAD.append("MMB-h")
-    LEGEND += r", \emph{MMB-h} = small hetero-span masking"
+    LEGEND += (
+        r", \emph{MMB-h} = exploratory small hetero-span masking variant "
+        r"(reported in preprint v1; single seed, not used for any claim)"
+    )
 
 df = pd.read_csv(MATRIX, index_col=0)
 df = df.loc[~df.index.isin(EXCLUDED_DATASETS)].copy()
 missing_cols = [c for c in COLS if c not in df.columns]
 if missing_cols:
     raise ValueError(
-        f"{MATRIX} is missing columns {missing_cols}; rebuild it with build_paper_results.py "
-        "(add --include-hetero-span when requesting MMB-small-hetero)."
+        f"{MATRIX} is missing columns {missing_cols}; rebuild it with the current "
+        "build_paper_results.py (or pass --exclude-hetero-span)."
     )
 
 

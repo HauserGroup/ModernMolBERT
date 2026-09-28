@@ -29,8 +29,6 @@ The script expects prepared files in the repo's standard data locations:
 If prepared evaluation data are not available yet, run the benchmark download step first.
 """
 
-from __future__ import annotations
-
 import argparse
 import json
 from pathlib import Path

@@ -25,7 +25,6 @@ This script only wrangles data. It does not subset models for plotting.
 
 from pathlib import Path
 import re
-from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -320,16 +319,17 @@ def print_summary(best_df: pd.DataFrame) -> None:
 
     print("ModernMolBERT rows")
     print("------------------")
-    modern = cast(
-        pd.DataFrame,
+    modern = (
         best_df[best_df["embedder"].str.contains("modernmolbert", case=False, na=False)]
         .groupby("embedder")
         .agg(
             n_datasets=("dataset", "nunique"),
             mean_metric=("test_metric", "mean"),
             median_metric=("test_metric", "median"),
-        ),
-    ).sort_values("mean_metric", ascending=False)
+        )
+    )
+    assert isinstance(modern, pd.DataFrame)
+    modern = modern.sort_values("mean_metric", ascending=False)
 
     if len(modern) == 0:
         print("No ModernMolBERT embedders found.")
@@ -343,14 +343,13 @@ def print_summary(best_df: pd.DataFrame) -> None:
         print(f"  {e}")
     print()
 
-    summary = cast(
-        pd.DataFrame,
-        best_df.groupby(["test_metric_name", "embedder"], as_index=False).agg(
-            n_datasets=("dataset", "nunique"),
-            mean_metric=("test_metric", "mean"),
-            median_metric=("test_metric", "median"),
-        ),
-    ).sort_values(["test_metric_name", "mean_metric"], ascending=[True, False])
+    summary = best_df.groupby(["test_metric_name", "embedder"], as_index=False).agg(
+        n_datasets=("dataset", "nunique"),
+        mean_metric=("test_metric", "mean"),
+        median_metric=("test_metric", "median"),
+    )
+    assert isinstance(summary, pd.DataFrame)
+    summary = summary.sort_values(["test_metric_name", "mean_metric"], ascending=[True, False])
 
     print("Top rows by mean metric")
     print("-----------------------")

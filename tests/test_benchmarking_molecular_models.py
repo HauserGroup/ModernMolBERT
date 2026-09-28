@@ -654,6 +654,7 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
     assert result.model == "knn"
     assert result.y_test_pred.shape == (5, 2)
     assert "clf__n_neighbors" in result.hyperparams
+    assert result.test_source_row_indices is not None
     assert result.test_source_row_indices.tolist() == [115, 116, 117, 118, 119]
 
 

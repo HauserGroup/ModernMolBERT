@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
 
 import matplotlib
 import numpy as np
@@ -121,10 +120,11 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
         raise ValueError(f"ROC-AUC values outside [0, 100]:\n{bad_rows.to_string(index=False)}")
 
     expected_counts = pd.Series(GROUP_TASK_COUNTS, name="expected")
-    task_counts = cast(pd.Series, df.groupby(["task_group", "model"])["task"].nunique())
-    coverage = cast(pd.DataFrame, task_counts.unstack(fill_value=0)).reindex(
-        index=GROUP_ORDER, columns=MODELS, fill_value=0
-    )
+    task_counts = df.groupby(["task_group", "model"])["task"].nunique()
+    assert isinstance(task_counts, pd.Series)
+    coverage = task_counts.unstack(fill_value=0)
+    assert isinstance(coverage, pd.DataFrame)
+    coverage = coverage.reindex(index=GROUP_ORDER, columns=MODELS, fill_value=0)
     expected = pd.DataFrame(
         {model: expected_counts for model in MODELS},
         index=GROUP_ORDER,
@@ -140,8 +140,11 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
 def group_means(df: pd.DataFrame) -> pd.DataFrame:
     """Return group mean ROC-AUC x100 values with canonical ordering."""
 
-    means = cast(pd.Series, df.groupby(["task_group", "model"])["roc_auc_x100"].mean())
-    return cast(pd.DataFrame, means.round(1).unstack()).reindex(index=GROUP_ORDER, columns=MODELS)
+    means = df.groupby(["task_group", "model"])["roc_auc_x100"].mean()
+    assert isinstance(means, pd.Series)
+    table = means.round(1).unstack()
+    assert isinstance(table, pd.DataFrame)
+    return table.reindex(index=GROUP_ORDER, columns=MODELS)
 
 
 def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.DataFrame:

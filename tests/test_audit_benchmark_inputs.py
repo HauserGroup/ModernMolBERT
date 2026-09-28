@@ -1,17 +1,17 @@
-from types import SimpleNamespace
-
 import pandas as pd
 import pytest
 
 from audit_benchmark_inputs import audit_dataset, audit_smiles
+from modernmolbert.eval.benchmarking_molecular_models.common.types import Dataset
 
 
 VOCAB = {"[C]": 5, "[O]": 6}
 
 
 def test_audit_counts_component_loss_and_conversion_failures_by_split():
-    dataset = SimpleNamespace(
+    dataset = Dataset(
         name="example",
+        task="classification",
         data=pd.DataFrame({"smiles": ["C", "C.O", "invalid_smiles"]}),
         splits={"train": [0], "test": [1, 2]},
     )
@@ -25,16 +25,22 @@ def test_audit_counts_component_loss_and_conversion_failures_by_split():
 
 
 def test_audit_rejects_ambiguous_split_membership():
-    dataset = SimpleNamespace(
-        name="example", data=pd.DataFrame({"smiles": ["C"]}), splits={"train": [0], "test": [0]}
+    dataset = Dataset(
+        name="example",
+        task="classification",
+        data=pd.DataFrame({"smiles": ["C"]}),
+        splits={"train": [0], "test": [0]},
     )
     with pytest.raises(ValueError, match="two splits"):
         audit_dataset(dataset, VOCAB, 1, 128)
 
 
 def test_audit_keeps_prepared_rows_outside_scored_splits_visible():
-    dataset = SimpleNamespace(
-        name="example", data=pd.DataFrame({"smiles": ["C", "C.O"]}), splits={"test": [0]}
+    dataset = Dataset(
+        name="example",
+        task="classification",
+        data=pd.DataFrame({"smiles": ["C", "C.O"]}),
+        splits={"test": [0]},
     )
     rows = {row["split"]: row for row in audit_dataset(dataset, VOCAB, 1, 128)}
     assert rows["test"]["n_inputs"] == 1

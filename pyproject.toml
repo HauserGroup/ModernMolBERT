@@ -3,7 +3,8 @@ name = "modernmolbert"
 version = "0.2.0"
 description = "Compact ModernBERT encoders for SELFIES molecular embeddings, pre-trained on ChEMBL 36."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.13,<3.14"
+
 dependencies = [
     "accelerate>=1.15",
     "aiohttp>=3.14.0",
@@ -23,9 +24,8 @@ dependencies = [
     "rdkit>=2026.3.1",
     "scikit-learn>=1.8.0",
     "selfies>=2.2.0",
-    "setuptools>=83",
     "tensorboard>=2.19.0",
-    "torch>2.12.0",
+    "torch==2.12.1",
     "tornado>=6.5.6",
     "tqdm>=4.67.3",
     "transformers>=5.8.0",
@@ -62,10 +62,7 @@ pretrain-data = [
     "rdkit>=2026.3.1",
     "selfies>=2.2.0",
 ]
-eval-transformers = [
-    "torch>=2.11.0",
-    "transformers>=5.8.0",
-]
+
 plotting = [
     "colorcet>=3.2.1",
     "datashader>=0.19.1",
@@ -73,14 +70,25 @@ plotting = [
 
 [project.optional-dependencies]
 cuda = [
-    "flash-attn",
+    "flash-attn==2.8.3.post1",
 ]
 
 [project.scripts]
 modernmolbert-regen-groupfig = "modernmolbert.visualize.regen_groupfig:main"
 
+[tool.uv]
+environments = [
+    "sys_platform == 'linux'",
+    "sys_platform == 'darwin'",
+]
+
 [tool.uv.extra-build-dependencies]
-flash-attn = ["torch"]
+flash-attn = [
+    "torch==2.12.1",
+    "ninja",
+    "packaging",
+    "psutil",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

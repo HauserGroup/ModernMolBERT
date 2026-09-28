@@ -15,6 +15,11 @@ records its own vocabulary and scanned training-Parquet hashes; the model writes
 `run_args.json` and run metadata. Do not label the new run as a reproduction of
 the released weights: its tokenizer and training recipe are new.
 
+The run record for `revision_clean_small_v1` is
+[revision_run_record.md](revision_run_record.md). It records the frozen
+inputs, the verified tokenizer, and the step-2 results, plus open decisions
+(including pretraining data order) to settle before step 3.
+
 ## 1. Train the corpus-only tokenizer
 
 The new name is deliberate; the committed 631-token preprint vocabulary must

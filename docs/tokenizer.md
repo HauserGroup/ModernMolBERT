@@ -48,6 +48,12 @@ This produces:
 > overwrite it. Use a different `--output_vocab_path` until the shipped
 > tokenizer is retrained.
 
+The corpus-only replacement for the revision run is
+`tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json`. It has 588
+tokens, no injected symbols, and every primitive in the full training split,
+including the `.` separator. Its checks and provenance are in
+[revision_run_record.md](revision_run_record.md).
+
 ### Extra vocabulary symbols (off by default)
 
 By default no tokens are force-added: the vocabulary is exactly what APE merge

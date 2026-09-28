@@ -9,6 +9,7 @@ Single source of truth for the static cards: `tokenizer_card()` is imported by
 `python -m modernmolbert.model_cards`.
 """
 
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -65,23 +66,26 @@ VARIANTS: list[dict[str, Any]] = [
         mlm=0.20,
         lr="2e-4",
     ),
-    dict(
-        path=RUNS / "modernmolbert_best_hetero_span/README.md",
-        title="ModernMolBERT-small-hetero-span",
-        repo="HauserGroup/ModernMolBERT-small-hetero-span",
-        role="small ablation variant (heteroatom-biased span masking)",
-        size="small",
-        params="34.15M",
-        hidden=512,
-        layers=8,
-        heads=8,
-        inter=2048,
-        maxpos=128,
-        masking="hetero_span",
-        mlm=0.15,
-        lr="4e-4",
-    ),
 ]
+
+# Hetero-span ablation: not part of the manuscript; cards are written only with
+# --include-hetero-span.
+HETERO_SPAN_VARIANT: dict[str, Any] = dict(
+    path=RUNS / "modernmolbert_best_hetero_span/README.md",
+    title="ModernMolBERT-small-hetero-span",
+    repo="HauserGroup/ModernMolBERT-small-hetero-span",
+    role="small ablation variant (heteroatom-biased span masking)",
+    size="small",
+    params="34.15M",
+    hidden=512,
+    layers=8,
+    heads=8,
+    inter=2048,
+    maxpos=128,
+    masking="hetero_span",
+    mlm=0.15,
+    lr="4e-4",
+)
 
 # Aspirin SELFIES, used as the worked example (one bracketed token per primitive).
 EXAMPLE_SELFIES = (
@@ -375,8 +379,17 @@ tokenization for enhanced chemical language modeling*, Sci. Rep. 14, 25016 (2024
 """
 
 
-def main() -> None:
-    for v in VARIANTS:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Write model and tokenizer cards.")
+    parser.add_argument(
+        "--include-hetero-span",
+        action="store_true",
+        help="Also write the card for the ModernMolBERT-small-hetero-span ablation.",
+    )
+    args = parser.parse_args(argv)
+
+    variants = [*VARIANTS, HETERO_SPAN_VARIANT] if args.include_hetero_span else VARIANTS
+    for v in variants:
         p: Path = v["path"]
         if not p.parent.exists():
             print(f"SKIP (missing dir): {p}")

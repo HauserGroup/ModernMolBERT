@@ -49,7 +49,7 @@ def test_prepare_chembl36_frame_filters_and_adds_selfies(tmp_path: Path) -> None
     out, stats = prepare_chembl36_frame(frame, config=config, return_stats=True)
 
     assert len(out) == 2
-    assert out["is_valid"].all()
+    assert out["is_valid"].to_numpy().all()
     assert "selfies" in out.columns
     assert "split_key" in out.columns
     assert stats["rows_after_dedupe"] == 4

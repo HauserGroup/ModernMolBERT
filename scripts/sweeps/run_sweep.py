@@ -42,6 +42,8 @@ NUM_WORKERS = 4
 SEED = 42
 
 ALL_MASKING = ["standard", "span", "hetero_span"]
+# hetero_span is an opt-in ablation (not in the manuscript); request it via --masking.
+DEFAULT_MASKING = ["standard", "span"]
 # Strings (not floats) so run-directory names match the literal CLI tokens.
 DEFAULT_MLM_PROBS = ["0.15", "0.20", "0.25"]
 
@@ -73,8 +75,8 @@ def parse_args() -> argparse.Namespace:
         "--masking",
         nargs="+",
         choices=ALL_MASKING,
-        default=ALL_MASKING,
-        help="Masking strategies to sweep (default: all three).",
+        default=DEFAULT_MASKING,
+        help="Masking strategies to sweep (default: standard span; hetero_span is opt-in).",
     )
     parser.add_argument(
         "--mlm-probs",

@@ -65,7 +65,7 @@ def test_load_drops_null_selfies(tmp_path: Path) -> None:
     ]
     path = _minimal_parquet(tmp_path, rows=rows)
     df = load_chembl_selfies(path, property_column="alogp", only_valid=False)
-    assert df["selfies"].notna().all()
+    assert df["selfies"].notna().to_numpy().all()
 
 
 def test_load_drops_null_property(tmp_path: Path) -> None:
@@ -80,7 +80,7 @@ def test_load_drops_null_property(tmp_path: Path) -> None:
     ]
     path = _minimal_parquet(tmp_path, rows=rows)
     df = load_chembl_selfies(path, property_column="alogp", only_valid=False)
-    assert df["alogp"].notna().all()
+    assert df["alogp"].notna().to_numpy().all()
 
 
 def test_load_sample_size_limits_rows(tmp_path: Path) -> None:

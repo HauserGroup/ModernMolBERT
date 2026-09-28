@@ -1,5 +1,11 @@
 # Notes for the revised manuscript
 
+## Hetero-span masking dropped (2026-09-28)
+
+The hetero-span ablation is removed from the next edition. The section-by-section
+removal plan (text, figures, tables, reworded conclusions) is in
+[`hetero_span_removal_plan.md`](hetero_span_removal_plan.md).
+
 ## Pretraining/benchmark structure overlap (measured, 2026-09-28)
 
 **Replaces:** the caveat in `main.tex` (Discussion, "Finally, the ChEMBL 36 corpus

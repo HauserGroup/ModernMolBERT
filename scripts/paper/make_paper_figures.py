@@ -6,7 +6,8 @@ make_paper_figures.py
 Generate paper figures from the 25-task results matrix. No new computation.
 
 Outputs (PDF) into the manuscript figures directory:
-  Fig_2.pdf            four-model internal comparison (paired scatter, 3 panels)
+  Fig_2.pdf            internal comparison (paired scatter: size, span masking;
+                       plus hetero-span masking with --include-hetero-span)
   Fig_baselines.pdf    best model vs four baselines (paired scatter, 4 panels)
   Fig_groupbars.pdf    per-task-group mean ROC-AUC grouped bar chart
   Fig_task_group_distributions.pdf
@@ -14,8 +15,12 @@ Outputs (PDF) into the manuscript figures directory:
 
 Main-analysis exclusions:
 - ogbg-moltoxcast  (26th MoleculeNet set; no Praski baseline)
+
+The hetero-span ablation (MMB-small-hetero) is excluded by default; pass
+--include-hetero-span (and build the matrix with the same flag) to add it back.
 """
 
+import argparse
 from pathlib import Path
 import sys
 import numpy as np
@@ -25,6 +30,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+
+parser = argparse.ArgumentParser(description="Generate paper figures from the results matrix.")
+parser.add_argument(
+    "--include-hetero-span",
+    action="store_true",
+    help="Add the MMB-small-hetero (hetero_span masking) panel to Fig_2.",
+)
+ARGS = parser.parse_args()
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = ROOT / "src"
@@ -74,6 +87,11 @@ SHORT = {
 
 df = pd.read_csv(MATRIX, index_col=0)
 df = df.loc[~df.index.isin(EXCLUDED_DATASETS)].copy()
+if ARGS.include_hetero_span and "MMB-small-hetero" not in df.columns:
+    raise ValueError(
+        f"{MATRIX} has no MMB-small-hetero column; rerun "
+        "build_paper_results.py with --include-hetero-span first."
+    )
 
 
 def paired_panel(ax, xcol, ycol, gap=0.05, lim=(0.45, 1.0)):
@@ -137,13 +155,14 @@ def group_legend(fig):
     )
 
 
-# ---------- Figure 2: four-model internal ----------
-fig, axes = plt.subplots(1, 3, figsize=(12, 4.3))
+# ---------- Figure 2: internal comparison ----------
 panels = [
     ("MMB-small", "MMB-base", "(a) size"),
     ("MMB-small", "MMB-small-span", "(b) span masking"),
-    ("MMB-small", "MMB-small-hetero", "(c) hetero-span masking"),
 ]
+if ARGS.include_hetero_span:
+    panels.append(("MMB-small", "MMB-small-hetero", "(c) hetero-span masking"))
+fig, axes = plt.subplots(1, len(panels), figsize=(4 * len(panels), 4.3))
 for ax, (x, y, title) in zip(axes, panels, strict=False):
     paired_panel(ax, x, y)
     ax.set_title(title, fontsize=10)

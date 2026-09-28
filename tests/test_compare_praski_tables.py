@@ -208,11 +208,11 @@ def test_pairwise_vs_ours_counts_wins_losses_with_metric_direction() -> None:
         ours="ModernMolBERT_SELFIES_ChEMBL36_2M",
     )
 
-    ecfp_rows = pairwise[pairwise["competitor"] == "ECFP"]
+    ecfp_rows = pairwise.loc[pairwise["competitor"] == "ECFP"]
 
     assert not ecfp_rows.empty
-    assert int(ecfp_rows["wins"].sum()) == 2
-    assert int(ecfp_rows["losses"].sum()) == 1
+    assert int(ecfp_rows["wins"].to_numpy().sum()) == 2
+    assert int(ecfp_rows["losses"].to_numpy().sum()) == 1
 
 
 def test_best_head_selected_by_cv_metric_not_test_metric() -> None:

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 import matplotlib
 import numpy as np
@@ -108,7 +109,7 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
         duplicates = df.loc[duplicated, ["task_group", "task", "model"]]
         raise ValueError(f"Duplicate task/model rows:\n{duplicates.to_string(index=False)}")
 
-    numeric_auc = pd.to_numeric(df["roc_auc_x100"], errors="coerce")
+    numeric_auc = pd.Series(pd.to_numeric(df["roc_auc_x100"], errors="coerce"), index=df.index)
     if numeric_auc.isna().any():
         bad_rows = df.loc[numeric_auc.isna(), ["task_group", "task", "model", "roc_auc_x100"]]
         raise ValueError(f"Non-numeric ROC-AUC values:\n{bad_rows.to_string(index=False)}")
@@ -120,11 +121,9 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
         raise ValueError(f"ROC-AUC values outside [0, 100]:\n{bad_rows.to_string(index=False)}")
 
     expected_counts = pd.Series(GROUP_TASK_COUNTS, name="expected")
-    coverage = (
-        df.groupby(["task_group", "model"])["task"]
-        .nunique()
-        .unstack(fill_value=0)
-        .reindex(index=GROUP_ORDER, columns=MODELS, fill_value=0)
+    task_counts = cast(pd.Series, df.groupby(["task_group", "model"])["task"].nunique())
+    coverage = cast(pd.DataFrame, task_counts.unstack(fill_value=0)).reindex(
+        index=GROUP_ORDER, columns=MODELS, fill_value=0
     )
     expected = pd.DataFrame(
         {model: expected_counts for model in MODELS},
@@ -141,13 +140,8 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
 def group_means(df: pd.DataFrame) -> pd.DataFrame:
     """Return group mean ROC-AUC x100 values with canonical ordering."""
 
-    return (
-        df.groupby(["task_group", "model"])["roc_auc_x100"]
-        .mean()
-        .round(1)
-        .unstack()
-        .reindex(index=GROUP_ORDER, columns=MODELS)
-    )
+    means = cast(pd.Series, df.groupby(["task_group", "model"])["roc_auc_x100"].mean())
+    return cast(pd.DataFrame, means.round(1).unstack()).reindex(index=GROUP_ORDER, columns=MODELS)
 
 
 def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.DataFrame:
@@ -169,7 +163,7 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
     for ax, group in zip(axes, GROUP_ORDER, strict=True):
         sub = df[df.task_group == group]
         for xi, model in enumerate(MODELS):
-            vals = sub[sub.model == model]["roc_auc_x100"].to_numpy()
+            vals = np.asarray(sub.loc[sub["model"] == model, "roc_auc_x100"], dtype=float)
             jitter = rng.uniform(-0.18, 0.18, size=len(vals))
             ax.scatter(
                 np.full(len(vals), xi) + jitter,

@@ -16,14 +16,26 @@ No model runs, no new benchmarking. Pure wrangling of existing eval output.
 
 Main-analysis dataset exclusions:
 - ogbg-moltoxcast  (26th MoleculeNet set; no Praski baseline)
+
+The hetero-span ablation (MMB-small-hetero) is excluded from the manuscript and
+from all outputs by default; pass --include-hetero-span to add it back.
 """
 
+import argparse
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 from scipy.stats import wilcoxon
+
+parser = argparse.ArgumentParser(description="Build paper-facing benchmark tables and stats.")
+parser.add_argument(
+    "--include-hetero-span",
+    action="store_true",
+    help="Include the MMB-small-hetero (hetero_span masking) ablation in all outputs.",
+)
+ARGS = parser.parse_args()
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "outputs/eval/best_metric_by_dataset_embedder.csv"
@@ -78,15 +90,21 @@ MODELS = {
     "MMB-small": "modernmolbert_best_standard",
     "MMB-base": "modernmolbert_best_base",
     "MMB-small-span": "modernmolbert_best_span",
-    "MMB-small-hetero": "modernmolbert_best_hetero_span",
 }
+if ARGS.include_hetero_span:
+    MODELS["MMB-small-hetero"] = "modernmolbert_best_hetero_span"
 
 df = pd.read_csv(SRC)
-df = df[df["test_metric_name"] == "roc_auc"]
-df = df.loc[~df["dataset"].isin(EXCLUDED_DATASETS)].copy()
+if "selection_metric" not in df or not df["selection_metric"].eq("cv_metric").to_numpy().all():
+    raise ValueError(
+        "Regenerate source results using CV head selection before building paper tables"
+    )
+df = df.loc[
+    df["test_metric_name"].eq("roc_auc") & ~df["dataset"].isin(list(EXCLUDED_DATASETS))
+].copy()
 
 # pivot: rows tasks, cols embedder
-pivot = df.pivot_table(index="dataset", columns="embedder", values="test_metric", aggfunc="first")
+pivot = df.pivot(index="dataset", columns="embedder", values="test_metric")
 matrix = pd.DataFrame(index=TASKS_MAIN)
 for label, key in MODELS.items():
     matrix[label] = pivot[key].reindex(TASKS_MAIN) if key in pivot.columns else np.nan
@@ -94,7 +112,9 @@ matrix.insert(0, "group", [GROUPS[t] for t in TASKS_MAIN])
 matrix.to_csv(OUT / "results_matrix_25task.csv")
 
 # ---- Missing cells ----
-missing = {m: matrix.index[matrix[m].isna()].tolist() for m in MODELS if matrix[m].isna().any()}
+missing = {
+    m: matrix.index[matrix[m].isna()].tolist() for m in MODELS if matrix[m].isna().to_numpy().any()
+}
 
 # ---- Group means + overall (per model, over available tasks) ----
 group_order = ["TDC-ADME", "TDC-Tox", "TDC-HTS", "MoleculeNet"]
@@ -102,11 +122,12 @@ rows = []
 for label in MODELS:
     rec: dict[str, Any] = {"model": label}
     for g in group_order:
-        sub = matrix.loc[matrix["group"] == g, label]
-        rec[g] = float(sub.mean())
-        rec[g + "_n"] = int(sub.notna().sum())
-    rec["Overall"] = float(matrix[label].mean())
-    rec["Overall_n"] = int(matrix[label].notna().sum())
+        sub = pd.Series(matrix.loc[matrix["group"] == g, label], dtype=float)
+        rec[g] = sub.mean()
+        rec[g + "_n"] = sub.count()
+    overall = pd.Series(matrix[label], dtype=float)
+    rec["Overall"] = overall.mean()
+    rec["Overall_n"] = overall.count()
     rows.append(rec)
 gm = pd.DataFrame(rows).set_index("model")
 gm.to_csv(OUT / "group_means.csv")
@@ -169,7 +190,7 @@ lines += [
     rf"    Mean ROC-AUC ($\times100$) on the {N_TASKS_MAIN}-task benchmark of "
     r"\citet{praskiBenchmarkingPretrainedMolecular2025}, broken down by task",
     r"    group. Each entry averages per-task ROC-AUC using the best "
-    r"cross-validated downstream head (ridge / random forest / $k$NN) per task.",
+    r"cross-validated downstream head (logistic regression / random forest / $k$NN) per task.",
     rf"    \emph{{Overall}} is the unweighted mean across all {N_TASKS_MAIN} tasks. "
     r"\textbf{Bold} marks the best value per column.",
     r"  }%",
@@ -203,8 +224,8 @@ out.append(gm[[*group_order, "Overall"]].mul(100).round(1).to_string() + "\n")
 def paired(a, b):
     s = matrix[[a, b]].dropna()
     return (
-        np.asarray(s[a].to_numpy(), dtype=np.float64),
-        np.asarray(s[b].to_numpy(), dtype=np.float64),
+        np.asarray(s[a], dtype=np.float64),
+        np.asarray(s[b], dtype=np.float64),
         s.index.tolist(),
     )
 
@@ -231,13 +252,12 @@ out.append(
     f"{hl} exceeds ECFP4; margin>0.02 on {int((diff > 0.02).sum())}.\n"
 )
 
-# four-model internal (small variants) on common tasks
-out.append("\nFour-model internal (mean ROC-AUC over common tasks):\n")
-for pair in [
-    ("MMB-small", "MMB-base"),
-    ("MMB-small", "MMB-small-span"),
-    ("MMB-small", "MMB-small-hetero"),
-]:
+# internal comparisons (size and masking variants) on common tasks
+internal_pairs = [("MMB-small", "MMB-base"), ("MMB-small", "MMB-small-span")]
+if ARGS.include_hetero_span:
+    internal_pairs.append(("MMB-small", "MMB-small-hetero"))
+out.append("\nInternal comparisons (mean ROC-AUC over common tasks):\n")
+for pair in internal_pairs:
     a, b, idx = paired(*pair)
     out.append(
         f"  {pair[0]} vs {pair[1]} (n={len(idx)}): "

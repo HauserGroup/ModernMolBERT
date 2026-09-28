@@ -5,10 +5,23 @@ Main-analysis exclusions:
 - ogbg-moltox21
 - ogbg-molmuv
 - ogbg-moltoxcast
+
+The hetero-span ablation (MMB-small-hetero) is excluded by default; pass
+--include-hetero-span (and build the matrix with the same flag) to add it back.
 """
 
+import argparse
 from pathlib import Path
+
 import pandas as pd
+
+parser = argparse.ArgumentParser(description="Write the per-task appendix ROC-AUC table.")
+parser.add_argument(
+    "--include-hetero-span",
+    action="store_true",
+    help="Add the MMB-small-hetero (hetero_span masking) column.",
+)
+ARGS = parser.parse_args()
 
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
@@ -54,12 +67,25 @@ COLS = [
     "MMB-small",
     "MMB-base",
     "MMB-small-span",
-    "MMB-small-hetero",
 ]
-HEAD = ["ECFP4", "ChBa-2", "SELF.", "MoLF.", "MMB-s", "MMB-b", "MMB-sp", "MMB-h"]
+HEAD = ["ECFP4", "ChBa-2", "SELF.", "MoLF.", "MMB-s", "MMB-b", "MMB-sp"]
+LEGEND = (
+    r"\emph{MMB-s} = \model{}-small (standard), "
+    r"\emph{MMB-b} = \model{}-base, \emph{MMB-sp} = small span masking"
+)
+if ARGS.include_hetero_span:
+    COLS.append("MMB-small-hetero")
+    HEAD.append("MMB-h")
+    LEGEND += r", \emph{MMB-h} = small hetero-span masking"
 
 df = pd.read_csv(MATRIX, index_col=0)
 df = df.loc[~df.index.isin(EXCLUDED_DATASETS)].copy()
+missing_cols = [c for c in COLS if c not in df.columns]
+if missing_cols:
+    raise ValueError(
+        f"{MATRIX} is missing columns {missing_cols}; rebuild it with build_paper_results.py "
+        "(add --include-hetero-span when requesting MMB-small-hetero)."
+    )
 
 
 def cell(v):
@@ -70,9 +96,7 @@ lines = [
     r"{\footnotesize\setlength{\tabcolsep}{3.5pt}",
     r"\begin{longtable}{l " + "r " * len(COLS) + "}",
     r"  \caption{Per-task test ROC-AUC ($\times100$) for all models on the "
-    r"25-task benchmark. \emph{MMB-s} = \model{}-small (standard), "
-    r"\emph{MMB-b} = \model{}-base, \emph{MMB-sp} = small span masking, "
-    r"\emph{MMB-h} = small hetero-span masking. ``--'' marks evaluations not "
+    r"25-task benchmark. " + LEGEND + r". ``--'' marks evaluations not "
     r"yet run.}\label{tab:pertask}\\",
     r"  \toprule",
     r"  \textbf{Task} & " + " & ".join(r"\textbf{" + h + "}" for h in HEAD) + r" \\",

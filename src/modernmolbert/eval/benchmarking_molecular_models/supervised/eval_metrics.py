@@ -34,7 +34,13 @@ def log_predictions(data: HeadResult, pred_directory: str):
         n_samples=y_true.shape[0],
     )
 
-    np.savez(base_path + ".npz", y_true=y_true, y_score=y_score)
+    artifact = {"y_true": y_true, "y_score": y_score}
+    if data.test_source_row_indices is not None:
+        source_rows = np.asarray(data.test_source_row_indices, dtype=np.int64)
+        if source_rows.ndim != 1 or len(source_rows) != len(y_true):
+            raise ValueError("Test source row indices must match prediction rows")
+        artifact["test_source_row_indices"] = source_rows
+    np.savez(base_path + ".npz", **artifact)
     print(f"Saving predictions to {base_path}.npy / .npz")
 
 

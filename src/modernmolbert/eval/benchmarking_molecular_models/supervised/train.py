@@ -258,6 +258,16 @@ def fit_and_eval_embedding(
     else:
         y_pred = best_model["model_obj"].predict_proba(X_test)
 
+    test_source_row_indices = None
+    source_rows = dataset.metadata.get("source_row_indices")
+    if source_rows is not None:
+        if len(source_rows) != len(dataset.X):
+            raise ValueError(f"Source row mapping length mismatch for {dataset.name}")
+        test_indices = np.asarray(dataset.splits["test"], dtype=int)
+        test_source_row_indices = np.asarray(source_rows, dtype=int)[test_indices]
+        if len(test_source_row_indices) != len(y_test):
+            raise ValueError(f"Test prediction row mapping mismatch for {dataset.name}")
+
     return HeadResult(
         embedder=dataset.embedder,
         dataset_name=dataset.name,
@@ -266,4 +276,5 @@ def fit_and_eval_embedding(
         model=best_model["model"],
         hyperparams=best_model["best_params"],
         cv_score=best_model["best_score"],
+        test_source_row_indices=test_source_row_indices,
     )

@@ -148,6 +148,7 @@ def test_make_scoring_model_name_adds_subsample_identity() -> None:
 
 def test_subsample_embedded_dataset_train_scope_keeps_full_test_split() -> None:
     embedded = make_embedded_dataset()
+    embedded.metadata["source_row_indices"] = list(range(100, 112))
 
     subset = score.subsample_embedded_dataset(
         embedded,
@@ -161,6 +162,8 @@ def test_subsample_embedded_dataset_train_scope_keeps_full_test_split() -> None:
     assert len(subset.splits["test"]) == 4
     assert subset.y.iloc[subset.splits["test"]]["label"].tolist() == [8, 9, 10, 11]
     assert embedded.X.shape == (12, 2)
+    assert subset.metadata["source_row_indices"][subset.splits["test"][0]] == 108
+    assert subset.metadata["source_row_indices"][subset.splits["test"][-1]] == 111
 
 
 def test_subsample_embedded_dataset_all_scope_samples_test_too() -> None:

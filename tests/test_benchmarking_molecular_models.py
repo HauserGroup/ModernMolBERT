@@ -375,6 +375,10 @@ def test_embed_dataset_aligns_invalid_features_and_remaps_splits() -> None:
     assert embedded.X.shape == (3, 2)
     assert embedded.y["label"].tolist() == [0, 1, 0]
     assert embedded.splits == {"train": [0], "valid": [1], "test": [2]}
+    assert embedded.metadata["source_row_indices"] == [0, 2, 3]
+    assert embedded.metadata["failed_source_row_indices"] == [1]
+    assert embedded.metadata["source_split_counts"] == {"train": 2, "valid": 1, "test": 1}
+    assert embedded.metadata["retained_split_counts"] == {"train": 1, "valid": 1, "test": 1}
 
 
 def write_embedding_test_config(config_dir: Path) -> None:
@@ -442,6 +446,8 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
     output_path = tmp_path / "data/embedded/tiny/fake_embedder.joblib"
     first = joblib.load(output_path)
     assert first.X[:, 1].tolist() == [1.0, 1.0]
+    assert first.metadata["prepared_data_sha256"]
+    assert first.metadata["source_row_indices"] == [0, 1]
 
     monkeypatch.setattr(embed_modernmolbert, "make_featurizer", lambda args: FakeFeaturizer(2.0))
     embed_modernmolbert.main()
@@ -636,6 +642,7 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
         },
         X=X,
         y=y,
+        metadata={"source_row_indices": list(range(100, 120))},
     )
 
     result = fit_and_eval_embedding(
@@ -647,6 +654,7 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
     assert result.model == "knn"
     assert result.y_test_pred.shape == (5, 2)
     assert "clf__n_neighbors" in result.hyperparams
+    assert result.test_source_row_indices.tolist() == [115, 116, 117, 118, 119]
 
 
 def test_regression_path_returns_1d_predictions() -> None:

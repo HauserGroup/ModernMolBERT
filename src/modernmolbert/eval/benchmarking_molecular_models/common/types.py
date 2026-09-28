@@ -211,6 +211,7 @@ class HeadResult:
     cv_score: float
     model: str
     hyperparams: dict[str, Any]
+    test_source_row_indices: np.ndarray | None = None
 
 
 @dataclass

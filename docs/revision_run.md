@@ -133,11 +133,15 @@ population actually measured.
 
 ## 4. Re-embed and re-score the full configured benchmark
 
-Use a unique embedder name and output CSV. The embedding script currently has
-an **independent historical default** for `--tokenizer-path`, so specify the
-new model path in *both* arguments. It rejects lossy or unknown tokenization
-and removes failed rows before scoring; preserve its per-dataset metadata and
-report valid/failed test counts. Mean pooling excludes special tokens.
+Use a unique embedder name and output CSV. Specify the new model path in both
+model and tokenizer arguments so the run record is explicit. The embedding
+script now defaults the tokenizer to the supplied model directory if the
+argument is omitted. It rejects lossy or unknown tokenization and removes
+failed rows before scoring. Each new embedding stores retained and failed
+prepared-row indices, the prepared-file SHA256, and split counts; each new
+prediction archive stores its test source-row indices. Report valid/failed
+test counts and use these indices to form common-row comparisons. Mean
+pooling excludes special tokens.
 
 ```bash
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py \

@@ -522,6 +522,12 @@ def subsample_embedded_dataset(
     }
 
     y = dataset.y.iloc[selected].reset_index(drop=True)
+    metadata = dict(dataset.metadata)
+    source_rows = metadata.get("source_row_indices")
+    if source_rows is not None:
+        if len(source_rows) != len(dataset.X):
+            raise ValueError(f"Source row mapping length mismatch for {dataset.name}")
+        metadata["source_row_indices"] = [source_rows[int(index)] for index in selected]
     subset = EmbeddedDataset(
         name=dataset.name,
         task=dataset.task,
@@ -529,7 +535,7 @@ def subsample_embedded_dataset(
         splits=remapped_splits,
         X=dataset.X[selected],
         y=y,
-        metadata=dict(dataset.metadata),
+        metadata=metadata,
     )
 
     log.info(

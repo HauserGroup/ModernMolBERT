@@ -3,12 +3,17 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-yaml
+      # Tokenizer JSON files are hash-bound: their metadata records the file's
+      # SHA-256, which validation checks, so rewriting hooks must leave them alone.
       - id: end-of-file-fixer
+        exclude: ^tokenizer/.*\.json$
       - id: trailing-whitespace
+        exclude: ^tokenizer/.*\.json$
       - id: check-added-large-files
         args: ["--maxkb=2000"]
       - id: pretty-format-json
         args: [--autofix]
+        exclude: ^tokenizer/.*\.json$
       - id: check-merge-conflict
       - id: detect-aws-credentials
         args: [--allow-missing-credentials]

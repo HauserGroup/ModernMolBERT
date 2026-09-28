@@ -24,6 +24,12 @@ class TinyTokenizer:
     unk_token_id = 3
     mask_token_id = 4
 
+    def tokenize(self, text):
+        return [text]
+
+    def encode(self, text, *, add_special_tokens=False, truncation=False):
+        return [5 + (i % 3) for i in range(max(1, min(3, len(text) % 4 + 1)))]
+
     def __call__(
         self,
         texts,
@@ -333,3 +339,51 @@ def test_modernmolbert_selfies_featurizer_records_metadata(tiny_modernmolbert_di
     assert batch.metadata["n_inputs"] == 2
     assert batch.metadata["n_valid"] == 1
     assert batch.metadata["invalid_fraction"] == pytest.approx(0.5)
+
+
+def test_unknown_tail_is_rejected_before_truncation(tiny_modernmolbert_dir, monkeypatch):
+    featurizer = ModernMolBERTSelfiesFeaturizer(
+        model_dir=tiny_modernmolbert_dir, max_seq_length=4, device="cpu"
+    )
+    monkeypatch.setattr(featurizer.tokenizer, "encode", lambda *a, **k: [5] * 20 + [3])
+    result = featurizer.featurize_smiles(["CCO"])
+    assert result.valid_mask.tolist() == [False]
+    assert result.X.shape == (0, 8)
+    assert result.metadata["n_tokenization_failures"] == 1
+
+
+def test_released_vocab_rejects_disconnected_input_without_losing_row_alignment(
+    tiny_modernmolbert_dir,
+):
+    from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+    f = ModernMolBERTSelfiesFeaturizer(model_dir=tiny_modernmolbert_dir, device="cpu")
+    f.tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+    vocab = Path(__file__).parents[1] / "tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"
+    f.tokenizer.load_vocabulary_file(vocab)
+    result = f.featurize_smiles(["CCO", "C.O", "CC"])
+    assert result.valid_mask.tolist() == [True, False, True]
+    assert result.X.shape == (2, 8)
+    assert result.metadata["n_tokenization_failures"] == 1
+    assert np.isfinite(result.X).all()
+
+
+def test_legacy_tokenizer_silent_component_loss_is_rejected(tiny_modernmolbert_dir):
+    from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+    class LegacyDotDroppingTokenizer(APEPreTrainedTokenizer):
+        def _tokenize(self, text, **kwargs):
+            return super()._tokenize(text.replace(".", ""), **kwargs)
+
+    f = ModernMolBERTSelfiesFeaturizer(model_dir=tiny_modernmolbert_dir, device="cpu")
+    f.tokenizer = LegacyDotDroppingTokenizer(representation="SELFIES")
+    vocab = Path(__file__).parents[1] / "tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"
+    f.tokenizer.load_vocabulary_file(vocab)
+    lost_ids = f.tokenizer.encode("[C].[O]", add_special_tokens=False)
+    assert f.tokenizer.unk_token_id not in lost_ids
+    assert lost_ids == f.tokenizer.encode("[C][O]", add_special_tokens=False)
+    result = f.featurize_smiles(["CCO", "C.O", "CC"])
+    assert result.valid_mask.tolist() == [True, False, True]
+    assert result.X.shape == (2, 8)
+    assert result.metadata["n_tokenization_failures"] == 1
+    result.check(n_inputs=3)

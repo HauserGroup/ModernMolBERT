@@ -22,7 +22,7 @@ VOCAB_FILES_NAMES = {
     "selfies_vocab_file": "selfies_vocab.json",
     "smiles_vocab_file": "smiles_vocab.json",
 }
-SELFIES_RE = re.compile(r"\[[^\]]+\]")
+SELFIES_RE = re.compile(r"\[[^\]]+\]|\.")
 # Only the organic subset (B C N O P S F Cl Br I) may appear unbracketed in
 # canonical SMILES; two-letter metals (Si, Se, Na, Mg, Al, Ca, Fe, Zn, ...) are
 # always bracketed and matched by the leading \[[^\]]+\] branch. The previous
@@ -94,7 +94,7 @@ def _pre_tokenize_selfies(molecule: str, *, strict: bool = True) -> list[str]:
     if strict and "".join(pieces) != molecule:
         raise ValueError(
             "Malformed SELFIES string contains unmatched text outside "
-            f"bracketed SELFIES tokens: {molecule!r}"
+            f"SELFIES symbols or component separators: {molecule!r}"
         )
 
     return pieces

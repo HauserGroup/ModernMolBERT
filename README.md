@@ -47,7 +47,7 @@ pip install transformers torch selfies
 
 ## Quickstart — get embeddings
 
-The model consumes **SELFIES** strings tokenized with the APE tokenizer. The standard molecular representation is the first-token embedding:
+The model consumes **SELFIES** strings tokenized with the APE tokenizer. The manuscript uses the mean of final-layer content-token embeddings, excluding special tokens:
 
 ```python
 import torch
@@ -65,9 +65,20 @@ tokenizer = AutoTokenizer.from_pretrained(
 # A SELFIES string (one bracketed token per primitive); here aspirin.
 selfies = "[C][C][=Branch1][C][=O][O][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Branch1][C][=O][O]"
 
+if "".join(tokenizer.tokenize(selfies)) != selfies:
+    raise ValueError("Tokenizer loses molecular symbols; do not use this input as a valid embedding")
 inputs = tokenizer(selfies, return_tensors="pt")
+if inputs["input_ids"].eq(tokenizer.unk_token_id).any():
+    raise ValueError("Input contains unknown tokens; do not use it as a valid embedding")
 with torch.no_grad():
-    embedding = model(**inputs).last_hidden_state[:, 0]
+    hidden = model(**inputs).last_hidden_state
+    keep = inputs["attention_mask"].bool()
+    for special_id in tokenizer.all_special_ids:
+        keep &= inputs["input_ids"].ne(special_id)
+    if not keep.any(dim=1).all():
+        raise ValueError("No molecular content tokens; check tokenisation")
+    weights = keep.unsqueeze(-1).to(hidden.dtype)
+    embedding = (hidden * weights).sum(dim=1) / weights.sum(dim=1)
 
 print(embedding.shape)  # (1, hidden_size)
 ```

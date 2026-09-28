@@ -505,6 +505,13 @@ def corpus_only_training_parquet(args: argparse.Namespace) -> Path:
     """Identify the exact local Parquet that the revision training will stream."""
     if args.data_dir is not None:
         raise ValueError("Corpus-only training requires a local Parquet, not --data_dir")
+    if args.data_files is None and find_local_dataset(dataset_name=args.dataset_name) is not None:
+        # get_streaming_dataset prefers a name-matched Arrow dataset under data/ over the
+        # Parquet hashed below, so the gate would check a file that training never reads.
+        raise ValueError(
+            "Corpus-only training found a matching local Arrow dataset under data/; "
+            "pass --data_files to stream the scanned training Parquet explicitly"
+        )
     if args.data_files is not None:
         source = Path(args.data_files)
     else:

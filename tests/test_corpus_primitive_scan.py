@@ -78,3 +78,17 @@ def test_encoder_identifies_single_local_training_parquet(tmp_path):
     args.data_dir = tmp_path
     with pytest.raises(ValueError, match="not --data_dir"):
         corpus_only_training_parquet(args)
+
+
+def test_encoder_rejects_auto_discovered_arrow_dataset(tmp_path, monkeypatch):
+    import modernmolbert.train_selfies_ape_modernbert as train
+
+    (tmp_path / "train.parquet").touch()
+    args = Namespace(
+        data_dir=None, data_files=None, dataset_name=str(tmp_path), train_split="train"
+    )
+    monkeypatch.setattr(train, "find_local_dataset", lambda **_: tmp_path / "arrow")
+    with pytest.raises(ValueError, match="Arrow dataset"):
+        corpus_only_training_parquet(args)
+    args.data_files = str(tmp_path / "train.parquet")
+    assert corpus_only_training_parquet(args) == tmp_path / "train.parquet"

@@ -11,7 +11,6 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
   --max_merge_pieces 4 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 
 # Moderate
@@ -24,7 +23,6 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 5000 \
   --min_freq_for_merge 2000 \
   --max_merge_pieces 8 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 
 # Final
@@ -37,9 +35,11 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --max_vocab_size 2000 \
   --min_freq_for_merge 3000 \
   --max_merge_pieces 2 \
-  --extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \
   --seed 42
 
+# Optional: add missing primitive symbols only when needed.
+# This is disabled by default; pass --extra_vocab_symbols_path or
+# --extra_vocab_selfies_path to force additional tokens into the final vocab.
 
 # Validate
 uv run python -m modernmolbert.validate_tokenizer \
@@ -264,11 +264,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Optional text file with one primitive token per line "
-            "(SELFIES: e.g. [C@@H1]; SMILES: e.g. [Fe+3]). "
-            "These tokens are force-added after APE merge training and "
-            "before saving the final vocabulary. Do not pass full molecule strings here. "
-            "For SELFIES representation, tokens are validated as bracket tokens."
+            "Optional: off by default. Text file with one primitive token per line "
+            "(SELFIES: e.g. [C@@H1]; SMILES: e.g. [Fe+3]). These tokens are "
+            "force-added after APE merge training and before saving the final "
+            "vocabulary. Do not pass full molecule strings here. For SELFIES "
+            "representation, tokens are validated as bracket tokens."
         ),
     )
     parser.add_argument(
@@ -276,10 +276,10 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help=(
-            "Optional text file with one full SELFIES molecule string per line. "
-            "All bracketed primitive SELFIES symbols are extracted and force-added "
-            "after APE merge training. Prefer --extra_vocab_symbols_path when you "
-            "already have a symbol list."
+            "Optional: off by default. Text file with one full SELFIES molecule "
+            "string per line. All bracketed primitive SELFIES symbols are extracted "
+            "and force-added after APE merge training. Prefer "
+            "--extra_vocab_symbols_path when you already have a symbol list."
         ),
     )
     parser.add_argument(

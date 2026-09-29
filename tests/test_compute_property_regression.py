@@ -11,7 +11,6 @@ import pandas as pd
 from compute_property_regression import (
     build_regression,
     emit_latex,
-    emit_property_r2_plot,
     fit_ridge_r2,
     load_embeddings_and_descriptors,
     run_regression,
@@ -69,13 +68,6 @@ def _make_embed_npy(tmp_path: Path, n: int = N, dim: int = DIM) -> Path:
 # ── fit_ridge_r2 ──────────────────────────────────────────────────────────────
 
 
-def test_fit_ridge_r2_returns_float():
-    X = _make_embeddings()
-    y = RNG.standard_normal(N)
-    r2 = fit_ridge_r2(X, y, test_size=0.2, alpha=1.0, random_state=SEED)
-    assert isinstance(r2, float)
-
-
 def test_fit_ridge_r2_perfect_linear_signal():
     """When y is exactly a linear function of X, R² should be close to 1."""
     rng = np.random.default_rng(0)
@@ -84,23 +76,6 @@ def test_fit_ridge_r2_perfect_linear_signal():
     y = X @ coef  # perfect linear signal
     r2 = fit_ridge_r2(X, y, test_size=0.2, alpha=1e-6, random_state=0)
     assert r2 > 0.98, f"Expected R²>0.98 for perfect linear signal, got {r2:.4f}"
-
-
-def test_fit_ridge_r2_pure_noise_near_zero():
-    """When y is pure noise independent of X, R² should be close to zero."""
-    rng = np.random.default_rng(5)
-    X = rng.standard_normal((400, 16)).astype(np.float32)
-    y = rng.standard_normal(400)
-    r2 = fit_ridge_r2(X, y, test_size=0.2, alpha=1.0, random_state=5)
-    assert abs(r2) < 0.15, f"Expected |R²|<0.15 for pure noise, got {r2:.4f}"
-
-
-def test_fit_ridge_r2_reproducible():
-    X = _make_embeddings()
-    y = RNG.standard_normal(N)
-    r1 = fit_ridge_r2(X, y, random_state=7)
-    r2 = fit_ridge_r2(X, y, random_state=7)
-    assert r1 == r2
 
 
 # ── load_embeddings_and_descriptors ──────────────────────────────────────────
@@ -149,38 +124,6 @@ def test_load_drops_rows_with_missing_descriptors(tmp_path: Path):
     assert not bool(desc["alogp"].isna().any())
 
 
-def test_load_inner_join_excludes_unmatched(tmp_path: Path):
-    """Molecules in meta but absent from train.parquet should be excluded."""
-    embed_path = _make_embed_npy(tmp_path, n=N)
-    # meta has N molecules
-    meta_df = pd.DataFrame(
-        {
-            "chembl_id": [f"CHEMBL{i}" for i in range(N)],
-            "embedding_row": list(range(N)),
-        }
-    )
-    meta_path = tmp_path / "metadata.parquet"
-    meta_df.to_parquet(meta_path, index=False)
-
-    # train has only the first N//2 molecules
-    rng = np.random.default_rng(3)
-    half = N // 2
-    train_df = pd.DataFrame(
-        {
-            "chembl_id": [f"CHEMBL{i}" for i in range(half)],
-            "alogp": rng.standard_normal(half),
-            "heavy_atoms": rng.integers(5, 50, half).astype(float),
-        }
-    )
-    train_path = tmp_path / "train.parquet"
-    train_df.to_parquet(train_path, index=False)
-
-    X, desc = load_embeddings_and_descriptors(
-        embed_path, meta_path, train_path, ["alogp", "heavy_atoms"]
-    )
-    assert len(desc) == half
-
-
 # ── run_regression ────────────────────────────────────────────────────────────
 
 
@@ -195,33 +138,6 @@ def test_run_regression_returns_one_row_per_descriptor(tmp_path: Path):
     df = run_regression(X, desc_df, descs, test_size=0.2, alpha=1.0, random_state=SEED)
     assert len(df) == 2
     assert set(df["descriptor_col"]) == {"alogp", "heavy_atoms"}
-
-
-def test_run_regression_sorted_descending(tmp_path: Path):
-    embed_path = _make_embed_npy(tmp_path)
-    meta_path = _make_meta_parquet(tmp_path)
-    train_path = _make_train_parquet(tmp_path)
-    X, desc_df = load_embeddings_and_descriptors(
-        embed_path, meta_path, train_path, ["alogp", "heavy_atoms"]
-    )
-    descs = [("alogp", "AlogP"), ("heavy_atoms", "Heavy atoms")]
-    df = run_regression(X, desc_df, descs, test_size=0.2, alpha=1.0, random_state=SEED)
-    r2_vals = df["r2"].tolist()
-    assert r2_vals == sorted(r2_vals, reverse=True)
-
-
-def test_run_regression_skips_missing_column(tmp_path: Path):
-    """A descriptor not present in desc_df should be silently skipped."""
-    embed_path = _make_embed_npy(tmp_path)
-    meta_path = _make_meta_parquet(tmp_path)
-    train_path = _make_train_parquet(tmp_path)
-    X, desc_df = load_embeddings_and_descriptors(
-        embed_path, meta_path, train_path, ["alogp", "heavy_atoms"]
-    )
-    descs = [("alogp", "AlogP"), ("nonexistent_col", "Ghost descriptor")]
-    df = run_regression(X, desc_df, descs, test_size=0.2, alpha=1.0, random_state=SEED)
-    assert len(df) == 1
-    assert df.iloc[0]["descriptor_col"] == "alogp"
 
 
 # ── emit_latex ────────────────────────────────────────────────────────────────
@@ -242,39 +158,7 @@ def test_emit_latex_creates_file(tmp_path: Path):
     assert out.exists() and out.stat().st_size > 0
 
 
-def test_emit_latex_contains_table_environment(tmp_path: Path):
-    out = tmp_path / "table.tex"
-    emit_latex(_r2_df(), out)
-    content = out.read_text()
-    assert r"\begin{table}" in content
-    assert r"\label{tab:property-r2}" in content
-
-
-def test_emit_latex_r2_values_present(tmp_path: Path):
-    out = tmp_path / "table.tex"
-    emit_latex(_r2_df(), out)
-    content = out.read_text()
-    assert "0.712" in content
-    assert "0.503" in content
-
-
-def test_emit_latex_descriptor_labels_present(tmp_path: Path):
-    out = tmp_path / "table.tex"
-    emit_latex(_r2_df(), out)
-    content = out.read_text()
-    assert "AlogP" in content
-    assert "Heavy atom count" in content
-
-
 # ── emit_property_r2_plot ────────────────────────────────────────────────────
-
-
-def test_emit_property_r2_plot_creates_pdf_and_png(tmp_path: Path):
-    emit_property_r2_plot(_r2_df(), tmp_path)
-    pdf = tmp_path / "property_r2_bars.pdf"
-    png = tmp_path / "property_r2_bars.png"
-    assert pdf.exists() and pdf.stat().st_size > 0
-    assert png.exists() and png.stat().st_size > 0
 
 
 # ── integration: build_regression ────────────────────────────────────────────

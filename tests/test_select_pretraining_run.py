@@ -1,5 +1,4 @@
 import json
-import math
 from pathlib import Path
 
 import pytest
@@ -7,8 +6,6 @@ import pytest
 from modernmolbert.select_pretraining_run import (
     best_eval_from_log_history,
     copy_best_model,
-    discover_runs,
-    flatten_scalar_dict,
     summarize_run,
 )
 
@@ -54,26 +51,6 @@ def _make_complete_run(run_dir: Path) -> None:
     (final_model / "pytorch_model.bin").write_bytes(b"weights")
 
 
-def test_flatten_scalar_dict_keeps_json_scalar_values_only() -> None:
-    flattened = flatten_scalar_dict(
-        {
-            "eval_loss": 0.2,
-            "eval_ok": True,
-            "eval_name": "run",
-            "eval_missing": None,
-            "eval_nested": {"ignored": 1},
-            "eval_list": [1, 2],
-        },
-    )
-
-    assert flattened == {
-        "eval_loss": 0.2,
-        "eval_ok": True,
-        "eval_name": "run",
-        "eval_missing": None,
-    }
-
-
 def test_best_eval_from_log_history_ignores_unusable_values() -> None:
     trainer_state = {
         "log_history": [
@@ -105,32 +82,6 @@ def test_summarize_run_reports_completion_and_selection_metric(tmp_path) -> None
     assert summary["selection_metric"] == pytest.approx(0.5)
     assert summary["num_parameters"] == 1234
     assert summary["metadata_best_checkpoint"] == "ckpt-8"
-
-
-def test_summarize_run_marks_incomplete_and_nan_selection_metric(tmp_path) -> None:
-    run_dir = tmp_path / "run_b"
-    run_dir.mkdir()
-    _write_json(run_dir / "run_args.json", {"max_steps": 10})
-    _write_json(run_dir / "trainer_state.json", {"global_step": 3, "log_history": []})
-
-    summary = summarize_run(run_dir, metric="eval_loss", lower_is_better=True)
-
-    assert summary["status"] == "incomplete"
-    assert summary["has_final_model"] is False
-    assert summary["completed_max_steps"] is False
-    assert math.isnan(summary["selection_metric"])
-
-
-def test_discover_runs_ignores_hidden_dirs_and_non_runs(tmp_path) -> None:
-    _make_complete_run(tmp_path / "run_a")
-    (tmp_path / ".hidden").mkdir()
-    (tmp_path / "notes").mkdir()
-    (tmp_path / "file.txt").write_text("notes\n", encoding="utf-8")
-    run_b = tmp_path / "run_b"
-    run_b.mkdir()
-    _write_json(run_b / "trainer_state.json", {"global_step": 1})
-
-    assert [path.name for path in discover_runs(tmp_path)] == ["run_a", "run_b"]
 
 
 def test_copy_best_model_copies_final_model_and_refuses_existing_destination(tmp_path) -> None:

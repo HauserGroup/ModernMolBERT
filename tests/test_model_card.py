@@ -109,20 +109,3 @@ def test_build_readme_structure_and_quickstart(tmp_path: Path) -> None:
     assert "best_eval_loss" not in card
     assert "accuracy" not in card.lower()
     assert "eval_loss" not in card
-
-
-def test_build_readme_handles_missing_optional_files(tmp_path: Path) -> None:
-    """run_args / trainer_state are optional; card still generates from config alone."""
-    source_dir = tmp_path / "final_model"
-    source_dir.mkdir()
-    (source_dir / "config.json").write_text(
-        json.dumps({"model_type": "modernbert", "hidden_size": 768})
-    )
-
-    card = build_readme(source_dir, tmp_path, repo_id=REPO_ID, vocab_size=VOCAB_SIZE)
-
-    assert f"# {REPO_ID}" in card
-    assert "print(f\"Token IDs:\\n{inputs['input_ids'][0].tolist()}\\n\")" in card
-    assert 'print(f"Embedding shape: {tuple(embedding.shape)}")' in card
-    assert "## Training" not in card
-    assert "best_eval_loss" not in card

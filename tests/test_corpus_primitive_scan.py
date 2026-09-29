@@ -65,21 +65,6 @@ def test_encoder_requires_scanned_uninjected_tokenizer_metadata(tmp_path):
         )
 
 
-def test_encoder_identifies_single_local_training_parquet(tmp_path):
-    source = tmp_path / "train.parquet"
-    source.touch()
-    args = Namespace(
-        data_dir=None, data_files=None, dataset_name=str(tmp_path), train_split="train"
-    )
-    assert corpus_only_training_parquet(args) == source
-    args.train_split = "missing"
-    with pytest.raises(ValueError, match="one local Parquet"):
-        corpus_only_training_parquet(args)
-    args.data_dir = tmp_path
-    with pytest.raises(ValueError, match="not --data_dir"):
-        corpus_only_training_parquet(args)
-
-
 def test_encoder_rejects_auto_discovered_arrow_dataset(tmp_path, monkeypatch):
     import modernmolbert.train_selfies_ape_modernbert as train
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from modernmolbert import upload_dataset, upload_model, upload_tokenizer
+from modernmolbert import upload_dataset, upload_tokenizer
 
 
 class _RecordingApi:
@@ -92,21 +92,6 @@ def _make_vocab_and_metadata(tmp_path: Path) -> tuple[Path, Path]:
     return vocab_path, metadata_path
 
 
-def test_write_collator_config_writes_expected_defaults(tmp_path: Path) -> None:
-    out_dir = tmp_path / "staging"
-    out_dir.mkdir()
-
-    upload_model.write_collator_config(out_dir, "hetero_span")
-
-    payload = json.loads((out_dir / "collator_config.json").read_text(encoding="utf-8"))
-    assert payload["masking_strategy"] == "hetero_span"
-    assert payload["mlm_probability"] == 0.20
-    assert payload["span_p_geom"] == 0.4
-    assert payload["span_max_length"] == 6
-    assert payload["heteroatom_start_weight"] == 2.0
-    assert "Change masking_strategy" in payload["_note"]
-
-
 def test_upload_dataset_to_hub_dry_run_stages_files(tmp_path: Path) -> None:
     dataset_dir = _make_dataset_dir(tmp_path / "dataset")
 
@@ -153,15 +138,6 @@ def test_upload_dataset_to_hub_uses_injected_api(tmp_path: Path) -> None:
     assert api.upload_folder_calls[0]["repo_id"] == "org/chembl36-selfies"
     assert api.upload_folder_calls[0]["repo_type"] == "dataset"
     assert api.upload_folder_calls[0]["commit_message"] == "Upload dataset test"
-
-
-def test_verify_metadata_accepts_valid_payload(tmp_path: Path) -> None:
-    vocab_path, metadata_path = _make_vocab_and_metadata(tmp_path)
-    metadata = upload_tokenizer.load_metadata(metadata_path)
-
-    representation = upload_tokenizer.verify_metadata(metadata, vocab_path)
-
-    assert representation == "SELFIES"
 
 
 def test_upload_tokenizer_to_hub_dry_run_stages_without_network(

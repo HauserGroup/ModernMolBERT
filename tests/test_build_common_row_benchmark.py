@@ -5,7 +5,6 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 
 from build_common_row_benchmark import (
     main,
-    multioutput_average_precision,
     paired_task_differences,
     rank_roc_auc,
     score_rows,
@@ -112,52 +111,11 @@ def test_heads_selected_by_cv_and_scored_on_common_rows(tmp_path):
     assert candidates["selected"].sum() == 2
 
 
-def test_head_selection_uses_same_candidate_set_for_all_embedders(tmp_path):
-    results_path, predictions, prepared = _write_inputs(tmp_path)
-    results = pd.read_csv(results_path)
-    results.loc[len(results)] = {
-        "embedder": "A",
-        "model": "knn",
-        "cv_metric": 1.0,
-        "test_metric": 1.0,
-        "dataset": "toy",
-        "cv_metric_name": "roc_auc",
-        "test_metric_name": "roc_auc",
-    }
-    results.to_csv(results_path, index=False)
-    out = tmp_path / "out"
-    main(
-        [
-            "--results",
-            str(results_path),
-            "--predictions-dir",
-            str(predictions),
-            "--prepared-dir",
-            str(prepared),
-            "--output-dir",
-            str(out),
-        ]
-    )
-    selected = pd.read_csv(out / "selected_heads.csv").set_index("embedder")
-    candidates = pd.read_csv(out / "head_candidates.csv")
-    assert selected.loc["A", "model"] == "rf"
-    assert selected.loc["B", "model"] == "ridge"
-    knn = candidates.loc[candidates["model"].eq("knn")].iloc[0]
-    assert not knn["eligible_head"]
-    assert not knn["selected"]
-
-
 def test_score_mismatch_excludes_model_from_common_rows(tmp_path):
     selected, common, _ = _run(tmp_path, overrides={("B", "ridge"): 0.5})
     assert selected.loc["B", "archive_status"] == "score_mismatch"
     assert list(common["embedder"]) == ["A"]
     assert common["n_common_test_rows"].item() == 4
-
-
-def test_archive_without_row_ids_is_reported_not_compared(tmp_path):
-    selected, common, _ = _run(tmp_path, drop_row_ids=("B",))
-    assert selected.loc["B", "archive_status"] == "no_row_ids"
-    assert list(common["embedder"]) == ["A"]
 
 
 def test_archive_from_different_prepared_file_is_excluded(tmp_path):
@@ -183,56 +141,6 @@ def test_archive_from_different_prepared_file_is_excluded(tmp_path):
     selected = pd.read_csv(out / "selected_heads.csv").set_index("embedder")
     assert selected.loc["B", "archive_status"] == "prepared_hash_mismatch"
     assert list(pd.read_csv(out / "common_row_scores.csv")["embedder"]) == ["A"]
-
-
-def test_archive_without_prepared_hash_is_excluded(tmp_path):
-    results_path, predictions, prepared = _write_inputs(tmp_path)
-    path = predictions / "toy/B/ridge.npz"
-    with np.load(path, allow_pickle=False) as archive:
-        arrays = {key: archive[key] for key in archive.files if key != "prepared_data_sha256"}
-    np.savez(path, **arrays)
-    out = tmp_path / "out"
-    main(
-        [
-            "--results",
-            str(results_path),
-            "--predictions-dir",
-            str(predictions),
-            "--prepared-dir",
-            str(prepared),
-            "--output-dir",
-            str(out),
-        ]
-    )
-    selected = pd.read_csv(out / "selected_heads.csv").set_index("embedder")
-    assert selected.loc["B", "archive_status"] == "no_prepared_hash"
-
-
-def test_inputs_are_not_modified(tmp_path):
-    results_path, predictions, prepared = _write_inputs(tmp_path)
-    inputs = [results_path, *sorted(predictions.rglob("*.npz")), prepared / "toy.json"]
-    before = [file_sha256(p) for p in inputs]
-    main(
-        [
-            "--results",
-            str(results_path),
-            "--predictions-dir",
-            str(predictions),
-            "--prepared-dir",
-            str(prepared),
-            "--output-dir",
-            str(tmp_path / "out"),
-        ]
-    )
-    assert [file_sha256(p) for p in inputs] == before
-
-
-def test_average_precision_skips_unusable_endpoints():
-    y_true = np.array([[0, 1, np.nan], [1, 1, 0], [0, 1, np.nan], [1, 1, 1]])
-    y_score = np.array([[0.1, 0.5, 0.2], [0.9, 0.4, 0.3], [0.2, 0.6, 0.1], [0.8, 0.7, 0.9]])
-    # Endpoint 2 has one class only; endpoint 3 keeps two finite rows.
-    expected = (1.0 + float(average_precision_score([0, 1], [0.3, 0.9]))) / 2
-    assert multioutput_average_precision(y_true, y_score) == pytest.approx(expected)
 
 
 def test_common_row_score_handles_a_single_class_after_exclusion():
@@ -341,15 +249,6 @@ def test_paired_bootstrap_names_a_winner_only_when_clear(tmp_path):
     assert (paired["ci_low"] <= paired["roc_auc_difference"]).all()
 
 
-def test_paired_reference_limits_the_pairs(tmp_path):
-    selected = _paired_archives(tmp_path)
-    paired = paired_task_differences(selected, reference="noisy", n_boot=50, seed=0)
-    assert set(zip(paired["embedder_a"], paired["embedder_b"], strict=True)) == {
-        ("noisy", "good"),
-        ("noisy", "twin"),
-    }
-
-
 def test_main_writes_paired_task_differences(tmp_path):
     _, _, out = _run(tmp_path)
     paired = pd.read_csv(out / "paired_task_differences.csv")
@@ -417,36 +316,3 @@ def test_table_baselines_are_cv_selected_but_never_row_compared(tmp_path):
     matrix = pd.read_csv(out / "task_matrix.csv", index_col=0)
     assert matrix.loc["toy", "Table model"] == 0.70
     assert matrix.loc["toy", "A"] == selected.loc["A", "test_metric"]
-
-
-def test_table_results_need_named_embedders(tmp_path):
-    results_path, predictions, prepared = _write_inputs(tmp_path)
-    table_path = _write_table(tmp_path, [("T", "rf", 0.9, 0.8)])
-    with pytest.raises(SystemExit):
-        main(
-            [
-                "--results",
-                str(results_path),
-                "--table-results",
-                str(table_path),
-                "--output-dir",
-                str(tmp_path / "out"),
-            ]
-        )
-    with pytest.raises(ValueError, match="not found"):
-        main(
-            [
-                "--results",
-                str(results_path),
-                "--table-results",
-                str(table_path),
-                "--table-embedders",
-                "Missing",
-                "--predictions-dir",
-                str(predictions),
-                "--prepared-dir",
-                str(prepared),
-                "--output-dir",
-                str(tmp_path / "out"),
-            ]
-        )

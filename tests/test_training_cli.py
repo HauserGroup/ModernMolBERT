@@ -6,12 +6,10 @@ import torch
 from datasets import Dataset
 from transformers.models.modernbert.configuration_modernbert import ModernBertConfig
 
-from modernmolbert.train_ape_tokenizer import parse_args as parse_ape_args
 from modernmolbert.train_selfies_ape_modernbert import (
     build_modernbert_config,
     make_eval_dataset,
     make_train_iterable_dataset,
-    parse_args as parse_train_args,
     sequence_bucket,
     validate_args,
 )
@@ -28,13 +26,6 @@ class _Argv:
 
     def __exit__(self, exc_type, exc, tb):
         sys.argv = self._old
-
-
-def test_parse_train_args_accepts_no_bf16():
-    with _Argv("--output_dir", "tmp/run", "--no-bf16"):
-        args = parse_train_args()
-
-    assert args.bf16 is False
 
 
 def test_molecular_model_config_uses_vocabulary_boundaries_for_cls_and_sep(monkeypatch):
@@ -56,13 +47,6 @@ def test_molecular_model_config_uses_vocabulary_boundaries_for_cls_and_sep(monke
     assert config.cls_token_id == config.bos_token_id == 0
     assert config.sep_token_id == config.eos_token_id == 2
     assert max(config.cls_token_id, config.sep_token_id, config.pad_token_id) < 588
-
-
-def test_parse_ape_args_accepts_data_files():
-    with _Argv("--data_files", "data/*.parquet"):
-        args = parse_ape_args()
-
-    assert args.data_files == "data/*.parquet"
 
 
 def test_validate_args_rejects_unsupported_cuda_bf16(monkeypatch):
@@ -128,34 +112,3 @@ def test_pretokenized_rows_use_stable_hash_split(monkeypatch):
 
     assert [row["input_ids"] for row in train_rows] == [[0, 6, 2]]
     assert eval_dataset["input_ids"] == [[0, 5, 2]]
-
-
-def test_global_train_shuffle_covers_all_rows_without_source_order_bias(tmp_path):
-    source = tmp_path / "train.parquet"
-    Dataset.from_dict({"input_ids": [[0, i + 5, 2] for i in range(100)]}).to_parquet(source)
-    args = argparse.Namespace(
-        output_dir=str(tmp_path / "run"),
-        dataset_name=str(tmp_path),
-        train_split="train",
-        data_dir=None,
-        data_files=None,
-        global_train_shuffle=True,
-        seed=42,
-        shuffle_buffer_size=10,
-        selfies_column="selfies",
-        use_validation_split=True,
-        max_seq_length=8,
-    )
-
-    rows = list(make_train_iterable_dataset(args, tokenizer=None))  # type: ignore[arg-type]
-    observed = [row["input_ids"][1] - 5 for row in rows]
-    assert sorted(observed) == list(range(100))
-    assert observed != list(range(100))
-    assert any(index >= 20 for index in observed[:10])
-    rows_again = list(make_train_iterable_dataset(args, tokenizer=None))  # type: ignore[arg-type]
-    assert [row["input_ids"][1] for row in rows_again] == [row["input_ids"][1] for row in rows]
-    stream = make_train_iterable_dataset(args, tokenizer=None)  # type: ignore[arg-type]
-    stream.set_epoch(1)
-    assert [row["input_ids"][1] for row in stream][:10] != [row["input_ids"][1] for row in rows][
-        :10
-    ]

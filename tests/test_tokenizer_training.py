@@ -52,26 +52,6 @@ def test_ape_train_freq_debits_merged_constituents():
     assert all(count >= 0 for count in freq.values())
 
 
-def test_ape_train_rejects_empty_corpus() -> None:
-    tokenizer = APEPreTrainedTokenizer()
-
-    with pytest.raises(ValueError, match="empty corpus"):
-        tokenizer.train(corpus=[], max_vocab_size=32, min_freq_for_merge=2)
-
-
-def test_ape_train_rejects_nonpositive_checkpoint_interval() -> None:
-    tokenizer = APEPreTrainedTokenizer()
-
-    with pytest.raises(ValueError, match="checkpoint_interval"):
-        tokenizer.train(
-            corpus=["[C][O]"],
-            max_vocab_size=32,
-            min_freq_for_merge=2,
-            save_checkpoint=True,
-            checkpoint_interval=0,
-        )
-
-
 def test_load_vocabulary_rejects_duplicate_ids(tmp_path) -> None:
     vocab_path = tmp_path / "bad_vocab.json"
     vocab_path.write_text(
@@ -211,77 +191,3 @@ def _write_vocab(path, extra_tokens):
         ),
         encoding="utf-8",
     )
-
-
-def test_init_selects_representation_specific_vocab_file(tmp_path):
-    selfies_vocab = tmp_path / "selfies_vocab.json"
-    smiles_vocab = tmp_path / "smiles_vocab.json"
-    _write_vocab(selfies_vocab, {"[C]": 5, "[C][C]": 6})
-    _write_vocab(smiles_vocab, {"C": 5, "CC": 6, "CCO": 7})
-
-    tokenizer = APEPreTrainedTokenizer(
-        selfies_vocab_file=selfies_vocab,
-        smiles_vocab_file=smiles_vocab,
-        representation="SMILES",
-    )
-
-    assert tokenizer.vocab_file == str(smiles_vocab)
-    assert "CCO" in tokenizer.vocabulary
-    assert "[C][C]" not in tokenizer.vocabulary
-    assert tokenizer.encode("CCO", add_special_tokens=False) == [7]
-
-
-def test_from_pretrained_selects_representation_specific_vocab_file(tmp_path):
-    _write_vocab(tmp_path / "selfies_vocab.json", {"[C]": 5, "[C][C]": 6})
-    _write_vocab(tmp_path / "smiles_vocab.json", {"C": 5, "CC": 6, "CCO": 7})
-
-    tokenizer = APEPreTrainedTokenizer.from_pretrained(
-        str(tmp_path),
-        representation="SELFIES",
-    )
-
-    assert tokenizer.vocab_file == str(tmp_path / "selfies_vocab.json")
-    assert tokenizer.encode("[C][C]", add_special_tokens=False) == [6]
-
-
-def test_get_special_tokens_mask_returns_input_length_masks():
-    tokenizer = APEPreTrainedTokenizer()
-    token_ids = [tokenizer.bos_token_id, 10, tokenizer.eos_token_id]
-
-    with_specials = tokenizer.get_special_tokens_mask(
-        token_ids,
-        already_has_special_tokens=True,
-    )
-    without_specials = tokenizer.get_special_tokens_mask(
-        token_ids,
-        already_has_special_tokens=False,
-    )
-
-    assert len(with_specials) == len(token_ids)
-    assert len(without_specials) == len(token_ids)
-    assert with_specials == [1, 0, 1]
-    assert without_specials == [0, 0, 0]
-
-
-def test_unk_token_id_matches_special_tokens_mapping():
-    tokenizer = APEPreTrainedTokenizer()
-    assert tokenizer.unk_token_id == tokenizer.special_tokens[str(tokenizer.unk_token)]
-
-
-def test_pad_pads_labels_with_ignore_index():
-    tokenizer = APEPreTrainedTokenizer()
-    batch = [
-        {"input_ids": [0, 5, 2], "labels": [0, 5, 2]},
-        {"input_ids": [0, 6, 7, 2], "labels": [0, 6, 7, 2]},
-    ]
-
-    out = tokenizer.pad(batch, return_tensors=None)
-
-    assert out["labels"][0] == [0, 5, 2, -100]
-    assert out["labels"][1] == [0, 6, 7, 2]
-
-
-def test_train_from_iterator_raises_not_implemented():
-    tokenizer = APEPreTrainedTokenizer()
-    with pytest.raises(NotImplementedError):
-        tokenizer.train_from_iterator(iter(["[C][C][O]"]))

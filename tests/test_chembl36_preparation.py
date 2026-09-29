@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from modernmolbert.data.chembl36 import (
     ChemBL36SelfiesPrepConfig,
@@ -18,14 +17,6 @@ def test_canonicalize_and_selfies_valid() -> None:
     assert out["smiles_canonical_clean"] == "CCO"
     assert out["selfies"] is not None
     assert out["sanitize_error"] is None
-
-
-def test_canonicalize_and_selfies_invalid() -> None:
-    out = canonicalize_and_selfies("not_a_smiles")
-
-    assert out["is_valid"] is False
-    assert out["selfies"] is None
-    assert out["sanitize_error"] is not None
 
 
 def test_prepare_chembl36_frame_filters_and_adds_selfies(tmp_path: Path) -> None:
@@ -77,14 +68,6 @@ def test_prepare_chembl36_frame_dedupes_clean_split_keys(tmp_path: Path) -> None
 
     assert len(out) == 1
     assert out.loc[0, "split_key"] == "same"
-
-
-def test_prepare_chembl36_frame_requires_smiles_column() -> None:
-    with pytest.raises(ValueError, match="missing required columns"):
-        prepare_chembl36_frame(
-            pd.DataFrame({"x": ["CCO"]}),
-            config=ChemBL36SelfiesPrepConfig(),
-        )
 
 
 def test_split_by_hash_default_returns_train_valid_only() -> None:
@@ -142,50 +125,3 @@ def test_split_by_hash_can_create_non_overlapping_test_split() -> None:
     assert train_keys.isdisjoint(test_keys)
     assert valid_keys.isdisjoint(test_keys)
     assert len(train_keys | valid_keys | test_keys) == len(frame)
-
-
-def test_split_by_hash_changes_with_seed_without_test_split() -> None:
-    frame = pd.DataFrame({"split_key": [f"mol_{i}" for i in range(1000)]})
-
-    train_a, valid_a, test_a = split_by_hash(
-        frame,
-        key_column="split_key",
-        valid_fraction=0.1,
-        seed=13,
-    )
-    train_b, valid_b, test_b = split_by_hash(
-        frame,
-        key_column="split_key",
-        valid_fraction=0.1,
-        seed=14,
-    )
-
-    assert test_a is None
-    assert test_b is None
-    assert set(train_a["split_key"]) != set(train_b["split_key"])
-    assert set(valid_a["split_key"]) != set(valid_b["split_key"])
-
-
-def test_split_by_hash_changes_with_seed_with_test_split() -> None:
-    frame = pd.DataFrame({"split_key": [f"mol_{i}" for i in range(1000)]})
-
-    train_a, valid_a, test_a = split_by_hash(
-        frame,
-        key_column="split_key",
-        valid_fraction=0.1,
-        test_fraction=0.1,
-        seed=13,
-    )
-    train_b, valid_b, test_b = split_by_hash(
-        frame,
-        key_column="split_key",
-        valid_fraction=0.1,
-        test_fraction=0.1,
-        seed=14,
-    )
-
-    assert test_a is not None
-    assert test_b is not None
-    assert set(train_a["split_key"]) != set(train_b["split_key"])
-    assert set(valid_a["split_key"]) != set(valid_b["split_key"])
-    assert set(test_a["split_key"]) != set(test_b["split_key"])

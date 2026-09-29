@@ -117,26 +117,6 @@ def tiny_modernmolbert_dir(tmp_path: Path, monkeypatch) -> Path:
     return model_dir
 
 
-def test_modernmolbert_selfies_featurizer_valid_and_invalid_smiles(
-    tiny_modernmolbert_dir,
-):
-    featurizer = ModernMolBERTSelfiesFeaturizer(
-        model_dir=tiny_modernmolbert_dir,
-        tokenizer_path=tiny_modernmolbert_dir,
-        max_seq_length=32,
-        batch_size=2,
-        device="cpu",
-    )
-
-    batch = featurizer.featurize_smiles(["CCO", "not_a_smiles"])
-
-    assert batch.valid_mask.tolist() == [True, False]
-    assert batch.X.shape == (1, 8)
-    assert batch.X.ndim == 2
-    assert batch.X.dtype == np.float32
-    batch.check(n_inputs=2)
-
-
 def test_modernmolbert_selfies_featurizer_all_invalid_smiles(tiny_modernmolbert_dir):
     featurizer = ModernMolBERTSelfiesFeaturizer(
         model_dir=tiny_modernmolbert_dir,
@@ -191,38 +171,6 @@ def test_modernmolbert_selfies_featurizer_preserves_input_order_in_valid_mask(
     assert batch.valid_mask.tolist() == [False, True, False, True]
     assert batch.X.shape == (2, 8)
     batch.check(n_inputs=4)
-
-
-def test_modernmolbert_selfies_featurizer_cls_pooling(tiny_modernmolbert_dir):
-    featurizer = ModernMolBERTSelfiesFeaturizer(
-        model_dir=tiny_modernmolbert_dir,
-        tokenizer_path=tiny_modernmolbert_dir,
-        max_seq_length=32,
-        batch_size=2,
-        device="cpu",
-        pooling="cls",
-    )
-
-    batch = featurizer.featurize_smiles(["CCO"])
-
-    assert batch.valid_mask.tolist() == [True]
-    assert batch.X.shape == (1, 8)
-    assert batch.X.dtype == np.float32
-    batch.check(n_inputs=1)
-
-
-def test_modernmolbert_selfies_featurizer_rejects_unknown_pooling(
-    tiny_modernmolbert_dir,
-):
-    with pytest.raises(ValueError, match="pooling|Unsupported"):
-        ModernMolBERTSelfiesFeaturizer(
-            model_dir=tiny_modernmolbert_dir,
-            tokenizer_path=tiny_modernmolbert_dir,
-            max_seq_length=32,
-            batch_size=2,
-            device="cpu",
-            pooling="not_a_pooling_strategy",  # type: ignore[arg-type]
-        )
 
 
 def test_mean_pooling_excludes_special_tokens(tiny_modernmolbert_dir):

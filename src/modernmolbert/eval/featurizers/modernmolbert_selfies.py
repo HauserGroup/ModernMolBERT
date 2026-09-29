@@ -55,6 +55,8 @@ class ModernMolBERTSelfiesFeaturizer:
 
         selfies_strings: list[str] = []
         valid_mask = np.zeros(len(smiles), dtype=bool)
+        n_tokenization_failures = 0
+        n_truncated = 0
 
         for i, smi in enumerate(smiles):
             if smi is None:
@@ -72,6 +74,17 @@ class ModernMolBERTSelfiesFeaturizer:
             if not encoded:
                 continue
 
+            # Validate the complete string before truncation can hide a failure.
+            # Older checkpoint-bundled tokenizers silently discard component dots.
+            # An unknown-ID check alone cannot detect that molecular information loss.
+            if "".join(self.tokenizer.tokenize(encoded)) != encoded:
+                n_tokenization_failures += 1
+                continue
+            content_ids = self.tokenizer.encode(encoded, add_special_tokens=False, truncation=False)
+            if not content_ids or any(i in self._special_token_ids() for i in content_ids):
+                n_tokenization_failures += 1
+                continue
+            n_truncated += int(len(content_ids) + 2 > self.max_seq_length)
             selfies_strings.append(encoded)
             valid_mask[i] = True
 
@@ -84,6 +97,8 @@ class ModernMolBERTSelfiesFeaturizer:
                 metadata=self._metadata(
                     n_inputs=len(smiles),
                     n_valid=0,
+                    n_tokenization_failures=n_tokenization_failures,
+                    n_truncated=n_truncated,
                 ),
             )
             out.check(n_inputs=len(smiles))
@@ -130,6 +145,8 @@ class ModernMolBERTSelfiesFeaturizer:
             metadata=self._metadata(
                 n_inputs=len(smiles),
                 n_valid=int(valid_mask.sum()),
+                n_tokenization_failures=n_tokenization_failures,
+                n_truncated=n_truncated,
             ),
         )
         out.check(n_inputs=len(smiles))
@@ -143,7 +160,14 @@ class ModernMolBERTSelfiesFeaturizer:
     ) -> FeatureBatch:
         return self.featurize_smiles(smiles, batch_size=batch_size)
 
-    def _metadata(self, *, n_inputs: int, n_valid: int) -> dict[str, object]:
+    def _metadata(
+        self,
+        *,
+        n_inputs: int,
+        n_valid: int,
+        n_tokenization_failures: int = 0,
+        n_truncated: int = 0,
+    ) -> dict[str, object]:
         return {
             "featurizer": self.name,
             "backend": "modernmolbert_selfies",
@@ -159,6 +183,8 @@ class ModernMolBERTSelfiesFeaturizer:
             "num_parameters": int(sum(p.numel() for p in self.model.parameters())),
             "n_inputs": n_inputs,
             "n_valid": n_valid,
+            "n_tokenization_failures": n_tokenization_failures,
+            "n_truncated": n_truncated,
             "invalid_fraction": float(1.0 - n_valid / n_inputs) if n_inputs else 0.0,
         }
 

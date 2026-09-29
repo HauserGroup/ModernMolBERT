@@ -4,12 +4,12 @@ import sys
 import pytest
 import torch
 from datasets import Dataset
+from transformers.models.modernbert.configuration_modernbert import ModernBertConfig
 
-from modernmolbert.train_ape_tokenizer import parse_args as parse_ape_args
 from modernmolbert.train_selfies_ape_modernbert import (
+    build_modernbert_config,
     make_eval_dataset,
     make_train_iterable_dataset,
-    parse_args as parse_train_args,
     sequence_bucket,
     validate_args,
 )
@@ -28,18 +28,25 @@ class _Argv:
         sys.argv = self._old
 
 
-def test_parse_train_args_accepts_no_bf16():
-    with _Argv("--output_dir", "tmp/run", "--no-bf16"):
-        args = parse_train_args()
-
-    assert args.bf16 is False
-
-
-def test_parse_ape_args_accepts_data_files():
-    with _Argv("--data_files", "data/*.parquet"):
-        args = parse_ape_args()
-
-    assert args.data_files == "data/*.parquet"
+def test_molecular_model_config_uses_vocabulary_boundaries_for_cls_and_sep(monkeypatch):
+    monkeypatch.setattr(
+        "modernmolbert.train_selfies_ape_modernbert.AutoConfig.from_pretrained",
+        lambda *_args: ModernBertConfig(),
+    )
+    config = build_modernbert_config(
+        argparse.Namespace(model_size="small", max_seq_length=128),
+        vocab_size=588,
+        special_ids={
+            "pad_token": 1,
+            "bos_token": 0,
+            "eos_token": 2,
+            "unk_token": 3,
+            "mask_token": 4,
+        },
+    )
+    assert config.cls_token_id == config.bos_token_id == 0
+    assert config.sep_token_id == config.eos_token_id == 2
+    assert max(config.cls_token_id, config.sep_token_id, config.pad_token_id) < 588
 
 
 def test_validate_args_rejects_unsupported_cuda_bf16(monkeypatch):

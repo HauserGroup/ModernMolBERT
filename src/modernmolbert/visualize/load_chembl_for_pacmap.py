@@ -74,10 +74,10 @@ def load_chembl_selfies(
     df = pd.read_parquet(parquet_path, columns=selected_columns)
 
     if only_valid and "is_valid" in df.columns:
-        df = df[df["is_valid"].astype(bool)]
+        df = df.loc[df["is_valid"].astype(bool)]
 
     df = df.dropna(subset=[selfies_column, property_column])
-    df = df[df[selfies_column].astype(str).str.len() > 0]
+    df = df.loc[df[selfies_column].astype(str).str.len() > 0]
 
     df[property_column] = pd.to_numeric(df[property_column], errors="coerce")
     df = df.dropna(subset=[property_column])

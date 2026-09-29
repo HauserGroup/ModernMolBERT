@@ -83,6 +83,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Tokenizer metadata JSON. Defaults to <vocab>.metadata.json.",
     )
+    parser.add_argument(
+        "--require_corpus_only_vocab",
+        action="store_true",
+        help="Require a tokenizer scanned over the training corpus without injected symbols.",
+    )
 
     # Dataset
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
@@ -129,6 +134,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--eval_size", type=int, default=100_000)
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
+    parser.add_argument(
+        "--global_train_shuffle",
+        action="store_true",
+        help=(
+            "Load the exact local train Parquet as an Arrow dataset, shuffle all rows "
+            "before streaming, then apply the usual buffer shuffle. Avoids source-order bias."
+        ),
+    )
     parser.add_argument("--seed", type=int, default=13)
 
     # Deterministic non-overlapping split by molecule identity.
@@ -496,6 +509,43 @@ def _is_validation_row(row: dict[str, Any], args: argparse.Namespace) -> bool:
     return key is not None and sequence_bucket(key, args.val_split_mod) == args.val_split_bucket
 
 
+def corpus_only_training_parquet(args: argparse.Namespace) -> Path:
+    """Identify the exact local Parquet that the revision training will stream."""
+    if args.data_dir is not None:
+        raise ValueError("Corpus-only training requires a local Parquet, not --data_dir")
+    if args.data_files is None and find_local_dataset(dataset_name=args.dataset_name) is not None:
+        # get_streaming_dataset prefers a name-matched Arrow dataset under data/ over the
+        # Parquet hashed below, so the gate would check a file that training never reads.
+        raise ValueError(
+            "Corpus-only training found a matching local Arrow dataset under data/; "
+            "pass --data_files to stream the scanned training Parquet explicitly"
+        )
+    if args.data_files is not None:
+        source = Path(args.data_files)
+    else:
+        source = Path(args.dataset_name) / f"{args.train_split}.parquet"
+    if not source.is_file():
+        raise ValueError(
+            f"Corpus-only training requires one local Parquet file for the training split: {source}"
+        )
+    return source
+
+
+def assert_corpus_only_vocab(metadata: dict[str, Any], training_parquet: Path) -> None:
+    """Require uninjected primitives scanned from this exact training file."""
+    scan = metadata.get("corpus_primitive_scan")
+    if not isinstance(scan, dict):
+        raise ValueError("Corpus-only tokenizer requires corpus_primitive_scan metadata")
+    if not scan.get("sha256") or int(scan.get("n_rows", 0)) <= 0:
+        raise ValueError("Corpus-only tokenizer scan lacks a source hash or positive row count")
+    if scan["sha256"] != file_sha256(training_parquet):
+        raise ValueError("Corpus-only tokenizer was scanned from a different training Parquet")
+    if int(metadata.get("extra_vocab_symbols_requested", 0)) != 0:
+        raise ValueError("Corpus-only tokenizer includes requested extra vocabulary symbols")
+    if int(metadata.get("extra_vocab_symbols_added", 0)) != 0:
+        raise ValueError("Corpus-only tokenizer includes added extra vocabulary symbols")
+
+
 def load_and_validate_tokenizer(
     args: argparse.Namespace,
 ) -> tuple[
@@ -528,6 +578,8 @@ def load_and_validate_tokenizer(
 
     metadata = load_tokenizer_metadata(metadata_path)
     assert_metadata_representation(metadata, expected_representation=SELFIES_REPRESENTATION)
+    if args.require_corpus_only_vocab:
+        assert_corpus_only_vocab(metadata, corpus_only_training_parquet(args))
 
     recorded_sha = str(metadata.get("tokenizer_sha256", ""))
     actual_sha = file_sha256(vocab_path)
@@ -591,14 +643,38 @@ def load_and_validate_tokenizer(
 def make_train_iterable_dataset(
     args: argparse.Namespace, tokenizer: APEPreTrainedTokenizer
 ) -> IterableDataset:
-    ds = get_streaming_dataset(
-        args.dataset_name,
-        split=args.train_split,
-        seed=args.seed + 100,
-        buffer_size=args.shuffle_buffer_size,
-        data_dir=args.data_dir,
-        data_files=args.data_files,
-    )
+    if getattr(args, "global_train_shuffle", False):
+        source = corpus_only_training_parquet(args)
+        import pyarrow.parquet as pq
+
+        available_columns = pq.ParquetFile(source).schema_arrow.names
+        if args.selfies_column in available_columns:
+            input_columns = [args.selfies_column]
+        elif "input_ids" in available_columns:
+            input_columns = ["input_ids"]
+        else:
+            raise ValueError(f"Missing SELFIES and input_ids columns in {source}")
+        cache_dir = Path(args.output_dir) / "dataset_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        indexed = Dataset.from_parquet(str(source), columns=input_columns, cache_dir=str(cache_dir))
+        if not len(indexed):
+            raise ValueError(f"No training rows in {source}")
+        # The source Parquet is ChEMBL-ID ordered. An index-level Arrow shuffle
+        # distributes all compounds across the first epoch without changing the
+        # hashed training file or the tokenizer's corpus-only coverage proof.
+        indexed = indexed.shuffle(seed=args.seed + 100)
+        ds = indexed.to_iterable_dataset(num_shards=min(64, len(indexed)))
+        ds = ds.shuffle(seed=args.seed + 101, buffer_size=args.shuffle_buffer_size)
+        log(f"Training rows globally shuffled from {source}: {len(indexed):,}")
+    else:
+        ds = get_streaming_dataset(
+            args.dataset_name,
+            split=args.train_split,
+            seed=args.seed + 100,
+            buffer_size=args.shuffle_buffer_size,
+            data_dir=args.data_dir,
+            data_files=args.data_files,
+        )
 
     def keep_train(row: dict[str, Any]) -> bool:
         has_content = normalize_sequence(row, args.selfies_column) is not None or "input_ids" in row
@@ -755,6 +831,11 @@ def build_modernbert_config(
     config.pad_token_id = special_ids["pad_token"]
     config.bos_token_id = special_ids["bos_token"]
     config.eos_token_id = special_ids["eos_token"]
+    # ModernBERT also keeps CLS/SEP IDs from its base vocabulary. Align them
+    # with the molecular tokenizer so saved configs never reference IDs above
+    # the new vocabulary size.
+    config.cls_token_id = special_ids["bos_token"]
+    config.sep_token_id = special_ids["eos_token"]
     # Optional context-length override.
     if args.max_seq_length is not None:
         config.max_position_embeddings = args.max_seq_length

@@ -306,7 +306,7 @@ def write_report(df: pd.DataFrame, args: argparse.Namespace, path: Path) -> None
         "global_step",
         "max_steps",
     ]
-    lines += [_markdown_table(df[[c for c in overview_cols if c in df.columns]]), ""]
+    lines += [_markdown_table(df.loc[:, [c for c in overview_cols if c in df.columns]]), ""]
 
     lines += [f"## Best run: `{best['run_name']}`", ""]
 
@@ -388,12 +388,12 @@ def main() -> None:
     df = pd.DataFrame(rows)
 
     if args.masking_strategy:
-        df = df[df["masking_strategy"] == args.masking_strategy]
+        df = df.loc[df["masking_strategy"] == args.masking_strategy]
 
     if args.require_complete:
-        df = df[df["completed_max_steps"]]
+        df = df.loc[df["completed_max_steps"].astype(bool)]
 
-    df = df[df["selection_metric"].notna()].copy()
+    df = df.loc[df["selection_metric"].notna()].copy()
     if df.empty:
         raise SystemExit("No runs had a usable selection metric.")
 

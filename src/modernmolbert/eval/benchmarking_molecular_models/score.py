@@ -522,6 +522,12 @@ def subsample_embedded_dataset(
     }
 
     y = dataset.y.iloc[selected].reset_index(drop=True)
+    metadata = dict(dataset.metadata)
+    source_rows = metadata.get("source_row_indices")
+    if source_rows is not None:
+        if len(source_rows) != len(dataset.X):
+            raise ValueError(f"Source row mapping length mismatch for {dataset.name}")
+        metadata["source_row_indices"] = [source_rows[int(index)] for index in selected]
     subset = EmbeddedDataset(
         name=dataset.name,
         task=dataset.task,
@@ -529,7 +535,7 @@ def subsample_embedded_dataset(
         splits=remapped_splits,
         X=dataset.X[selected],
         y=y,
-        metadata=dict(dataset.metadata),
+        metadata=metadata,
     )
 
     log.info(
@@ -666,6 +672,7 @@ def run_eval(
     override: bool,
     preloaded: Any = None,
     n_jobs: int | None = None,
+    missing_labels: str = "observed",
 ) -> bool:
     """Run one dataset/head evaluation.
 
@@ -696,6 +703,7 @@ def run_eval(
             override=override,
             preloaded=preloaded,
             n_jobs=n_jobs,
+            missing_labels=missing_labels,
         )
     except Exception as exc:
         if not safe:
@@ -872,6 +880,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for scoring-time subsampling. Defaults to 42.",
+    )
+
+    parser.add_argument(
+        "--missing-labels",
+        choices=["observed", "as-negative"],
+        default="observed",
+        help=(
+            "Handling of missing labels in multi-endpoint datasets (Tox21, MUV). "
+            "'observed' fits each endpoint on its observed labels; 'as-negative' "
+            "treats them as negatives, matching the scorer behind the imported "
+            "Praski et al. results. Use 'as-negative' when comparing with that table."
+        ),
     )
 
     parser.add_argument(
@@ -1059,6 +1079,7 @@ def main() -> int:
                     override=override,
                     preloaded=embedded_data,
                     n_jobs=args.n_jobs,
+                    missing_labels=args.missing_labels,
                 )
             except Exception as exc:
                 success = False

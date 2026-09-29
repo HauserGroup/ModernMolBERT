@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Create plots for the pretraining/evaluation overlap analysis."""
+"""Plot pretraining/evaluation overlap per benchmark dataset.
+
+Reads analysis/pretraining_eval_overlap.csv (from pretraining_eval_overlap.py) and
+writes a single dot plot comparing full-dataset and test-split overlap.
+"""
 
 from pathlib import Path
 
@@ -8,61 +12,70 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 CSV_PATH = ROOT / "analysis" / "pretraining_eval_overlap.csv"
-OUT_DIR = ROOT / "analysis" / "plots"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_PATH = ROOT / "analysis" / "plots" / "pretraining_eval_overlap.png"
 
-
-def _short_label(name: str) -> str:
-    stem = Path(name).stem
-    if stem.startswith("prepared/"):
-        stem = stem[len("prepared/") :]
-    if stem.endswith(".joblib"):
-        stem = stem[: -len(".joblib")]
-    return stem
+FULL_COLOR = "#2a78d6"
+TEST_COLOR = "#eb6834"
+INK = "#0b0b0b"
+MUTED_INK = "#52514e"
+GRID = "#e1e0d9"
+LINK = "#c3c2b7"
 
 
 def main() -> None:
-    df = pd.read_csv(CSV_PATH)
-    df = df.sort_values("overlap_pct", ascending=True).reset_index(drop=True)
+    df = pd.read_csv(CSV_PATH).dropna(subset=["overlap_pct"])
+    df = df.sort_values("overlap_pct").reset_index(drop=True)
+    y = range(len(df))
 
-    df["dataset_label"] = df["dataset"].map(_short_label)
+    fig, ax = plt.subplots(figsize=(8, 0.32 * len(df) + 1.4))
+    ax.hlines(
+        y,
+        df[["overlap_pct", "test_overlap_pct"]].min(axis=1),
+        df[["overlap_pct", "test_overlap_pct"]].max(axis=1),
+        color=LINK,
+        linewidth=2,
+        zorder=1,
+    )
+    ax.scatter(
+        df["overlap_pct"],
+        y,
+        s=48,
+        color=FULL_COLOR,
+        edgecolors="white",
+        linewidths=1.5,
+        label="Full dataset",
+        zorder=3,
+    )
+    ax.scatter(
+        df["test_overlap_pct"],
+        y,
+        s=48,
+        color=TEST_COLOR,
+        marker="D",
+        edgecolors="white",
+        linewidths=1.5,
+        label="Test split",
+        zorder=3,
+    )
 
-    fig, ax = plt.subplots(figsize=(12, 8))
-    bars = ax.barh(df["dataset_label"], df["overlap_pct"], color="steelblue")
-    ax.invert_yaxis()
-    ax.set_title("Pretraining/evaluation overlap by benchmark dataset")
-    ax.set_xlabel("Overlap (%)")
-    ax.set_ylabel("Dataset")
-    ax.set_xlim(0, 100)
-    ax.xaxis.grid(True, linestyle="--", alpha=0.4)
-    ax.yaxis.grid(False)
-    for bar, value in zip(bars, df["overlap_pct"]):
-        ax.text(value + 1.0, bar.get_y() + bar.get_height() / 2, f"{value:.1f}%", va="center", fontsize=8)
+    ax.set_yticks(list(y), df["dataset"], fontsize=8, color=INK)
+    ax.set_xlim(0, 102)
+    ax.set_xlabel("Molecules seen in ChEMBL pretraining set (%)", color=MUTED_INK)
+    ax.set_title("Benchmark overlap with pretraining data", color=INK, loc="left")
+    ax.xaxis.grid(True, color=GRID, linewidth=0.8)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis="x", colors=MUTED_INK, labelsize=8)
+    ax.tick_params(axis="y", length=0)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color(LINK)
+    ax.legend(loc="lower right", frameon=False, fontsize=8, labelcolor=MUTED_INK)
+
     fig.tight_layout()
-    fig.savefig(OUT_DIR / "pretraining_eval_overlap_bar.png", dpi=200)
+    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(OUT_PATH, dpi=200)
     plt.close(fig)
-
-    fig, ax = plt.subplots(figsize=(10, 7))
-    ax.scatter(df["n_eval"], df["overlap_pct"], s=60, c="darkorange", edgecolors="black")
-    for _, row in df.iterrows():
-        ax.annotate(
-            _short_label(row["dataset"]),
-            (row["n_eval"], row["overlap_pct"]),
-            xytext=(4, 4),
-            textcoords="offset points",
-            fontsize=8,
-        )
-    ax.set_title("Overlap percentage vs dataset size")
-    ax.set_xlabel("Evaluation dataset size (n_eval)")
-    ax.set_ylabel("Overlap (%)")
-    ax.set_xlim(0, max(df["n_eval"]) * 1.08)
-    ax.set_ylim(0, 105)
-    ax.grid(True, linestyle="--", alpha=0.4)
-    fig.tight_layout()
-    fig.savefig(OUT_DIR / "pretraining_eval_overlap_scatter.png", dpi=200)
-    plt.close(fig)
-
-    print(f"Saved plots to {OUT_DIR}")
+    print(f"Saved plot to {OUT_PATH}")
 
 
 if __name__ == "__main__":

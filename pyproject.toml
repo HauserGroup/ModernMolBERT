@@ -35,6 +35,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "iprogress>=0.4",
+    "nbstripout>=0.9.1",
     "pre-commit>=4.6.0",
     "pyright>=1.1.409",
     "pytest>=9.0.3",

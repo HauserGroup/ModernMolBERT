@@ -2,9 +2,15 @@
 """
 build_paper_results.py
 
-Derive all paper-facing benchmark numbers from the already-built
-`outputs/eval/best_metric_by_dataset_embedder.csv` (one row per
-dataset x embedder, best downstream head already selected upstream).
+Derive all paper-facing benchmark numbers from one dataset x model score matrix.
+
+Two inputs are supported:
+- ``--task-matrix``: ``task_matrix.csv`` from ``build_common_row_benchmark.py``
+  (CV-selected heads; baselines from the imported table, columns already
+  labelled). This is the revision path for a newly trained model; pass the
+  paper model's label with ``--reference``.
+- default: the archived ``outputs/eval/best_metric_by_dataset_embedder.csv``
+  (one row per dataset x embedder) with the released checkpoints' labels.
 
 Produces:
     outputs/eval/paper/results_matrix_25task.csv   (tasks x models, ROC-AUC; name kept for compatibility)
@@ -16,8 +22,13 @@ No model runs, no new benchmarking. Pure wrangling of existing eval output.
 
 Main-analysis dataset exclusions:
 - ogbg-moltoxcast  (26th MoleculeNet set; no Praski baseline)
+
+The hetero-span ablation (MMB-small-hetero) is exploratory and supplementary-only:
+it is written to the results matrix (for the appendix per-task table) but left out
+of group means, Table 2 and all stats unless --include-hetero-span is passed.
 """
 
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -25,9 +36,31 @@ import numpy as np
 import pandas as pd
 from scipy.stats import wilcoxon
 
+parser = argparse.ArgumentParser(description="Build paper-facing benchmark tables and stats.")
+parser.add_argument(
+    "--include-hetero-span",
+    action="store_true",
+    help="Also include MMB-small-hetero (hetero_span masking) in group means and stats.",
+)
+parser.add_argument(
+    "--task-matrix",
+    type=Path,
+    default=None,
+    help="task_matrix.csv from build_common_row_benchmark.py (columns are model labels).",
+)
+parser.add_argument(
+    "--reference",
+    default=None,
+    help="Headline ModernMolBERT label for the stats (required with --task-matrix).",
+)
+parser.add_argument("--out-dir", type=Path, default=None, help="Output directory.")
+ARGS = parser.parse_args()
+if ARGS.task_matrix is not None and ARGS.reference is None:
+    parser.error("--reference is required with --task-matrix")
+
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "outputs/eval/best_metric_by_dataset_embedder.csv"
-OUT = ROOT / "outputs/eval/paper"
+OUT = ARGS.out_dir or ROOT / "outputs/eval/paper"
 OUT.mkdir(parents=True, exist_ok=True)
 
 # ---- Task -> group map for manuscript main analysis ----
@@ -67,6 +100,7 @@ GROUPS = {
     **{t: "MoleculeNet" for t in MOLNET},
 }
 TASKS_MAIN = TDC_ADME + TDC_TOX + TDC_HTS + MOLNET
+BASELINES = ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer"]
 N_TASKS_MAIN = len(TASKS_MAIN)
 
 # ---- Model name map: paper label -> embedder key in source CSV ----
@@ -78,23 +112,54 @@ MODELS = {
     "MMB-small": "modernmolbert_best_standard",
     "MMB-base": "modernmolbert_best_base",
     "MMB-small-span": "modernmolbert_best_span",
-    "MMB-small-hetero": "modernmolbert_best_hetero_span",
 }
+# Supplementary-only models: kept in the results matrix for the appendix per-task
+# table, but not used for any aggregate or claim unless explicitly requested.
+SUPPLEMENTARY_MODELS = {"MMB-small-hetero": "modernmolbert_best_hetero_span"}
+if ARGS.include_hetero_span:
+    MODELS.update(SUPPLEMENTARY_MODELS)
 
-df = pd.read_csv(SRC)
-df = df[df["test_metric_name"] == "roc_auc"]
-df = df.loc[~df["dataset"].isin(EXCLUDED_DATASETS)].copy()
+df: pd.DataFrame | None = None
+if ARGS.task_matrix is not None:
+    source = pd.read_csv(ARGS.task_matrix, index_col=0)
+    source = source.loc[~source.index.isin(list(EXCLUDED_DATASETS))]
+    if absent := [m for m in [*BASELINES, ARGS.reference] if m not in source.columns]:
+        raise ValueError(f"{ARGS.task_matrix} lacks model columns {absent}; check --matrix-labels")
+    if extra := sorted(set(source.index) - set(TASKS_MAIN)):
+        raise ValueError(f"{ARGS.task_matrix} has datasets outside the benchmark: {extra}")
+    ordered = [*BASELINES, *[c for c in source.columns if c not in BASELINES]]
+    MODELS = {label: label for label in ordered}
+    SUPPLEMENTARY_MODELS = {}
+    matrix = pd.DataFrame(index=TASKS_MAIN)
+    for label in ordered:
+        matrix[label] = pd.Series(source[label], dtype=float).reindex(TASKS_MAIN)
+else:
+    results = pd.read_csv(SRC)
+    if (
+        "selection_metric" not in results
+        or not results["selection_metric"].eq("cv_metric").to_numpy().all()
+    ):
+        raise ValueError(
+            "Regenerate source results using CV head selection before building paper tables"
+        )
+    results = results.loc[
+        results["test_metric_name"].eq("roc_auc")
+        & ~results["dataset"].isin(list(EXCLUDED_DATASETS))
+    ].copy()
+    df = results
 
-# pivot: rows tasks, cols embedder
-pivot = df.pivot_table(index="dataset", columns="embedder", values="test_metric", aggfunc="first")
-matrix = pd.DataFrame(index=TASKS_MAIN)
-for label, key in MODELS.items():
-    matrix[label] = pivot[key].reindex(TASKS_MAIN) if key in pivot.columns else np.nan
+    # pivot: rows tasks, cols embedder
+    pivot = results.pivot(index="dataset", columns="embedder", values="test_metric")
+    matrix = pd.DataFrame(index=TASKS_MAIN)
+    for label, key in {**MODELS, **SUPPLEMENTARY_MODELS}.items():
+        matrix[label] = pivot[key].reindex(TASKS_MAIN) if key in pivot.columns else np.nan
 matrix.insert(0, "group", [GROUPS[t] for t in TASKS_MAIN])
 matrix.to_csv(OUT / "results_matrix_25task.csv")
 
 # ---- Missing cells ----
-missing = {m: matrix.index[matrix[m].isna()].tolist() for m in MODELS if matrix[m].isna().any()}
+missing = {
+    m: matrix.index[matrix[m].isna()].tolist() for m in MODELS if matrix[m].isna().to_numpy().any()
+}
 
 # ---- Group means + overall (per model, over available tasks) ----
 group_order = ["TDC-ADME", "TDC-Tox", "TDC-HTS", "MoleculeNet"]
@@ -102,25 +167,33 @@ rows = []
 for label in MODELS:
     rec: dict[str, Any] = {"model": label}
     for g in group_order:
-        sub = matrix.loc[matrix["group"] == g, label]
-        rec[g] = float(sub.mean())
-        rec[g + "_n"] = int(sub.notna().sum())
-    rec["Overall"] = float(matrix[label].mean())
-    rec["Overall_n"] = int(matrix[label].notna().sum())
+        sub = pd.Series(matrix.loc[matrix["group"] == g, label], dtype=float)
+        rec[g] = sub.mean()
+        rec[g + "_n"] = sub.count()
+    overall = pd.Series(matrix[label], dtype=float)
+    rec["Overall"] = overall.mean()
+    rec["Overall_n"] = overall.count()
     rows.append(rec)
 gm = pd.DataFrame(rows).set_index("model")
 gm.to_csv(OUT / "group_means.csv")
 
 # ---- LaTeX Table 2 (×100, 1 decimal; bold best per column) ----
-table_models = ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer", "MMB-small", "MMB-base"]
-disp_name = {
-    "ECFP4": "ECFP4",
-    "ChemBERTa-2": "ChemBERTa-2 (MLM)",
-    "SELFormer": "SELFormer",
-    "MoLFormer": "MoLFormer",
-    "MMB-small": r"\textbf{\model{}-small}",
-    "MMB-base": r"\textbf{\model{}-base}",
-}
+mmb_models = (
+    [m for m in MODELS if m not in BASELINES]
+    if ARGS.task_matrix is not None
+    else ["MMB-small", "MMB-base"]
+)
+table_models = [*BASELINES, *mmb_models]
+
+
+def display_name(label: str) -> str:
+    if label == "ChemBERTa-2":
+        return "ChemBERTa-2 (MLM)"
+    if label.startswith("MMB-"):
+        return r"\textbf{\model{}-" + label.removeprefix("MMB-") + "}"
+    return label
+
+
 cols = group_order + ["Overall"]
 best = {c: gm.loc[table_models, c].max() for c in cols}
 
@@ -153,14 +226,14 @@ lines = [
     r"\textbf{TDC-HTS} & \textbf{MoleculeNet} & \textbf{Overall} \\",
     r"    \midrule",
 ]
-for label in ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer"]:
+for label in BASELINES:
     lines.append(
-        "    " + disp_name[label] + " & " + " & ".join(fmt(label, c) for c in cols) + r" \\"
+        "    " + display_name(label) + " & " + " & ".join(fmt(label, c) for c in cols) + r" \\"
     )
 lines.append(r"    \midrule")
-for label in ["MMB-small", "MMB-base"]:
+for label in mmb_models:
     lines.append(
-        "    " + disp_name[label] + " & " + " & ".join(fmt(label, c) for c in cols) + r" \\"
+        "    " + display_name(label) + " & " + " & ".join(fmt(label, c) for c in cols) + r" \\"
     )
 lines += [
     r"    \bottomrule",
@@ -169,7 +242,7 @@ lines += [
     rf"    Mean ROC-AUC ($\times100$) on the {N_TASKS_MAIN}-task benchmark of "
     r"\citet{praskiBenchmarkingPretrainedMolecular2025}, broken down by task",
     r"    group. Each entry averages per-task ROC-AUC using the best "
-    r"cross-validated downstream head (ridge / random forest / $k$NN) per task.",
+    r"cross-validated downstream head (logistic regression / random forest / $k$NN) per task.",
     rf"    \emph{{Overall}} is the unweighted mean across all {N_TASKS_MAIN} tasks. "
     r"\textbf{Bold} marks the best value per column.",
     r"  }%",
@@ -188,8 +261,8 @@ def headline():
 
 
 out = []
-hl = headline()
-out.append(f"Headline released model (higher overall): {hl}\n")
+hl = ARGS.reference or headline()
+out.append(f"Headline model: {hl}\n")
 out.append("Overall mean ROC-AUC (x100), n tasks:\n")
 for label in MODELS:
     overall = scalar_float(gm.loc[label, "Overall"])
@@ -203,8 +276,8 @@ out.append(gm[[*group_order, "Overall"]].mul(100).round(1).to_string() + "\n")
 def paired(a, b):
     s = matrix[[a, b]].dropna()
     return (
-        np.asarray(s[a].to_numpy(), dtype=np.float64),
-        np.asarray(s[b].to_numpy(), dtype=np.float64),
+        np.asarray(s[a], dtype=np.float64),
+        np.asarray(s[b], dtype=np.float64),
         s.index.tolist(),
     )
 
@@ -231,13 +304,14 @@ out.append(
     f"{hl} exceeds ECFP4; margin>0.02 on {int((diff > 0.02).sum())}.\n"
 )
 
-# four-model internal (small variants) on common tasks
-out.append("\nFour-model internal (mean ROC-AUC over common tasks):\n")
-for pair in [
-    ("MMB-small", "MMB-base"),
-    ("MMB-small", "MMB-small-span"),
-    ("MMB-small", "MMB-small-hetero"),
-]:
+# internal comparisons (size and masking variants) on common tasks
+internal_pairs = [("MMB-small", "MMB-base"), ("MMB-small", "MMB-small-span")]
+if ARGS.include_hetero_span:
+    internal_pairs.append(("MMB-small", "MMB-small-hetero"))
+out.append("\nInternal comparisons (mean ROC-AUC over common tasks):\n")
+for pair in internal_pairs:
+    if not set(pair) <= set(matrix.columns):
+        continue
     a, b, idx = paired(*pair)
     out.append(
         f"  {pair[0]} vs {pair[1]} (n={len(idx)}): "
@@ -249,11 +323,12 @@ out.append("\nMissing cells (model -> tasks with no result):\n")
 for m, ts in missing.items():
     out.append(f"  {m}: {ts}\n")
 
-# best-head distribution for released models
-out.append("\nBest downstream head distribution (released models):\n")
-for key in ["modernmolbert_best_standard", "modernmolbert_best_base"]:
-    sub = df[(df["embedder"] == key) & (df["dataset"].isin(TASKS_MAIN))]
-    out.append(f"  {key}: {sub['model'].value_counts().to_dict()}\n")
+# best-head distribution for released models (task-matrix runs: see selected_heads.csv)
+if df is not None:
+    out.append("\nBest downstream head distribution (released models):\n")
+    for key in ["modernmolbert_best_standard", "modernmolbert_best_base"]:
+        sub = df[(df["embedder"] == key) & (df["dataset"].isin(TASKS_MAIN))]
+        out.append(f"  {key}: {pd.Series(sub['model']).value_counts().to_dict()}\n")
 
 (OUT / "stats.txt").write_text("".join(out))
 print("".join(out))

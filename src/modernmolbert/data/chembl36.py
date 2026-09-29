@@ -210,7 +210,7 @@ def prepare_chembl36_frame(
 
             if checkpoint_path.exists():
                 summary = pd.read_parquet(checkpoint_path, columns=["is_valid"])
-                conversion_valid_rows += int(summary["is_valid"].sum())
+                conversion_valid_rows += int(summary["is_valid"].to_numpy().sum())
                 pbar.update(len(chunk))
                 continue
 
@@ -380,6 +380,12 @@ def canonicalize_and_selfies(smiles: Any) -> dict[str, Any]:
     }
 
 
+def _present(value: Any) -> bool:
+    """Scalar ``pd.notna`` with a plain ``bool`` result."""
+
+    return bool(pd.notna(value))
+
+
 def passes_basic_filters(
     row: dict[str, Any],
     *,
@@ -387,26 +393,26 @@ def passes_basic_filters(
 ) -> bool:
     """Apply light ChEMBL pretraining filters to already valid molecules."""
 
-    heavy_atoms = row.get("heavy_atoms")
-    if pd.notna(heavy_atoms):
+    heavy_atoms: Any = row.get("heavy_atoms")
+    if _present(heavy_atoms):
         heavy_atoms = float(heavy_atoms)
         if heavy_atoms < config.min_heavy_atoms:
             return False
         if heavy_atoms > config.max_heavy_atoms:
             return False
 
-    mw = row.get("mw_freebase")
-    if pd.notna(mw) and float(mw) > config.max_mw:
+    mw: Any = row.get("mw_freebase")
+    if _present(mw) and float(mw) > config.max_mw:
         return False
 
     molecule_type = row.get("molecule_type")
-    return not (pd.notna(molecule_type) and str(molecule_type).strip().lower() != "small molecule")
+    return not (_present(molecule_type) and str(molecule_type).strip().lower() != "small molecule")
 
 
 def make_split_key(row: pd.Series) -> str:
     for col in ["standard_inchi_key", "chembl_id", "smiles_canonical_clean"]:
         value = row.get(col)
-        if pd.notna(value) and str(value).strip():
+        if _present(value) and str(value).strip():
             return str(value)
 
     return str(row["selfies"])

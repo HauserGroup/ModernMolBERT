@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Find and rerun missing embedding artifacts for a chosen embedder.
 
-Default target is modernmolbert_best_hetero_span because it often has partial
-coverage when earlier embedding runs were interrupted.
+The embedder and its model directory must be given explicitly.
 
 Usage:
   Preview only:
-    uv run python analysis/validation/rerun_missing_embeddings.py
+    uv run python analysis/validation/rerun_missing_embeddings.py \
+      --embedder modernmolbert_best_span \
+      --model-dir runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_span/final_model
 
-  Execute reruns:
-    uv run python analysis/validation/rerun_missing_embeddings.py --run
+  Execute reruns: add --run.
 """
 
 import argparse
@@ -49,10 +49,12 @@ def embedding_path(root: Path, dataset: str, embedder: str) -> Path:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Rerun missing embedding jobs for one embedder.")
-    parser.add_argument("--embedder", default="modernmolbert_best_hetero_span")
+    parser.add_argument("--embedder", required=True, help="e.g. modernmolbert_best_span")
     parser.add_argument(
         "--model-dir",
-        default="runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_hetero_span",
+        required=True,
+        help="Model directory relative to the repo root, e.g. "
+        "runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_span/final_model",
     )
     parser.add_argument("--tokenizer-path", default=None)
     parser.add_argument("--batch-size", type=int, default=32)

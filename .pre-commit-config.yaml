@@ -3,12 +3,17 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-yaml
+      # Tokenizer JSON files are hash-bound: their metadata records the file's
+      # SHA-256, which validation checks, so rewriting hooks must leave them alone.
       - id: end-of-file-fixer
+        exclude: ^tokenizer/.*\.json$
       - id: trailing-whitespace
+        exclude: ^tokenizer/.*\.json$
       - id: check-added-large-files
         args: ["--maxkb=2000"]
       - id: pretty-format-json
         args: [--autofix]
+        exclude: ^tokenizer/.*\.json$
       - id: check-merge-conflict
       - id: detect-aws-credentials
         args: [--allow-missing-credentials]
@@ -17,7 +22,7 @@ repos:
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.15.12
+    rev: v0.16.9
     hooks:
       # Run the linter.
       - id: ruff
@@ -35,7 +40,7 @@ repos:
   #     - id: style-files
   #       args: [--scope=tokens, --strict=true, --reindention=specify_reindention('#'), --indent_by=4, --start_comments_with_one_space=true]
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.3
     hooks:
       - id: codespell
         args: [--skip, "*.bib,*.tex,*.ipynb", --ignore-words-list, "nd,ser,ba,fpr"]
@@ -46,3 +51,8 @@ repos:
       hooks:
       -   id: pyupgrade
           args: [--py313-plus]
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout

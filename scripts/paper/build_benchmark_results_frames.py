@@ -13,7 +13,7 @@ Build unified benchmark result frames from:
 
 Special case:
    outputs/eval/praski_best_base_standard/results.csv
-   is forced to embedder = modernmolbert_best_base
+   must have a verified base-model identity; directory names never override CSV labels.
 
 Outputs:
    outputs/eval/combined_benchmark_results.csv
@@ -25,6 +25,8 @@ This script only wrangles data. It does not subset models for plotting.
 
 from pathlib import Path
 import re
+
+import numpy as np
 import pandas as pd
 
 
@@ -50,16 +52,8 @@ BEST_OUT = OUTPUT_DIR / "best_metric_by_dataset_embedder.csv"
 
 
 def clean_embedder_name(name: object) -> str:
-    """
-    Normalize embedder names.
-
-    Removes run-specific suffixes like:
-        modernmolbert_best_standard__subsample_train8000_seed42
-    ->  modernmolbert_best_standard
-    """
-    s = str(name)
-    s = re.sub(r"__subsample.*$", "", s)
-    return s
+    """Keep run-specific suffixes: they identify distinct evaluation conditions."""
+    return str(name).strip()
 
 
 def infer_embedder_from_result_path(path: Path) -> str:
@@ -148,44 +142,17 @@ def normalize_praski(path: Path) -> pd.DataFrame:
         )
 
     df["embedder"] = df["embedder"].map(clean_embedder_name)
-    df["test_metric"] = pd.to_numeric(df["test_metric"], errors="coerce")
+    df["test_metric"] = pd.to_numeric(df["test_metric"], errors="raise")
 
-    keep = [
-        "dataset",
-        "embedder",
-        "model",
-        "test_metric_name",
-        "test_metric",
-    ]
-
-    optional = [
-        "cv_metric",
-        "cv_metric_name",
-        "task",
-        "task_type",
-        "split",
-    ]
-
-    keep += [c for c in optional if c in df.columns]
-
-    out = df[keep].copy()
-    out["result_source"] = "praski"
+    # Retain all available provenance, including split, seed and preprocessing.
+    out = df.copy()
+    out["result_source"] = str(path.resolve())
 
     return out
 
 
 def normalize_own_result(path: Path) -> pd.DataFrame:
-    """
-    Load one own result CSV and normalize schema.
-
-    The embedder name is always inferred from the directory name.
-    This deliberately overrides any embedder column inside the CSV.
-
-    This ensures:
-        outputs/eval/praski_best_base_standard/results.csv
-    becomes:
-        modernmolbert_best_base
-    """
+    """Load results without discarding run identity or extraction metadata."""
     df = pd.read_csv(path)
 
     rename_map = {
@@ -199,14 +166,27 @@ def normalize_own_result(path: Path) -> pd.DataFrame:
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
     df = ensure_test_metric_name(df)
 
-    # Critical behavior: path determines own embedder identity.
-    df["embedder"] = infer_embedder_from_result_path(path)
-
+    inferred = infer_embedder_from_result_path(path)
+    if "embedder" not in df.columns:
+        df["embedder"] = inferred
+    else:
+        if df["embedder"].isna().to_numpy().any():
+            raise ValueError(f"Missing embedder identity in {path}")
+        # Only this explicit alias is safe; subsampling/run suffixes are retained.
+        df["embedder"] = df["embedder"].replace(
+            {"modernmolbert_best_base_standard": "modernmolbert_best_base"}
+        )
+        identities = df["embedder"].map(clean_embedder_name).str.split("__subsample").str[0]
+        if not identities.eq(inferred.split("__subsample")[0]).all():
+            raise ValueError(
+                f"Embedder identity conflicts with result directory {path}; "
+                "resolve labels using the run manifest before aggregation"
+            )
     if "model" not in df.columns:
-        df["model"] = "best"
+        raise ValueError(f"Missing downstream-head identity in {path}")
 
     df["embedder"] = df["embedder"].map(clean_embedder_name)
-    df["test_metric"] = pd.to_numeric(df["test_metric"], errors="coerce")
+    df["test_metric"] = pd.to_numeric(df["test_metric"], errors="raise")
 
     required = {"dataset", "embedder", "model", "test_metric", "test_metric_name"}
     missing = required - set(df.columns)
@@ -217,28 +197,8 @@ def normalize_own_result(path: Path) -> pd.DataFrame:
             f"Available columns: {list(df.columns)}"
         )
 
-    keep = [
-        "dataset",
-        "embedder",
-        "model",
-        "test_metric_name",
-        "test_metric",
-    ]
-
-    optional = [
-        "cv_metric",
-        "cv_metric_name",
-        "task",
-        "task_type",
-        "checkpoint",
-        "embedding",
-        "run_dir",
-    ]
-
-    keep += [c for c in optional if c in df.columns]
-
-    out = df[keep].copy()
-    out["result_source"] = str(path.relative_to(PROJECT_ROOT))
+    out = df.copy()
+    out["result_source"] = str(path.resolve())
 
     return out
 
@@ -249,53 +209,72 @@ def normalize_own_result(path: Path) -> pd.DataFrame:
 
 
 def collapse_best_head(df: pd.DataFrame) -> pd.DataFrame:
+    """Select ROC-AUC heads using training-side CV, never test scores.
+
+    Ambiguous repeated runs must be resolved explicitly upstream. A selected
+    head with a missing test score stays missing; a worse-CV head is not used
+    as a replacement. Selection does not establish cross-model comparability.
     """
-    Collapse downstream model/head dimension.
-
-    For each:
-        dataset × embedder × test_metric_name
-
-    keep the row with the highest test_metric.
-
-    This also handles repeated rows introduced by stripped __subsample suffixes.
-    """
-    required = {"dataset", "embedder", "test_metric_name", "test_metric", "model"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Cannot collapse; missing columns: {sorted(missing)}")
-
-    out = df.copy()
-    out["embedder"] = out["embedder"].map(clean_embedder_name)
-    out["test_metric"] = pd.to_numeric(out["test_metric"], errors="coerce")
-    out = out.dropna(subset=["test_metric"])
-
-    group_keys = ["dataset", "embedder", "test_metric_name"]
-
-    out = (
-        out.sort_values(
-            [*group_keys, "test_metric", "model"],
-            ascending=[True, True, True, False, True],
-        )
-        .drop_duplicates(subset=group_keys, keep="first")
-        .reset_index(drop=True)
-    )
-
-    keep = [
+    required = {
         "dataset",
         "embedder",
         "test_metric_name",
         "test_metric",
         "model",
-    ]
-
-    optional = [
         "cv_metric",
-        "result_source",
+        "cv_metric_name",
+    }
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Cannot select heads; missing columns: {sorted(missing)}")
+    out = df.copy()
+    group_keys = ["dataset", "embedder", "test_metric_name"]
+    if out[[*group_keys, "model"]].isna().to_numpy().any():
+        raise ValueError("Missing dataset, embedder, metric or head identity")
+    if not (out["cv_metric_name"].eq("roc_auc") & out["test_metric_name"].eq("roc_auc")).all():
+        raise ValueError("Paper head selection currently requires ROC-AUC CV and test metrics")
+    out["cv_metric"] = pd.to_numeric(out["cv_metric"], errors="raise")
+    if not np.isfinite(out["cv_metric"]).all() or not out["cv_metric"].between(0, 1).all():
+        raise ValueError("Every candidate head requires a finite CV ROC-AUC in [0, 1]")
+    out["test_metric"] = pd.to_numeric(out["test_metric"], errors="raise")
+    measured = out["test_metric"].dropna()
+    if not measured.between(0, 1).all():
+        raise ValueError("Test ROC-AUC must be missing or in [0, 1]")
+    if out.duplicated([*group_keys, "model"]).any():
+        raise ValueError("Repeated head results: select a single run per condition explicitly")
+    provenance = [
+        c
+        for c in out.columns
+        if any(
+            part in c.lower()
+            for part in (
+                "split",
+                "seed",
+                "subsample",
+                "checkpoint",
+                "pooling",
+                "embedding_",
+                "run_dir",
+                "result_source",
+                "library_hash",
+            )
+        )
     ]
-
-    keep += [c for c in optional if c in out.columns]
-
-    return out[keep]
+    for col in provenance:
+        if (out.groupby(group_keys, dropna=False)[col].nunique(dropna=False) > 1).any():
+            raise ValueError(f"Conflicting run provenance within head candidates: {col}")
+    # Head name gives a deterministic, test-independent tie break.
+    out = (
+        out.sort_values(
+            [*group_keys, "cv_metric", "model"],
+            ascending=[True, True, True, False, True],
+            kind="stable",
+        )
+        .drop_duplicates(group_keys)
+        .reset_index(drop=True)
+    )
+    out["selection_metric"] = "cv_metric"
+    return out
 
 
 def write_dabest_exports(best_df: pd.DataFrame) -> None:
@@ -308,7 +287,7 @@ def write_dabest_exports(best_df: pd.DataFrame) -> None:
     DABEST_DIR.mkdir(exist_ok=True, parents=True)
 
     for metric_name, metric_df in best_df.groupby("test_metric_name", sort=True):
-        out = metric_df[["dataset", "embedder", "test_metric"]].copy()
+        out = metric_df.loc[:, ["dataset", "embedder", "test_metric"]].copy()
 
         metric_safe = safe_name(metric_name)
         out_path = DABEST_DIR / f"dabest_test_metric__{metric_safe}.csv"
@@ -348,8 +327,9 @@ def print_summary(best_df: pd.DataFrame) -> None:
             mean_metric=("test_metric", "mean"),
             median_metric=("test_metric", "median"),
         )
-        .sort_values("mean_metric", ascending=False)
     )
+    assert isinstance(modern, pd.DataFrame)
+    modern = modern.sort_values("mean_metric", ascending=False)
 
     if len(modern) == 0:
         print("No ModernMolBERT embedders found.")
@@ -363,15 +343,13 @@ def print_summary(best_df: pd.DataFrame) -> None:
         print(f"  {e}")
     print()
 
-    summary = (
-        best_df.groupby(["test_metric_name", "embedder"], as_index=False)
-        .agg(
-            n_datasets=("dataset", "nunique"),
-            mean_metric=("test_metric", "mean"),
-            median_metric=("test_metric", "median"),
-        )
-        .sort_values(["test_metric_name", "mean_metric"], ascending=[True, False])
+    summary = best_df.groupby(["test_metric_name", "embedder"], as_index=False).agg(
+        n_datasets=("dataset", "nunique"),
+        mean_metric=("test_metric", "mean"),
+        median_metric=("test_metric", "median"),
     )
+    assert isinstance(summary, pd.DataFrame)
+    summary = summary.sort_values(["test_metric_name", "mean_metric"], ascending=[True, False])
 
     print("Top rows by mean metric")
     print("-----------------------")
@@ -413,10 +391,10 @@ def main() -> int:
 
     combined["embedder"] = combined["embedder"].map(clean_embedder_name)
 
+    best_df = collapse_best_head(combined)
     combined.to_csv(COMBINED_OUT, index=False)
     print(f"Wrote combined raw results: {COMBINED_OUT}")
 
-    best_df = collapse_best_head(combined)
     best_df.to_csv(BEST_OUT, index=False)
     print(f"Wrote best dataset/embedder results: {BEST_OUT}")
     print()

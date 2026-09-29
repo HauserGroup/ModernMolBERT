@@ -16,7 +16,8 @@ paper. No model training. Tested scripts have unit tests under `tests/`.
 |--------|---------|--------|
 | `build_benchmark_results_frames.py` | Build unified benchmark result frames from the Praski benchmark CSV and our own `outputs/eval` results | |
 | `build_paper_results.py` | Derive all paper-facing numbers (incl. Wilcoxon tests) from `outputs/eval/best_metric_by_dataset_embedder.csv` | |
-| `compute_bootstrap_cis.py` | Paired bootstrap 95% CIs on mean ΔROC-AUC for the four key ModernMolBERT-vs-baseline comparisons | ✓ |
+| `compute_bootstrap_cis.py` | Paired bootstrap 95% CIs on mean ΔROC-AUC for the four key ModernMolBERT-vs-baseline comparisons, resampling tasks and, as a sensitivity, the task families in `config/task_families.yaml` | ✓ |
+| `audit_task_overlap.py` | Test molecules shared by every pair of benchmark datasets, flagged by task family; checks the families file against the dataset config | ✓ |
 | `compute_property_regression.py` | Ridge regression of mean-pooled embeddings → 9 ChEMBL physicochemical descriptors; reports test R² | ✓ |
 | `make_ape_token_table.py` | Supplementary table of the most frequent APE merged tokens (Appendix B) | ✓ |
 | `make_appendix_table.py` | Per-task full ROC-AUC table (Appendix C / S3) from the main-analysis matrix | |
@@ -24,6 +25,8 @@ paper. No model training. Tested scripts have unit tests under `tests/`.
 | `make_loss_curves.py` | Training/validation loss curves from a run's `trainer_state.json` | |
 | `align_sweep_result_csvs.py` | Reconcile old/new schema sweep CSVs under `results/` into one aligned table | |
 | `arrange_panes.py` | Compose a labeled overview image from the QED PaCMAP PNG panes | |
+| `measure_embedding_cost.py` | Time feature extraction (SMILES conversion, tokenisation, forward pass) and peak memory for ModernMolBERT checkpoints and ECFP4 on one seeded list of benchmark test molecules; each measurement runs in a fresh process via `embedding_cost_worker.py`. Not used by the manuscript; analysis not planned. | ✓ |
+| `make_cost_table.py` | Feature-extraction cost table (LaTeX) from a `measure_embedding_cost.py` output directory. Not used by the manuscript; analysis not planned. | ✓ |
 
 ## `sweeps/` — pre-training launchers
 

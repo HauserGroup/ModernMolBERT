@@ -26,6 +26,7 @@ from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     EmbeddingConfig,
 )
+from modernmolbert.utils import file_sha256
 
 DEFAULT_MODEL_DIR = Path("runs/pubchem10m_mps_base_pilot_256/final_model")
 DEFAULT_EMBEDDER = "modernmolbert_pubchem10m_mps_base_pilot_256"
@@ -36,7 +37,12 @@ def parse_args() -> argparse.Namespace:
         description="Embed prepared Praski benchmark datasets with a ModernMolBERT checkpoint.",
     )
     parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
-    parser.add_argument("--tokenizer-path", type=Path, default=DEFAULT_MODEL_DIR)
+    parser.add_argument(
+        "--tokenizer-path",
+        type=Path,
+        default=None,
+        help="Tokenizer bundle path; defaults to --model-dir.",
+    )
     parser.add_argument("--embedder", default=DEFAULT_EMBEDDER)
     parser.add_argument("--datasets", nargs="+", default=["all"])
     parser.add_argument("--config-dir", default="config")
@@ -63,6 +69,16 @@ def embed_dataset(dataset: Dataset, *, featurizer: Any, embedder_name: str, batc
 
     # Expand to full matrix then immediately free the compact batch
     X = expand_to_nan_matrix(feature_batch.X, feature_batch.valid_mask, n_inputs=len(smiles))
+    if X.shape[1] == 0:
+        raise ValueError(f"No valid embeddings for {dataset.name}")
+    retained = np.flatnonzero(~np.isnan(X).any(axis=1))
+    dropped = np.flatnonzero(np.isnan(X).any(axis=1))
+    metadata["source_n_rows"] = len(smiles)
+    metadata["source_row_indices"] = retained.tolist()
+    metadata["failed_source_row_indices"] = dropped.tolist()
+    metadata["source_split_counts"] = {
+        split: len(indices) for split, indices in dataset.splits.items()
+    }
     del feature_batch
     gc.collect()
 
@@ -75,7 +91,12 @@ def embed_dataset(dataset: Dataset, *, featurizer: Any, embedder_name: str, batc
         y=dataset.labels.copy(),
         metadata=metadata,
     )
-    embedded.remove_failed_embeddings()
+    n_failed = embedded.remove_failed_embeddings()
+    if n_failed != len(dropped) or embedded.X.shape[0] != len(retained):
+        raise ValueError(f"Embedding row provenance mismatch for {dataset.name}")
+    metadata["retained_split_counts"] = {
+        split: len(indices) for split, indices in embedded.splits.items()
+    }
     return embedded
 
 
@@ -166,6 +187,11 @@ def main() -> None:
             embedder_name=args.embedder,
             batch_size=args.batch_size,
         )
+        source_path = prepared_path.with_suffix(".json")
+        if not source_path.exists():
+            source_path = prepared_path
+        embedded.metadata["prepared_data_path"] = str(source_path)
+        embedded.metadata["prepared_data_sha256"] = file_sha256(source_path)
 
         # Free the prepared dataset before writing the embedded one
         del dataset

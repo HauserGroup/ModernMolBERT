@@ -1,7 +1,7 @@
 # Historical clean small-model run guide
 
 > **Historical one-model recipe.** The subsequent five-model SSH/GPU proposal is in the
-> [canonical master plan](</Users/skn506/HauserGroup Dropbox/Jakob Madsen/PhD/Manuscripts/ModernMolBERT pre-print manuscript/MASTER_REVISION_PLAN.md#gpu-training-plan--five-model-experiment-draft-29-september-2026>), G1–G7.
+> canonical `MASTER_REVISION_PLAN.md` in the manuscript repository, G1–G7.
 > It uses five fresh encoders and supersedes this document's one-model/partial-run
 > prescription for that campaign. Keep the details below as the earlier run record
 > and command reference; do not launch the expanded experiment from these old commands.

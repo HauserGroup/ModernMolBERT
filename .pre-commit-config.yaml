@@ -11,6 +11,8 @@ repos:
         exclude: ^tokenizer/.*\.json$
       - id: check-added-large-files
         args: ["--maxkb=2000"]
+        # Published reference PDFs are source material, not generated data or weights.
+        exclude: ^(paper/published_manuscript|papers/ape)\.pdf$
       - id: pretty-format-json
         args: [--autofix]
         exclude: ^tokenizer/.*\.json$

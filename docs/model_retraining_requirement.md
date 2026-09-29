@@ -1,4 +1,10 @@
-# Exact model training still required for the submission revision
+# Historical one-model retraining specification
+
+> **Historical one-model recipe.** The subsequent five-model SSH/GPU proposal is in the
+> canonical `MASTER_REVISION_PLAN.md` in the manuscript repository, G1–G7.
+> It uses five fresh encoders and supersedes this document's one-model/partial-run
+> prescription for that campaign. Keep the details below as the earlier run record
+> and command reference; do not launch the expanded experiment from these old commands.
 
 Status: 29 September 2026. No model training is running. This document defines
 the remaining encoder experiment; it is not a request to launch it.

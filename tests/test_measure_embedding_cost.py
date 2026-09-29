@@ -10,7 +10,8 @@ import embedding_cost_worker
 from measure_embedding_cost import (
     benchmark_test_smiles,
     measurement_specs,
-    parse_checkpoints,
+    parse_named,
+    run_worker,
     sample_molecules,
     summarise,
 )
@@ -50,20 +51,22 @@ def test_sample_is_seeded_and_capped() -> None:
     assert sorted(sample_molecules(smiles, None, seed=0)) == sorted(smiles)
 
 
-def test_checkpoint_arguments_need_unique_names() -> None:
-    assert parse_checkpoints(["small=runs/a", "base=runs/b"]) == {
-        "small": Path("runs/a"),
-        "base": Path("runs/b"),
+def test_named_arguments_need_unique_names() -> None:
+    assert parse_named(["small=runs/a", "base=org/model"]) == {
+        "small": "runs/a",
+        "base": "org/model",
     }
     with pytest.raises(ValueError, match="Duplicate"):
-        parse_checkpoints(["small=runs/a", "small=runs/b"])
+        parse_named(["small=runs/a", "small=runs/b"])
+    with pytest.raises(ValueError, match="Duplicate"):
+        parse_named(["ECFP4-count=runs/a"])
     with pytest.raises(ValueError, match="NAME=PATH"):
-        parse_checkpoints(["runs/a"])
+        parse_named(["runs/a"])
 
 
 def test_fingerprints_are_timed_once_on_cpu() -> None:
     specs = measurement_specs(
-        {"small": Path("runs/a")},
+        {"small": "runs/a"},
         fingerprints=True,
         devices=["cpu", "mps"],
         batch_sizes=[32, 128],
@@ -78,6 +81,32 @@ def test_fingerprints_are_timed_once_on_cpu() -> None:
         ("mps", 32),
         ("mps", 128),
     }
+
+
+def test_remote_code_is_opt_in_per_encoder() -> None:
+    specs = measurement_specs(
+        {},
+        fingerprints=False,
+        devices=["cpu"],
+        batch_sizes=[32],
+        max_seq_length=128,
+        transformers={"ChemBERTa-2": "org/chemberta", "MoLFormer": "org/molformer"},
+        selfies_transformers={"SELFormer": "org/selformer"},
+        trust_remote_code=["MoLFormer"],
+    )
+    by_name = {spec["name"]: spec for spec in specs}
+    assert by_name["ChemBERTa-2"]["input"] == "smiles"
+    assert by_name["SELFormer"]["input"] == "selfies"
+    assert [name for name, spec in by_name.items() if spec["trust_remote_code"]] == ["MoLFormer"]
+    with pytest.raises(ValueError, match="unique"):
+        measurement_specs(
+            {"x": "runs/a"},
+            fingerprints=False,
+            devices=["cpu"],
+            batch_sizes=[32],
+            max_seq_length=128,
+            transformers={"x": "org/x"},
+        )
 
 
 def test_summary_counts_all_inputs_in_throughput() -> None:
@@ -159,3 +188,28 @@ def test_checkpoint_worker_matches_featurizer(existing_minimal_model: Path) -> N
     assert result["n_valid"] == result["n_valid_stage_split"]
     seconds = result["end_to_end_seconds"]
     assert isinstance(seconds, float) and np.isfinite(seconds)
+
+
+@pytest.mark.model
+def test_transformer_worker_runs_offline_on_a_cached_encoder(tmp_path: Path) -> None:
+    from huggingface_hub import try_to_load_from_cache
+
+    model = "DeepChem/ChemBERTa-10M-MLM"
+    if not isinstance(try_to_load_from_cache(model, "config.json"), str):
+        pytest.skip(f"{model} is not in the local Hugging Face cache")
+    molecules = tmp_path / "molecules.txt"
+    molecules.write_text("CCO\nc1ccccc1\nCC(=O)O\n")
+    spec = {
+        "name": "cached",
+        "kind": "transformer",
+        "device": "cpu",
+        "batch_size": 2,
+        "max_seq_length": 128,
+        "path": model,
+        "input": "smiles",
+        "trust_remote_code": False,
+    }
+    result = run_worker(spec, molecules)
+    assert result["n_valid"] == 3
+    assert result["feature_dim"] == 384
+    assert result["conversion_seconds"] is not None

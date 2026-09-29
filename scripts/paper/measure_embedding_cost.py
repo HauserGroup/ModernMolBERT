@@ -4,8 +4,12 @@
 Times each configuration on one fixed molecule list: ModernMolBERT
 checkpoints through the benchmark featurizer (SMILES-to-SELFIES conversion,
 lossless-tokenisation checks, tokenisation, encoder forward pass and mean
-pooling), and ECFP4 through RDKit (SMILES parsing plus a radius-2, 2,048-bit
-Morgan fingerprint, binary or count). ``embedding_cost_worker.py`` performs
+pooling), other Hugging Face encoders on SMILES or converted SELFIES with
+attention-mask mean pooling, and ECFP4 through RDKit (SMILES parsing plus a
+radius-2, 2,048-bit Morgan fingerprint, binary or count). A Hugging Face
+model that is not cached locally is downloaded on first use, and remote model
+code runs only for names passed to ``--trust-remote-code``.
+``embedding_cost_worker.py`` performs
 each measurement in a fresh process, so peak resident memory belongs to one
 configuration. Repeats are interleaved across configurations so that
 background load affects them alike.
@@ -20,6 +24,8 @@ Usage:
     uv run python scripts/paper/measure_embedding_cost.py \\
         --checkpoint ModernMolBERT-small=runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_standard/final_model \\
         --checkpoint ModernMolBERT-base=runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_base/final_model \\
+        --transformer ChemBERTa-2=DeepChem/ChemBERTa-77M-MLM \\
+        --selfies-transformer SELFormer=HUBioDataLab/SELFormer \\
         --fingerprints --devices cpu mps --batch-sizes 32 128 --repeats 3 \\
         --output-dir outputs/audit/embedding_cost
 """
@@ -46,6 +52,7 @@ CONFIG = Path("src/modernmolbert/eval/benchmarking_molecular_models/config/datas
 WORKER = Path(__file__).resolve().with_name("embedding_cost_worker.py")
 FINGERPRINTS = ("ECFP4-binary", "ECFP4-count")
 GROUP_COLUMNS = ["name", "kind", "device", "batch_size"]
+WEIGHT_FILES = ("model.safetensors", "pytorch_model.bin")
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -59,6 +66,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="NAME=PATH",
         help="ModernMolBERT model directory with its bundled tokenizer; repeatable.",
     )
+    parser.add_argument(
+        "--transformer",
+        action="append",
+        default=[],
+        metavar="NAME=MODEL",
+        help="Hugging Face encoder (hub ID or directory) that reads SMILES; repeatable.",
+    )
+    parser.add_argument(
+        "--selfies-transformer",
+        action="append",
+        default=[],
+        metavar="NAME=MODEL",
+        help="Hugging Face encoder that reads SELFIES converted from SMILES; repeatable.",
+    )
+    parser.add_argument(
+        "--trust-remote-code",
+        nargs="*",
+        default=[],
+        metavar="NAME",
+        help="Encoder names allowed to run model code from their repository.",
+    )
     parser.add_argument("--fingerprints", action="store_true", help="Also time ECFP4.")
     parser.add_argument("--devices", nargs="+", default=["cpu"])
     parser.add_argument("--batch-sizes", nargs="+", type=int, default=[32])
@@ -70,21 +98,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--prepared-dir", type=Path, default=Path("data/prepared"))
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args(argv)
-    if not args.checkpoint and not args.fingerprints:
-        parser.error("pass at least one --checkpoint or --fingerprints")
+    if not (args.checkpoint or args.transformer or args.selfies_transformer or args.fingerprints):
+        parser.error("pass a --checkpoint, --transformer, --selfies-transformer or --fingerprints")
     return args
 
 
-def parse_checkpoints(values: list[str]) -> dict[str, Path]:
-    checkpoints: dict[str, Path] = {}
+def parse_named(values: list[str]) -> dict[str, str]:
+    named: dict[str, str] = {}
     for value in values:
-        name, sep, path = value.partition("=")
-        if not sep or not name or not path:
+        name, sep, target = value.partition("=")
+        if not sep or not name or not target:
             raise ValueError(f"Expected NAME=PATH, got {value!r}")
-        if name in checkpoints:
-            raise ValueError(f"Duplicate checkpoint name {name!r}")
-        checkpoints[name] = Path(path)
-    return checkpoints
+        if name in named or name in FINGERPRINTS:
+            raise ValueError(f"Duplicate configuration name {name!r}")
+        named[name] = target
+    return named
 
 
 def benchmark_test_smiles(
@@ -111,14 +139,28 @@ def sample_molecules(smiles: list[str], n: int | None, seed: int) -> list[str]:
 
 
 def measurement_specs(
-    checkpoints: dict[str, Path],
+    checkpoints: dict[str, str],
     *,
     fingerprints: bool,
     devices: list[str],
     batch_sizes: list[int],
     max_seq_length: int,
+    transformers: dict[str, str] | None = None,
+    selfies_transformers: dict[str, str] | None = None,
+    trust_remote_code: list[str] | None = None,
 ) -> list[dict[str, object]]:
     """Fingerprints run once on CPU; batch size does not change their path."""
+    encoders = [(name, target, "checkpoint", "selfies") for name, target in checkpoints.items()]
+    encoders += [
+        (name, target, "transformer", "smiles") for name, target in (transformers or {}).items()
+    ]
+    encoders += [
+        (name, target, "transformer", "selfies")
+        for name, target in (selfies_transformers or {}).items()
+    ]
+    names = [name for name, *_ in encoders]
+    if len(set(names)) != len(names):
+        raise ValueError("Configuration names must be unique")
     specs: list[dict[str, object]] = [
         {"name": name, "kind": "fingerprint", "device": "cpu", "batch_size": None, "path": None}
         for name in (FINGERPRINTS if fingerprints else ())
@@ -126,14 +168,16 @@ def measurement_specs(
     specs += [
         {
             "name": name,
-            "kind": "checkpoint",
+            "kind": kind,
             "device": device,
             "batch_size": batch_size,
-            "path": str(path),
+            "path": target,
+            "input": text_input,
+            "trust_remote_code": name in (trust_remote_code or []),
         }
         for device in devices
         for batch_size in batch_sizes
-        for name, path in checkpoints.items()
+        for name, target, kind, text_input in encoders
     ]
     return [{**spec, "max_seq_length": max_seq_length} for spec in specs]
 
@@ -207,6 +251,40 @@ def checkpoint_record(path: Path) -> dict[str, object]:
     }
 
 
+def weights_file(target: str, revision: str | None) -> Path | None:
+    """Weight file of a model directory, or of a hub model already in the local cache."""
+    from huggingface_hub import try_to_load_from_cache
+
+    if Path(target).is_dir():
+        return next((Path(target) / f for f in WEIGHT_FILES if (Path(target) / f).is_file()), None)
+    for filename in WEIGHT_FILES:
+        cached = try_to_load_from_cache(target, filename, revision=revision)
+        if isinstance(cached, str):
+            return Path(cached)
+    return None
+
+
+def transformer_records(
+    measurements: pd.DataFrame, targets: dict[str, str]
+) -> dict[str, dict[str, object]]:
+    records: dict[str, dict[str, object]] = {}
+    for name, target in targets.items():
+        row = measurements.loc[measurements["name"] == name].iloc[0]
+        revision = row.get("model_revision")
+        revision = revision if isinstance(revision, str) else None
+        weights = weights_file(target, revision)
+        records[name] = {
+            "model": target,
+            "input": row["input"],
+            "trust_remote_code": bool(row["trust_remote_code"]),
+            "revision": revision,
+            "weights_file": None if weights is None else weights.name,
+            "weights_bytes": None if weights is None else weights.stat().st_size,
+            "weights_sha256": None if weights is None else file_sha256(weights),
+        }
+    return records
+
+
 def hardware() -> dict[str, object]:
     brand = subprocess.run(
         ["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, check=False
@@ -239,7 +317,10 @@ def software() -> dict[str, str]:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    checkpoints = parse_checkpoints(args.checkpoint)
+    revision = git_revision()
+    checkpoints = parse_named(args.checkpoint)
+    transformers = parse_named(args.transformer)
+    selfies_transformers = parse_named(args.selfies_transformer)
     distinct, prepared_hashes, n_test_rows = benchmark_test_smiles(args.config, args.prepared_dir)
     smiles = sample_molecules(distinct, args.n_molecules, args.seed)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -252,6 +333,9 @@ def main(argv: list[str] | None = None) -> None:
         devices=args.devices,
         batch_sizes=args.batch_sizes,
         max_seq_length=args.max_seq_length,
+        transformers=transformers,
+        selfies_transformers=selfies_transformers,
+        trust_remote_code=args.trust_remote_code,
     )
     rows = []
     for repeat in range(args.repeats):
@@ -269,7 +353,7 @@ def main(argv: list[str] | None = None) -> None:
 
     manifest = {
         "command": [sys.executable, *sys.argv],
-        "git": git_revision(),
+        "git": revision,
         "hardware": hardware(),
         "software": software(),
         "molecules": {
@@ -286,7 +370,8 @@ def main(argv: list[str] | None = None) -> None:
             "radius": ECFP_RADIUS,
             "bits": ECFP_BITS,
         },
-        "checkpoints": {name: checkpoint_record(path) for name, path in checkpoints.items()},
+        "checkpoints": {name: checkpoint_record(Path(path)) for name, path in checkpoints.items()},
+        "transformers": transformer_records(measurements, {**transformers, **selfies_transformers}),
         "max_seq_length": args.max_seq_length,
         "repeats": args.repeats,
     }

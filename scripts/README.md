@@ -25,8 +25,8 @@ paper. No model training. Tested scripts have unit tests under `tests/`.
 | `make_loss_curves.py` | Training/validation loss curves from a run's `trainer_state.json` | |
 | `align_sweep_result_csvs.py` | Reconcile old/new schema sweep CSVs under `results/` into one aligned table | |
 | `arrange_panes.py` | Compose a labeled overview image from the QED PaCMAP PNG panes | |
-| `measure_embedding_cost.py` | Time feature extraction (SMILES conversion, tokenisation, forward pass) and peak memory for ModernMolBERT checkpoints and ECFP4 on one seeded list of benchmark test molecules; each measurement runs in a fresh process via `embedding_cost_worker.py` | ✓ |
-| `make_cost_table.py` | Feature-extraction cost table (LaTeX) from a `measure_embedding_cost.py` output directory | ✓ |
+| `measure_embedding_cost.py` | Time feature extraction (SMILES conversion, tokenisation, forward pass) and peak memory for ModernMolBERT checkpoints and ECFP4 on one seeded list of benchmark test molecules; each measurement runs in a fresh process via `embedding_cost_worker.py`. Not used by the manuscript; analysis not planned. | ✓ |
+| `make_cost_table.py` | Feature-extraction cost table (LaTeX) from a `measure_embedding_cost.py` output directory. Not used by the manuscript; analysis not planned. | ✓ |
 
 ## `sweeps/` — pre-training launchers
 

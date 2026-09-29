@@ -1,9 +1,9 @@
 import gc
 import os
+import sys
 
 import joblib
 import json
-import torch
 import logging as log
 from pathlib import Path
 
@@ -60,7 +60,9 @@ def load_embedded_dataset(
         log.error("Embedded dataset is empty")
         raise RuntimeError("Embedded dataset is empty")
 
-    if isinstance(embedded_data.X, torch.Tensor):
+    # Only a tensor if torch is already imported, so avoid importing it just for this check.
+    torch = sys.modules.get("torch")
+    if torch is not None and isinstance(embedded_data.X, torch.Tensor):
         log.info("Converting torch.Tensor to numpy array")
         embedded_data.X = embedded_data.X.detach().cpu().numpy()
 

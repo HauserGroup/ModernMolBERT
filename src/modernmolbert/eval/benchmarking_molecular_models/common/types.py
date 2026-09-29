@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import json
 import base64
-import torch
+import sys
 
 
 try:
@@ -22,7 +22,9 @@ class NumpyEncoder(json.JSONEncoder):
         """
         if input object is a ndarray it will be converted into a dict holding dtype, shape and the data base64 encoded
         """
-        if isinstance(o, torch.Tensor):
+        # A tensor can only exist if torch is already imported, so avoid importing it here.
+        torch = sys.modules.get("torch")
+        if torch is not None and isinstance(o, torch.Tensor):
             data_b64 = base64.b64encode(o.cpu().numpy().tobytes()).decode("utf-8")
             return dict(__torch_tensor__=data_b64, dtype=str(o.dtype).split(".")[-1], shape=o.shape)
         if isinstance(o, np.ndarray):
@@ -47,6 +49,8 @@ def json_numpy_obj_hook(dct):
     elif isinstance(dct, dict) and "__dataframe__" in dct:
         return pd.DataFrame(**dct["__dataframe__"])
     elif isinstance(dct, dict) and "__torch_tensor__" in dct:
+        import torch
+
         data = base64.b64decode(dct["__torch_tensor__"])
         as_tensor = getattr(torch, "as_" + "tensor")
         return as_tensor(np.frombuffer(data, dct["dtype"]).reshape(dct["shape"]))

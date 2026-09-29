@@ -6,7 +6,6 @@ import shutil
 from pathlib import Path
 
 from dotenv import load_dotenv
-from transformers import AutoTokenizer
 
 from modernmolbert.hf_upload import file_sha256, push_folder_to_hub, resolve_hf_token
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
@@ -156,6 +155,8 @@ def verify_saved_tokenizer(
             f"Wrong tokenizer_config.json model_max_length: "
             f"{saved_max_length!r}; expected {model_max_length}"
         )
+
+    from transformers import AutoTokenizer
 
     loaded = AutoTokenizer.from_pretrained(
         str(staging_dir),

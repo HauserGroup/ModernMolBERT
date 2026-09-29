@@ -7,19 +7,20 @@ import shutil
 import statistics
 import re
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import pandas as pd
 
-
-import torch
-from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
-from tqdm.auto import tqdm
-
 # Re-exported so existing callers can keep importing it from modernmolbert.utils.
 from modernmolbert.hf_upload import file_sha256 as file_sha256
-from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+# transformers, datasets and tqdm are slow to import, so they are imported inside the
+# functions that use them; the names below are only needed for type checking.
+if TYPE_CHECKING:
+    from datasets import IterableDataset
+
+    from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
 SPECIAL_TOKENS: dict[str, str] = {
@@ -123,9 +124,9 @@ def infer_molecule_column(
 
 
 def filter_zinc20_chembl36_by_source(
-    ds: IterableDataset,
+    ds: "IterableDataset",
     source: Literal["zinc", "chembl", "all"] = "all",
-) -> IterableDataset:
+) -> "IterableDataset":
     """Filter a ZINC20_CHEMBL36 streaming dataset by molecule source.
 
     Parameters
@@ -268,6 +269,8 @@ def collect_local_parquet_corpus(
             f"Local parquet dataset at {directory} has no split '{split}'. Available splits: {available}"
         )
 
+    from tqdm.auto import tqdm
+
     rng = np.random.default_rng(seed)
     corpus: list[str] = []
     pbar = tqdm(total=n, desc=f"Collecting {representation} corpus for APE tokenizer")
@@ -373,6 +376,8 @@ def copy_tokenizer_artifacts(
 
     metadata = load_tokenizer_metadata(metadata_path)
     representation = str(metadata.get("representation", SELFIES_REPRESENTATION))
+    from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
     tokenizer = APEPreTrainedTokenizer(representation=representation)
     tokenizer.load_vocabulary_file(vocab_path, representation=representation)
 
@@ -516,7 +521,9 @@ def get_streaming_dataset(
     split: str = "train",
     data_dir: Path | None = None,
     data_files: str | None = None,
-) -> IterableDataset:
+) -> "IterableDataset":
+    from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
+
     if data_files is not None:
         print(
             f"[data] Streaming parquet files directly for split '{split}': {data_files}",
@@ -608,6 +615,8 @@ def collect_corpus_for_tokenizer(
     )
     corpus: list[str] = []
 
+    from tqdm.auto import tqdm
+
     print(f"[corpus] Collecting {n:,} {representation} sequences...", flush=True)
     milestones = {int(n * p) for p in (0.25, 0.50, 0.75)}
     pbar = tqdm(
@@ -642,7 +651,7 @@ def collect_corpus_for_tokenizer(
 # ---------------------------------------------------------------------------
 
 
-def tokenizer_vocab_size(tokenizer: APEPreTrainedTokenizer) -> int:
+def tokenizer_vocab_size(tokenizer: "APEPreTrainedTokenizer") -> int:
     get_vocab = getattr(tokenizer, "get_vocab", None)
     if callable(get_vocab):
         vocab = get_vocab()
@@ -661,7 +670,7 @@ def tokenizer_vocab_size(tokenizer: APEPreTrainedTokenizer) -> int:
     )
 
 
-def token_id(tokenizer: APEPreTrainedTokenizer, token: str) -> int:
+def token_id(tokenizer: "APEPreTrainedTokenizer", token: str) -> int:
     if hasattr(tokenizer, "convert_tokens_to_ids"):
         out = tokenizer.convert_tokens_to_ids([token])
         return int(out[0] if isinstance(out, list) else out)
@@ -669,7 +678,7 @@ def token_id(tokenizer: APEPreTrainedTokenizer, token: str) -> int:
     encoded = tokenizer(token, add_special_tokens=False)
     ids = encoded["input_ids"]
 
-    if isinstance(ids, torch.Tensor):
+    if hasattr(ids, "tolist"):
         ids = ids.tolist()
     if ids and isinstance(ids[0], list):
         ids = ids[0]
@@ -679,7 +688,7 @@ def token_id(tokenizer: APEPreTrainedTokenizer, token: str) -> int:
     return int(ids[0])
 
 
-def resolve_special_ids(tokenizer: APEPreTrainedTokenizer) -> dict[str, int]:
+def resolve_special_ids(tokenizer: "APEPreTrainedTokenizer") -> dict[str, int]:
     ids: dict[str, int] = {}
     for name, token in SPECIAL_TOKENS.items():
         try:
@@ -697,7 +706,7 @@ def resolve_special_ids(tokenizer: APEPreTrainedTokenizer) -> dict[str, int]:
 
 
 def encode_sequence(
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "APEPreTrainedTokenizer",
     seq: str,
     max_seq_length: int | None,
 ) -> dict[str, list[int]]:
@@ -713,9 +722,9 @@ def encode_sequence(
     input_ids = encoded["input_ids"]
     attention_mask = encoded.get("attention_mask", [1] * len(input_ids))
 
-    if isinstance(input_ids, torch.Tensor):
+    if hasattr(input_ids, "tolist"):
         input_ids = input_ids.tolist()
-    if isinstance(attention_mask, torch.Tensor):
+    if hasattr(attention_mask, "tolist"):
         attention_mask = attention_mask.tolist()
 
     if input_ids and isinstance(input_ids[0], list):
@@ -749,7 +758,7 @@ def eligible_token_ids(input_ids: list[int], special_ids: dict[str, int]) -> lis
 
 
 def assert_representation_compatible(
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "APEPreTrainedTokenizer",
     special_ids: dict[str, int],
     representation: str,
     max_seq_length: int | None = 256,
@@ -774,7 +783,7 @@ def assert_representation_compatible(
 
 
 def compute_tokenization_stats(
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "APEPreTrainedTokenizer",
     sequences: list[str],
     max_seq_length: int,
     special_ids: dict[str, int],
@@ -794,7 +803,7 @@ def compute_tokenization_stats(
     for seq in sequences:
         raw = tokenizer(seq, add_special_tokens=True, return_tensors=None)
         raw_ids = raw["input_ids"]
-        if isinstance(raw_ids, torch.Tensor):
+        if hasattr(raw_ids, "tolist"):
             raw_ids = raw_ids.tolist()
         if raw_ids and isinstance(raw_ids[0], list):
             raw_ids = raw_ids[0]

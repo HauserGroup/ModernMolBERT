@@ -209,6 +209,4 @@ Fig_3.
 | `scripts/paper/make_paper_figures.py` | Fig_2 has 2 panels | `--include-hetero-span` adds panel (c) |
 | `scripts/paper/make_appendix_table.py` | `MMB-h` column included, labelled exploratory | `--exclude-hetero-span` drops it |
 | `src/modernmolbert/model_cards.py` | hetero-span card not written; when written, carries the exploratory note | `--include-hetero-span` |
-| `analysis/validation/rerun_missing_embeddings.py` | no default target; `--embedder`/`--model-dir` required | pass them explicitly |
-| `analysis/check_missing_benchmarks_and_rerun.ipynb` | hetero_span not audited | `INCLUDE_HETERO_SPAN = True` |
-| `scripts/maintenance/patch_model_max_length.py`, `analysis/sweep/collect_sweep_results.py`, `R/collect_sweep_results.R`, `scripts/paper/build_benchmark_results_frames.py` | unchanged: provenance scripts, or process whatever runs exist | n/a |
+| `R/collect_sweep_results.R`, `scripts/paper/build_benchmark_results_frames.py` | unchanged: provenance scripts, or process whatever runs exist | n/a |

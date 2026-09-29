@@ -48,12 +48,6 @@ probabilities with multioutput AUROC support.
 Run scoring for one existing embedder:
 
 ```sh
-./run_scoring.sh <embedder_name>
-```
-
-Equivalent direct commands:
-
-```sh
 python score.py --embedder <embedder_name> --output-csv data/benchmark_results.csv
 ```
 
@@ -106,8 +100,7 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
 
 ## ModernMolBERT Praski Run
 
-Smoke-test the trained `runs/pubchem10m_mps_base_pilot_256/final_model`
-checkpoint on `clf_AMES`:
+Smoke-test a trained checkpoint on `clf_AMES`:
 
 ```sh
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py \
@@ -115,9 +108,8 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py \
 
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernmolbert.py \
   --datasets clf_AMES \
-  --model-dir runs/pubchem10m_mps_base_pilot_256/final_model \
-  --tokenizer-path runs/pubchem10m_mps_base_pilot_256/final_model \
-  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
+  --model-dir runs/<run>/final_model \
+  --embedder <embedder_name> \
   --batch-size 32 \
   --device auto \
   --max-seq-length 256 \
@@ -125,9 +117,9 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
 
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --datasets clf_AMES \
-  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
-  --output-csv outputs/eval/praski_pubchem10m_mps_base_pilot_256_smoke/results.csv \
-  --checkpoint-dir outputs/eval/praski_pubchem10m_mps_base_pilot_256_smoke/checkpoints
+  --embedder <embedder_name> \
+  --output-csv outputs/eval/<embedder_name>_smoke/results.csv \
+  --checkpoint-dir outputs/eval/<embedder_name>_smoke/checkpoints
 ```
 
 Run the full Praski registry after the smoke run succeeds:
@@ -138,9 +130,8 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/download.py \
 
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernmolbert.py \
   --datasets all \
-  --model-dir runs/pubchem10m_mps_base_pilot_256/final_model \
-  --tokenizer-path runs/pubchem10m_mps_base_pilot_256/final_model \
-  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
+  --model-dir runs/<run>/final_model \
+  --embedder <embedder_name> \
   --batch-size 32 \
   --device auto \
   --max-seq-length 256 \
@@ -148,9 +139,9 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
 
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --datasets all \
-  --embedder modernmolbert_pubchem10m_mps_base_pilot_256 \
-  --output-csv outputs/eval/praski_pubchem10m_mps_base_pilot_256_full/results.csv \
-  --checkpoint-dir outputs/eval/praski_pubchem10m_mps_base_pilot_256_full/checkpoints
+  --embedder <embedder_name> \
+  --output-csv outputs/eval/<embedder_name>/results.csv \
+  --checkpoint-dir outputs/eval/<embedder_name>/checkpoints
 ```
 
 Per-dataset checkpoint CSVs are written as `<checkpoint-dir>/<dataset>.csv`.

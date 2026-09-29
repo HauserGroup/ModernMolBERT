@@ -28,22 +28,19 @@ from modernmolbert.eval.benchmarking_molecular_models.common.types import (
 )
 from modernmolbert.utils import file_sha256
 
-DEFAULT_MODEL_DIR = Path("runs/pubchem10m_mps_base_pilot_256/final_model")
-DEFAULT_EMBEDDER = "modernmolbert_pubchem10m_mps_base_pilot_256"
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Embed prepared Praski benchmark datasets with a ModernMolBERT checkpoint.",
     )
-    parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
+    parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument(
         "--tokenizer-path",
         type=Path,
         default=None,
         help="Tokenizer bundle path; defaults to --model-dir.",
     )
-    parser.add_argument("--embedder", default=DEFAULT_EMBEDDER)
+    parser.add_argument("--embedder", required=True)
     parser.add_argument("--datasets", nargs="+", default=["all"])
     parser.add_argument("--config-dir", default="config")
     parser.add_argument("--batch-size", type=int, default=32)

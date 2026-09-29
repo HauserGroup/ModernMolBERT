@@ -40,9 +40,9 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--model-dir` | `runs/pubchem10m_mps_base_pilot_256/final_model` | Path to the checkpoint directory |
+| `--model-dir` | required | Path to the checkpoint directory |
 | `--tokenizer-path` | same as `--model-dir` | Path to tokenizer (defaults to model-dir) |
-| `--embedder` | `modernmolbert_pubchem10m_mps_base_pilot_256` | Name used for output files and results CSV |
+| `--embedder` | required | Name used for output files and results CSV |
 | `--datasets` | `all` | Dataset config stems, globs, or `all` |
 | `--batch-size` | `32` | Inference batch size |
 | `--device` | `auto` | `cpu`, `cuda`, or `auto` |
@@ -72,13 +72,6 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --output-csv data/benchmark_results.csv
 ```
 
-Or via the shell wrapper (runs in background, logs to `logs_scoring/`):
-
-```bash
-cd src/modernmolbert/eval/benchmarking_molecular_models
-./run_scoring.sh <embedder_name> [output_csv]
-```
-
 ### Flags
 
 | Flag | Default | Description |
@@ -92,6 +85,7 @@ cd src/modernmolbert/eval/benchmarking_molecular_models
 | `--resume` / `--no-resume` | `true` | Skip dataset/embedder pairs with existing checkpoints |
 | `--cache` / `--no-cache` | from `score.yaml` | Skip already-evaluated rows in the output CSV (`override = not cache`) |
 | `--safe` / `--no-safe` | from `score.yaml` | Log errors and continue instead of aborting on first failure |
+| `--missing-labels` | `observed` | Missing labels in multi-endpoint datasets (Tox21, MUV): fit each endpoint on its observed labels, or `as-negative` to match the imported Praski et al. table |
 | `overrides` | — | Positional `key=value` pairs, e.g. `model_name=my_embedder` |
 
 ### Config files

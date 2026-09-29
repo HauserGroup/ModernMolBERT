@@ -95,15 +95,6 @@ MODERNMOLBERT_RUN_SMOKE=1 MODERNMOLBERT_RUN_MPS=1 \
 
 Use `--num_workers 0` for MPS runs.
 
-## Optional external-baseline tests
-
-MoLFormer tests should be run in the separate MoLFormer-only environment described in `docs/baselines.md`.
-
-```bash
-PYTHONPATH="$PWD/src" MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 \
-  python -m pytest tests/test_eval_molformer.py -q -s
-```
-
 ## What the eval tests cover
 
 The evaluation tests should cover:

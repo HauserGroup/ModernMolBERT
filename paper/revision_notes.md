@@ -1,35 +1,29 @@
 # Notes for the revised manuscript
 
-## TODO: re-run benchmark aggregation with CV head selection (2026-09-28)
+## TODO: rebuild benchmark results after the retrain (2026-09-28, route updated 2026-09-29)
 
 **Status: not yet re-run. All benchmark numbers in `main.tex` predate this fix.**
 
-`scripts/paper/build_benchmark_results_frames.py` now picks each dataset × embedder's
-downstream head by cross-validation ROC-AUC, not test ROC-AUC (critical review
-item 1). The old version kept the head with the highest *test* score.
+The paper numbers now come from one task matrix, with each dataset × embedder's
+downstream head picked by cross-validation ROC-AUC, not test ROC-AUC (critical
+review item 1). Baselines come from the imported Praski et al. table; the revised
+paper reports the retrained `MMB-small` against them (master plan step 4,
+decision a). Commands, in order, are in `docs/revision_run.md` §4–6:
 
-- `outputs/eval/best_metric_by_dataset_embedder.csv` was built by the old
-  version. It has no `selection_metric` column, so `build_paper_results.py`
-  refuses to run until it is regenerated.
-- The new script raises an error on repeated runs, conflicting run provenance,
-  or missing or out-of-range CV scores. Existing results may need cleaning
-  before it completes.
-
-Re-run from the repo root, in order:
-
-1. `uv run python scripts/paper/build_benchmark_results_frames.py`
-2. `uv run python scripts/paper/build_paper_results.py`
-3. `uv run python scripts/paper/make_paper_figures.py`
-4. `uv run python scripts/paper/make_appendix_table.py`
-5. `uv run python scripts/paper/compute_bootstrap_cis.py`
+1. Embed and score the retrained encoder (§4).
+2. `scripts/paper/audit_split_overlap.py` and
+   `scripts/paper/build_common_row_benchmark.py`, which write `task_matrix.csv` (§5).
+3. `build_paper_results.py --task-matrix`, `make_appendix_table.py`,
+   `compute_bootstrap_cis.py`, `make_paper_figures.py`, `make_loss_curves.py` (§6).
 
 **Manuscript impact:** every headline and per-task number may change. Check
 at least:
 
-- Abstract and Conclusion: MMB-base 77.9.
+- Abstract and Conclusion: the headline mean (MMB-base 77.9 in v1).
 - Results: the ECFP4/MoLFormer/SELFormer/ChemBERTa-2 means and win counts.
 - `tab:main-results`, `tab:pertask`, `tab:bootstrap-cis`, `fig:bootstrap-ci`.
-- Ablation deltas: size +0.5, span −0.3.
+- The v1 ablation deltas (size +0.5, span −0.3) and `Fig_2` leave the results
+  under decision (a).
 - Baseline rows are also affected: Praski results are re-selected by CV.
 
 Also align the downstream-head wording. The Table 2 caption generator now says

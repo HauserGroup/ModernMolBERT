@@ -256,6 +256,8 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
             "tiny_clf",
             "--embedder",
             "fake_embedder",
+            "--model-dir",
+            str(tmp_path / "model"),
         ],
     )
     embed_modernmolbert.main()
@@ -281,6 +283,8 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
             "tiny_clf",
             "--embedder",
             "fake_embedder",
+            "--model-dir",
+            str(tmp_path / "model"),
             "--overwrite",
         ],
     )

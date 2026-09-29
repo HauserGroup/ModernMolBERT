@@ -18,11 +18,13 @@ def test_prediction_archive_contains_prepared_source_row_indices(tmp_path, monke
         hyperparams={},
         cv_score=0.8,
         test_source_row_indices=np.array([4, 7]),
+        prepared_data_sha256="a" * 64,
     )
     log_predictions(result, "predictions")
     path = tmp_path / "predictions/assay/encoder/ridge.npz"
     with np.load(path, allow_pickle=False) as archive:
         assert archive["test_source_row_indices"].tolist() == [4, 7]
+        assert archive["prepared_data_sha256"].item() == "a" * 64
         assert archive["y_true"].tolist() == [0, 1]
 
 

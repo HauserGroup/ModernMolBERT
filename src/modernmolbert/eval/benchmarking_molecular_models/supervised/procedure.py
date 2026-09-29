@@ -215,6 +215,7 @@ def eval_procedure(
             "embedding_model_dir": metadata.get("model_dir"),
             "embedding_tokenizer_path": metadata.get("tokenizer_path"),
             "embedding_max_seq_length": metadata.get("max_seq_length"),
+            "prepared_data_sha256": metadata.get("prepared_data_sha256"),
             "model": result.model,
             "hyperparams": dump_hyperparams(result.hyperparams),
             "library_hash": model_version_hash,

@@ -82,7 +82,9 @@ SHORT = {
     "ogbg-molbbbp": "BBBP",
     "ogbg-molclintox": "ClinTox",
     "ogbg-molhiv": "HIV",
+    "ogbg-molmuv": "MUV",
     "ogbg-molsider": "SIDER",
+    "ogbg-moltox21": "Tox21",
 }
 
 df = pd.read_csv(MATRIX, index_col=0)

@@ -5,7 +5,10 @@ APE tokenizer using only the ChEMBL 36 training split, pretrain one small
 ModernMolBERT encoder with standard masking, then embed and score every one of
 the 25 datasets in the benchmark configuration. Keep the released preprint
 tokenizer, checkpoints, embeddings, and result CSVs as historical artifacts.
-The commands below have not been run as a full experiment.
+The full encoder command began on 29 September 2026 but stopped after step
+16,051/30,000; it has no final model. Its status and the exact remaining
+requirement are in [revision_run_record.md](revision_run_record.md) and
+[model_retraining_requirement.md](model_retraining_requirement.md).
 
 Run from the repository root. Before starting, freeze the code commit, the
 prepared ChEMBL data (`data/pretrain/chembl36_selfies/metadata.json` and Parquet
@@ -17,8 +20,9 @@ the released weights: its tokenizer and training recipe are new.
 
 The run record for `revision_clean_small_v1` is
 [revision_run_record.md](revision_run_record.md). It records the frozen
-inputs, the verified tokenizer, and the step-2 results, plus open decisions
-(including pretraining data order) to settle before step 3.
+inputs, the verified tokenizer, step-2 results, and the interrupted full-run
+status. Do not start or resume model training under the current no-retraining
+scope.
 
 ## 1. Train the corpus-only tokenizer
 
@@ -203,30 +207,40 @@ For each dataset × embedder it:
   in that dataset, then picks the head with the best training-side CV ROC-AUC;
 - checks that the saved predictions reproduce the archived `test_metric`,
   that their source rows are unique prepared test rows, and that the labels at
-  those rows match the prepared labels;
+  those rows match the prepared labels and the archive records the same
+  prepared-file SHA-256;
 - reports test coverage.
 
 For each dataset it then rescores the models that passed those checks on the
 test rows all of them predicted. ROC-AUC, average precision, and positive
 counts come from the same fixed predictions, and average precision never
-influences head selection. `head_candidates.csv` flags heads excluded from
+influences head selection. The output also records how many endpoints retain
+both test classes and the fewest positives among them. `head_candidates.csv` flags heads excluded from
 the shared candidate set; `manifest.json` records that set per dataset. Pass
 every run that should share a comparison in
 one call:
 
 ```bash
+uv run python scripts/paper/audit_split_overlap.py \
+  --summary-output outputs/audit/revision_clean_small_v1/split_overlap_summary.csv \
+  --row-output outputs/audit/revision_clean_small_v1/split_overlap_test_rows.csv
+
 uv run python scripts/paper/build_common_row_benchmark.py \
   --results outputs/eval/revision_clean_small_v1/results.csv \
             outputs/eval/<baseline_run>/results.csv \
   --exclude-datasets ogbg-moltoxcast \
+  --split-overlap-rows outputs/audit/revision_clean_small_v1/split_overlap_test_rows.csv \
   --output-dir outputs/eval/revision_clean_small_v1/common_rows
 ```
 
-It writes four files:
+It writes five files when a split-overlap audit is supplied:
 
 - `head_candidates.csv`: the selection record.
 - `selected_heads.csv`: archive checks, coverage, and file hashes.
 - `common_row_scores.csv`: paired inputs.
+- `common_row_scores_no_split_overlap.csv`: paired sensitivity after removing
+  prepared test rows that share an InChIKey or stereo-insensitive canonical
+  SMILES with training-side rows; the primary scores retain the configured splits.
 - `manifest.json`: input hashes and code revision.
 
 Archives from before commit `112efc5` have no source-row indices. They are

@@ -12,21 +12,23 @@ rescore models on shared rows.
    CV ROC-AUC per dataset x embedder, never the test score.
 2. Each selected head's archive is checked against the prepared dataset:
    source-row indices must be unique prepared test rows, labels must match the
-   prepared labels at those rows, and ROC-AUC recomputed from the archive must
-   equal the archived ``test_metric``. Coverage is the share of prepared test
-   rows that received a prediction.
+   prepared labels at those rows, the prepared-file SHA-256 must match, and
+   ROC-AUC recomputed from the archive must equal the archived ``test_metric``.
+   Coverage is the share of prepared test rows that received a prediction.
 3. For each dataset, models whose archive passed every check are rescored on
    the test rows that all of them predicted, so paired differences are taken
    over the same molecules. Average precision and positive counts are computed
    from the same fixed predictions; they are never used for selection.
 
-Archives without ``test_source_row_indices`` (all pre-``112efc5`` runs) are
-reported but excluded from the common-row comparison.
+Archives without ``test_source_row_indices`` (all pre-``112efc5`` runs) or
+without a matching ``prepared_data_sha256`` are reported but excluded from the
+common-row comparison.
 
 Outputs in ``--output-dir``:
     head_candidates.csv    every head row, with ``eligible_head`` and ``selected`` flags
     selected_heads.csv     CV-selected heads with archive checks and coverage
     common_row_scores.csv  per dataset x embedder scores on common test rows
+    common_row_scores_no_split_overlap.csv  optional paired sensitivity output
     manifest.json          input hashes, code revision and arguments
 
 Usage:
@@ -69,6 +71,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Restrict to these embedders (default: every embedder in --results).",
     )
     parser.add_argument("--exclude-datasets", nargs="*", default=[])
+    parser.add_argument(
+        "--split-overlap-rows",
+        type=Path,
+        help="Optional row audit from audit_split_overlap.py for a paired exclusion sensitivity.",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -112,6 +119,7 @@ def check_archive(
     archived_test_metric: float,
     prepared_test_rows: np.ndarray,
     prepared_labels: np.ndarray,
+    prepared_sha256: str,
 ) -> dict[str, object]:
     """Verify one prediction archive against the prepared data and archived score."""
     record: dict[str, object] = {
@@ -119,6 +127,7 @@ def check_archive(
         "archive_sha256": None,
         "archive_test_metric": np.nan,
         "n_predicted_test": np.nan,
+        "archive_prepared_sha256": None,
     }
     if not path.exists():
         return record | {"archive_status": "missing_archive"}
@@ -131,9 +140,15 @@ def check_archive(
             if "test_source_row_indices" in archive.files
             else None
         )
+        prepared_hash = (
+            str(archive["prepared_data_sha256"].item())
+            if "prepared_data_sha256" in archive.files
+            else None
+        )
     recomputed = float(get_skfp_roc_auc(y_score, y_true))
     record["n_predicted_test"] = len(y_true)
     record["archive_test_metric"] = recomputed
+    record["archive_prepared_sha256"] = prepared_hash
     if not np.isclose(recomputed, archived_test_metric, rtol=0, atol=SCORE_ATOL):
         return record | {"archive_status": "score_mismatch"}
     if rows is None:
@@ -146,6 +161,10 @@ def check_archive(
         _as_label_matrix(prepared_labels[rows]), _as_label_matrix(y_true), equal_nan=True
     ):
         return record | {"archive_status": "label_mismatch"}
+    if prepared_hash is None:
+        return record | {"archive_status": "no_prepared_hash"}
+    if prepared_hash != prepared_sha256:
+        return record | {"archive_status": "prepared_hash_mismatch"}
     return record | {"archive_status": "ok"}
 
 
@@ -168,16 +187,31 @@ def score_rows(y_true: np.ndarray, y_score: np.ndarray) -> dict[str, float | int
     finite = np.isfinite(labels)
     n_positive = int((labels[finite] == 1).sum())
     n_labelled = int(finite.sum())
+    scored_positive_counts = []
+    for column in range(labels.shape[1]):
+        observed = labels[finite[:, column], column]
+        positive = int((observed == 1).sum())
+        negative = int((observed == 0).sum())
+        if positive and negative:
+            scored_positive_counts.append(positive)
     return {
-        "roc_auc_common": float(get_skfp_roc_auc(y_score, y_true)),
+        "roc_auc_common": (
+            float(get_skfp_roc_auc(y_score, y_true)) if scored_positive_counts else float("nan")
+        ),
         "average_precision_common": multioutput_average_precision(y_true, y_score),
+        "n_scored_endpoints_common": len(scored_positive_counts),
+        "min_positive_per_scored_endpoint_common": (
+            min(scored_positive_counts) if scored_positive_counts else float("nan")
+        ),
         "n_labelled_common": n_labelled,
         "n_positive_common": n_positive,
         "prevalence_common": n_positive / n_labelled if n_labelled else float("nan"),
     }
 
 
-def common_row_scores(selected: pd.DataFrame) -> pd.DataFrame:
+def common_row_scores(
+    selected: pd.DataFrame, excluded_rows_by_dataset: dict[str, set[int]] | None = None
+) -> pd.DataFrame:
     """Rescore every verified model of a dataset on the rows all of them predicted."""
     records = []
     verified = selected.loc[selected["archive_status"].eq("ok")]
@@ -190,7 +224,10 @@ def common_row_scores(selected: pd.DataFrame) -> pd.DataFrame:
                     archive["y_true"],
                     archive["y_score"],
                 )
-        common = sorted(set.intersection(*(set(rows.tolist()) for rows, _, _ in archives.values())))
+        common_set = set.intersection(*(set(rows.tolist()) for rows, _, _ in archives.values()))
+        if excluded_rows_by_dataset:
+            common_set -= excluded_rows_by_dataset.get(str(dataset), set())
+        common = sorted(common_set)
         for row in group.itertuples(index=False):
             rows, y_true, y_score = archives[row.embedder]
             position = {int(source): i for i, source in enumerate(rows)}
@@ -209,6 +246,41 @@ def common_row_scores(selected: pd.DataFrame) -> pd.DataFrame:
                 record |= score_rows(y_true[take], y_score[take])
             records.append(record)
     return pd.DataFrame(records)
+
+
+def load_split_overlap_exclusions(
+    path: Path, prepared_cache: dict[str, tuple[np.ndarray, np.ndarray, str]]
+) -> dict[str, set[int]]:
+    """Verify audit provenance and mark test rows sharing a fitting-side identity."""
+    audit = pd.read_csv(path)
+    required = {
+        "dataset",
+        "prepared_sha256",
+        "test_source_row_index",
+        "same_inchikey",
+        "same_nonisomeric_smiles",
+    }
+    if missing := required - set(audit.columns):
+        raise ValueError(f"Split-overlap audit missing columns: {sorted(missing)}")
+    exclusions: dict[str, set[int]] = {}
+    for dataset, (test_rows, _, prepared_sha) in prepared_cache.items():
+        group = audit.loc[audit["dataset"].eq(dataset)]
+        if len(group) != len(test_rows):
+            raise ValueError(f"Split-overlap audit row count mismatch for {dataset}")
+        if set(group["prepared_sha256"]) != {prepared_sha}:
+            raise ValueError(f"Split-overlap audit prepared-file hash mismatch for {dataset}")
+        audited_rows = group["test_source_row_index"].astype(int).tolist()
+        if len(set(audited_rows)) != len(audited_rows) or set(audited_rows) != set(test_rows):
+            raise ValueError(f"Split-overlap audit test-row mapping mismatch for {dataset}")
+        flag_columns = []
+        for column in ("same_inchikey", "same_nonisomeric_smiles"):
+            values = group[column].astype(str).str.lower()
+            if not values.isin(["true", "false"]).all():
+                raise ValueError(f"Invalid {column} flag in split-overlap audit for {dataset}")
+            flag_columns.append(values.eq("true"))
+        flagged = flag_columns[0] | flag_columns[1]
+        exclusions[dataset] = set(group.loc[flagged, "test_source_row_index"].astype(int))
+    return exclusions
 
 
 def git_revision() -> dict[str, object]:
@@ -252,7 +324,7 @@ def main(argv: list[str] | None = None) -> None:
             prepared_cache[dataset] = (test_rows, labels, file_sha256(path))
         test_rows, labels, prepared_sha = prepared_cache[dataset]
         archive = args.predictions_dir / dataset / str(row["embedder"]) / f"{row['model']}.npz"
-        check = check_archive(archive, float(row["test_metric"]), test_rows, labels)
+        check = check_archive(archive, float(row["test_metric"]), test_rows, labels, prepared_sha)
         n_test = len(test_rows)
         n_predicted = float(str(check["n_predicted_test"]))
         checks.append(
@@ -265,11 +337,19 @@ def main(argv: list[str] | None = None) -> None:
         )
     selected = pd.concat([selected, pd.DataFrame(checks, index=selected.index)], axis=1)
     common = common_row_scores(selected)
+    excluded = (
+        load_split_overlap_exclusions(args.split_overlap_rows, prepared_cache)
+        if args.split_overlap_rows
+        else None
+    )
+    sensitivity = common_row_scores(selected, excluded) if excluded is not None else None
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     candidates.to_csv(args.output_dir / "head_candidates.csv", index=False)
     selected.to_csv(args.output_dir / "selected_heads.csv", index=False)
     common.to_csv(args.output_dir / "common_row_scores.csv", index=False)
+    if sensitivity is not None:
+        sensitivity.to_csv(args.output_dir / "common_row_scores_no_split_overlap.csv", index=False)
     manifest = {
         "script": "scripts/paper/build_common_row_benchmark.py",
         "code": git_revision(),
@@ -284,6 +364,15 @@ def main(argv: list[str] | None = None) -> None:
         },
         "archive_status_counts": selected["archive_status"].value_counts().to_dict(),
     }
+    if excluded is not None:
+        manifest["split_overlap_sensitivity"] = {
+            "audit_path": str(args.split_overlap_rows),
+            "audit_sha256": file_sha256(args.split_overlap_rows),
+            "exclusion_rule": "same standard InChIKey or canonical SMILES without stereochemistry",
+            "n_flagged_test_rows_by_dataset": {
+                dataset: len(rows) for dataset, rows in excluded.items()
+            },
+        }
     (args.output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     print(f"Selected {len(selected)} heads from {len(candidates)} candidates")

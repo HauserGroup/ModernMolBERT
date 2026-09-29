@@ -9,7 +9,7 @@ below identify them.
 |---|---|
 | 1. Corpus-only tokenizer | Trained 2026-09-28 21:48 UTC; verified 2026-09-29 (below) |
 | 2. Validate and preflight | Passed 2026-09-29, including globally shuffled debug run and reload (below) |
-| 3. Full encoder pretraining | Started 2026-09-29 03:11 UTC on MPS; in progress |
+| 3. Full encoder pretraining | Stopped at step 16,051/30,000 on 2026-09-29; complete checkpoints through step 15,000 are preserved; no final model |
 | 4. Re-embed and re-score | Not started |
 | 5. CV selection and common rows | Not started |
 
@@ -226,5 +226,10 @@ in CYP2C9-substrate, CYP2D6-substrate, 3CLPro and hERG.
   vocabulary, valid token IDs, and loading the full 2,390,314-row training
   Parquet with global shuffle.
 - **Local outputs:** `runs/revision_clean_small_v1/` and
-  `outputs/audit/revision_clean_small_v1/full_train.log`. The 30,000-step
-  result, best checkpoint, reload, and downstream evaluation are pending.
+  `outputs/audit/revision_clean_small_v1/full_train.log`. Training was stopped
+  at step 16,051/30,000 in response to the current no-retraining scope (process
+  exit 130). Complete checkpoints exist at 5,000, 10,000 and 15,000 steps;
+  the 15,000-step checkpoint has evaluation loss 0.4672612. Work after that
+  checkpoint is not saved. There is no selected `final_model/` or final
+  evaluation. The exact remaining training requirement is documented in
+  [model_retraining_requirement.md](model_retraining_requirement.md).

@@ -2,8 +2,9 @@
 """Summarise the prepared benchmark datasets for the supplementary dataset table.
 
 For each dataset in the benchmark configuration, reports the split rule, the
-number of endpoints, prepared row counts by split, and labelled, positive, and
-missing label cells by split. Counts come from the prepared files that the
+number of endpoints, prepared row counts by split, labelled, positive, and
+missing label cells by split, and which prepared test endpoints have both
+classes needed for ROC-AUC. Counts come from the prepared files that the
 embedding and scoring steps read, not from the original source publications.
 
 Per-model retained and failed rows are not included: take them from the
@@ -38,7 +39,36 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", type=Path, default=CONFIG)
     parser.add_argument("--prepared-dir", type=Path, default=Path("data/prepared"))
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--endpoint-output",
+        type=Path,
+        help="Optional per-endpoint prepared-test label counts and ROC-AUC eligibility CSV.",
+    )
     return parser.parse_args(argv)
+
+
+def summarise_test_endpoints(dataset: Dataset) -> list[dict[str, object]]:
+    """Count prepared test labels using the ROC-AUC scorer's both-class rule."""
+    labels = dataset.labels
+    rows = np.asarray(dataset.splits.get("test", []), dtype=np.int64)
+    records = []
+    for endpoint in labels.columns:
+        values = labels[endpoint].to_numpy(dtype=float)[rows]
+        finite = np.isfinite(values)
+        positive = int((values[finite] == 1).sum())
+        negative = int((values[finite] == 0).sum())
+        records.append(
+            {
+                "endpoint": str(endpoint),
+                "n_test_rows": len(rows),
+                "n_test_labelled": int(finite.sum()),
+                "n_test_positive": positive,
+                "n_test_negative": negative,
+                "n_test_missing": int((~finite).sum()),
+                "prepared_test_roc_auc_evaluable": positive > 0 and negative > 0,
+            }
+        )
+    return records
 
 
 def summarise(dataset: Dataset) -> dict[str, object]:
@@ -63,6 +93,15 @@ def summarise(dataset: Dataset) -> dict[str, object]:
     test_labelled = int(str(record["test_labelled_cells"]))
     test_positive = int(str(record["test_positive_cells"]))
     record["test_prevalence"] = test_positive / test_labelled if test_labelled else np.nan
+    endpoints = summarise_test_endpoints(dataset)
+    evaluable = [row for row in endpoints if row["prepared_test_roc_auc_evaluable"]]
+    record["prepared_test_evaluable_endpoints"] = len(evaluable)
+    record["prepared_test_min_positive_per_evaluable_endpoint"] = (
+        min(int(str(row["n_test_positive"])) for row in evaluable) if evaluable else np.nan
+    )
+    record["prepared_test_min_negative_per_evaluable_endpoint"] = (
+        min(int(str(row["n_test_negative"])) for row in evaluable) if evaluable else np.nan
+    )
     return record
 
 
@@ -70,6 +109,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     config = yaml.safe_load(args.config.read_text())["datasets"]
     rows = []
+    endpoint_rows = []
     for key, entry in config.items():
         source = entry.get("source", {})
         rule = SPLIT_RULES.get((source.get("name"), source.get("benchmark")))
@@ -82,13 +122,21 @@ def main(argv: list[str] | None = None) -> None:
             "config_n_samples": entry.get("n_samples"),
         }
         if path.exists():
-            record |= summarise(Dataset.deserialize_legacy(path))
+            dataset = Dataset.deserialize_legacy(path)
+            record |= summarise(dataset)
+            endpoint_rows.extend(
+                {"dataset": entry["name"]} | endpoint
+                for endpoint in summarise_test_endpoints(dataset)
+            )
         else:
             record["n_prepared"] = np.nan
         rows.append(record)
     summary = pd.DataFrame(rows)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     summary.to_csv(args.output, index=False)
+    if args.endpoint_output:
+        args.endpoint_output.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(endpoint_rows).to_csv(args.endpoint_output, index=False)
     print(f"Summarised {len(summary)} datasets; wrote {args.output}")
     missing = summary.loc[summary["n_prepared"].isna(), "dataset"].tolist()
     if missing:

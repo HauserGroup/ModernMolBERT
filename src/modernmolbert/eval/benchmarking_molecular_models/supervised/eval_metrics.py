@@ -34,6 +34,8 @@ def log_predictions(data: HeadResult, pred_directory: str):
         if source_rows.ndim != 1 or len(source_rows) != len(y_true):
             raise ValueError("Test source row indices must match prediction rows")
         artifact["test_source_row_indices"] = source_rows
+    if data.prepared_data_sha256 is not None:
+        artifact["prepared_data_sha256"] = np.asarray(data.prepared_data_sha256)
 
     # Validate the row mapping before writing either prediction artifact.
     # Legacy .npy retains the raw predict_proba shape used by old consumers.

@@ -642,7 +642,10 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
         },
         X=X,
         y=y,
-        metadata={"source_row_indices": list(range(100, 120))},
+        metadata={
+            "source_row_indices": list(range(100, 120)),
+            "prepared_data_sha256": "a" * 64,
+        },
     )
 
     result = fit_and_eval_embedding(
@@ -656,6 +659,7 @@ def test_fit_and_eval_embedding_binary_classification_knn() -> None:
     assert "clf__n_neighbors" in result.hyperparams
     assert result.test_source_row_indices is not None
     assert result.test_source_row_indices.tolist() == [115, 116, 117, 118, 119]
+    assert result.prepared_data_sha256 == "a" * 64
 
 
 def test_regression_path_returns_1d_predictions() -> None:

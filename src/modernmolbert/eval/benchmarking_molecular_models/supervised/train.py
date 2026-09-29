@@ -277,4 +277,5 @@ def fit_and_eval_embedding(
         hyperparams=best_model["best_params"],
         cv_score=best_model["best_score"],
         test_source_row_indices=test_source_row_indices,
+        prepared_data_sha256=dataset.metadata.get("prepared_data_sha256"),
     )

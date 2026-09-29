@@ -212,6 +212,7 @@ class HeadResult:
     model: str
     hyperparams: dict[str, Any]
     test_source_row_indices: np.ndarray | None = None
+    prepared_data_sha256: str | None = None
 
 
 @dataclass

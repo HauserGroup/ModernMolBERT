@@ -125,14 +125,14 @@ def render(
         r"\begin{table}[htbp]",
         r"  \centering",
         r"  \small",
-        r"  \setlength{\tabcolsep}{4pt}",
+        r"  \setlength{\tabcolsep}{3pt}",
         r"  \begin{tabular}{@{} l r r r r r r r @{}}",
         r"    \toprule",
-        r"    & & & & \multicolumn{3}{c}{\textbf{Molecules per second}} & \\",
+        r"    & \textbf{Params} & \textbf{Weights} &"
+        r" & \multicolumn{3}{c}{\textbf{Molecules per second}} & \textbf{Peak RAM} \\",
         r"    \cmidrule(lr){5-7}",
-        r"    \textbf{Representation} & \textbf{Params (M)} & \textbf{Weights (MB)}"
-        r" & \textbf{Dim.} & \textbf{CPU} & \textbf{MPS, 32} & \textbf{MPS, 128}"
-        r" & \textbf{Peak RAM (GB)} \\",
+        r"    \textbf{Representation} & \textbf{(M)} & \textbf{(MB)} & \textbf{Dim.}"
+        r" & \textbf{CPU} & \textbf{MPS 32} & \textbf{MPS 128} & \textbf{(GB)} \\",
         r"    \midrule",
     ]
     footer = [

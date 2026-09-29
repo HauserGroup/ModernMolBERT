@@ -2,12 +2,12 @@
 \begin{table}[htbp]
   \centering
   \small
-  \setlength{\tabcolsep}{4pt}
+  \setlength{\tabcolsep}{3pt}
   \begin{tabular}{@{} l r r r r r r r @{}}
     \toprule
-    & & & & \multicolumn{3}{c}{\textbf{Molecules per second}} & \\
+    & \textbf{Params} & \textbf{Weights} & & \multicolumn{3}{c}{\textbf{Molecules per second}} & \textbf{Peak RAM} \\
     \cmidrule(lr){5-7}
-    \textbf{Representation} & \textbf{Params (M)} & \textbf{Weights (MB)} & \textbf{Dim.} & \textbf{CPU} & \textbf{MPS, 32} & \textbf{MPS, 128} & \textbf{Peak RAM (GB)} \\
+    \textbf{Representation} & \textbf{(M)} & \textbf{(MB)} & \textbf{Dim.} & \textbf{CPU} & \textbf{MPS 32} & \textbf{MPS 128} & \textbf{(GB)} \\
     \midrule
     ECFP4, binary & --- & --- & 2,048 & 9,944 & --- & --- & 0.37 \\
     ECFP4, count & --- & --- & 2,048 & 9,034 & --- & --- & 0.49 \\

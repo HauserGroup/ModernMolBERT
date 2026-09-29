@@ -196,8 +196,8 @@ Fig_3.
   - `model_cards.HETERO_SPAN_VARIANT` records `mlm=0.15`.
   - Check the run config before regenerating or uploading the card.
 - `paper/source_data/`: no hetero-span rows; no change needed.
-- `plans/ModernMolBERT-critical-review.md`: its controlled ablation plan (E2)
-  should not reintroduce hetero-span.
+- `paper/MASTER_REVISION_PLAN.md`: the critical review's controlled ablation
+  design (E2, under the matched comparator) should not reintroduce hetero-span.
 
 ## Code status
 

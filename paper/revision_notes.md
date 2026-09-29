@@ -49,7 +49,7 @@ figures, tables, reworded conclusions, disclosure wording) is in
 and several benchmark datasets derive from overlapping medicinal-chemistry
 sources...", ~l. 1061–1068). There the overlap analysis is listed as future work;
 it has now been run. It also addresses critical review item 5
-(`plans/ModernMolBERT-critical-review.md`).
+(item map in `paper/MASTER_REVISION_PLAN.md`).
 
 **Source data:** `analysis/pretraining_eval_overlap.csv`, produced by
 `uv run python analysis/pretraining_eval_overlap.py`.

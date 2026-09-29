@@ -207,11 +207,14 @@ in CYP2C9-substrate, CYP2D6-substrate, 3CLPro and hERG.
    and model reload passed. The archived runs made about
    3.2 passes (30,000 × 256 / 2,390,314), with loss drops at pass boundaries
    (0.619 → 0.580, 0.452 → 0.439, 0.377 → 0.354).
-2. **Special-token IDs: fixed for future runs.** The archived config inherits
-   ModernBERT's `cls_token_id` 50281 and `sep_token_id` 50282, outside the
-   588-token vocabulary. The revised builder sets them to molecular BOS 0 and
-   EOS 2. The debug `final_model/config.json` confirms these IDs. The released
-   historical config remains unchanged; verify the full-run config as well.
+2. **Special-token IDs: release and revised run checked.** The local archived
+   small/base configs inherit ModernBERT's `cls_token_id` 50281 and
+   `sep_token_id` 50282, outside their 631-token vocabulary. The current public
+   small/base revisions (`d734b00`, `9b13a24`) correct CLS/SEP to 0/2 and
+   add MASK/UNK 4/3 while retaining byte-identical archived weights and
+   tokenizer files. The revised builder also sets valid IDs; the debug
+   `final_model/config.json` confirms them for its 588-token vocabulary.
+   Verify the completed full-run config when that run exists.
 3. **Precision and hardware.** The new full run uses MPS and `--no-bf16`;
    the archived runs used bf16. This is a documented recipe difference.
 4. **Benchmark coverage.** 168 test rows will fail embedding. Report per-model

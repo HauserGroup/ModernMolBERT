@@ -7,8 +7,8 @@ Neither input is modified: archived ``test_metric`` values are reported as
 stored, and the prediction archives are only used to verify them and to
 rescore models on shared rows.
 
-1. Head selection uses ``collapse_best_head`` from
-   ``build_benchmark_results_frames.py``: the head with the best training-side
+1. For each dataset, restrict candidate heads to those evaluated for every
+   included embedder. Then ``collapse_best_head`` picks the best training-side
    CV ROC-AUC per dataset x embedder, never the test score.
 2. Each selected head's archive is checked against the prepared dataset:
    source-row indices must be unique prepared test rows, labels must match the
@@ -24,7 +24,7 @@ Archives without ``test_source_row_indices`` (all pre-``112efc5`` runs) are
 reported but excluded from the common-row comparison.
 
 Outputs in ``--output-dir``:
-    head_candidates.csv    every head row, with a ``selected`` flag
+    head_candidates.csv    every head row, with ``eligible_head`` and ``selected`` flags
     selected_heads.csv     CV-selected heads with archive checks and coverage
     common_row_scores.csv  per dataset x embedder scores on common test rows
     manifest.json          input hashes, code revision and arguments
@@ -80,6 +80,18 @@ def load_head_results(paths: list[Path]) -> pd.DataFrame:
         frame["result_source"] = str(path.resolve())
         frames.append(frame)
     return pd.concat(frames, ignore_index=True)
+
+
+def common_candidate_heads(heads: pd.DataFrame) -> dict[str, set[str]]:
+    """Allow only heads offered for every included embedder in each dataset."""
+    shared = {}
+    for dataset, group in heads.groupby("dataset", sort=True):
+        offered = [set(rows["model"].astype(str)) for _, rows in group.groupby("embedder")]
+        eligible = set.intersection(*offered)
+        if not eligible:
+            raise ValueError(f"No common candidate heads for dataset {dataset}")
+        shared[str(dataset)] = eligible
+    return shared
 
 
 def load_prepared_test(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -217,12 +229,17 @@ def main(argv: list[str] | None = None) -> None:
     if heads.empty:
         raise ValueError("No head results left after filtering")
 
-    selected = collapse_best_head(heads)
+    common_heads = common_candidate_heads(heads)
+    eligible = heads.apply(
+        lambda row: str(row["model"]) in common_heads[str(row["dataset"])], axis=1
+    )
+    selected = collapse_best_head(heads.loc[eligible].copy())
     selected_keys = set(selected[HEAD_KEYS].itertuples(index=False, name=None))
     candidates = heads.assign(
+        eligible_head=eligible,
         selected=[
             key in selected_keys for key in heads[HEAD_KEYS].itertuples(index=False, name=None)
-        ]
+        ],
     )
 
     prepared_cache: dict[str, tuple[np.ndarray, np.ndarray, str]] = {}
@@ -258,7 +275,13 @@ def main(argv: list[str] | None = None) -> None:
         "code": git_revision(),
         "arguments": {key: str(value) for key, value in vars(args).items()},
         "results_sha256": {str(path): file_sha256(path) for path in args.results},
-        "selection_rule": "max training-side CV ROC-AUC per dataset x embedder",
+        "selection_rule": (
+            "common candidate heads per dataset, then max training-side "
+            "CV ROC-AUC per dataset x embedder"
+        ),
+        "candidate_heads_by_dataset": {
+            dataset: sorted(models) for dataset, models in common_heads.items()
+        },
         "archive_status_counts": selected["archive_status"].value_counts().to_dict(),
     }
     (args.output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

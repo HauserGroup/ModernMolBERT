@@ -9,7 +9,7 @@ below identify them.
 |---|---|
 | 1. Corpus-only tokenizer | Trained 2026-09-28 21:48 UTC; verified 2026-09-29 (below) |
 | 2. Validate and preflight | Passed 2026-09-29, including globally shuffled debug run and reload (below) |
-| 3. Full encoder pretraining | Not started; use the documented full-run settings after freezing the code revision |
+| 3. Full encoder pretraining | Started 2026-09-29 03:11 UTC on MPS; in progress |
 | 4. Re-embed and re-score | Not started |
 | 5. CV selection and common rows | Not started |
 
@@ -193,7 +193,7 @@ in CYP2C9-substrate, CYP2D6-substrate, 3CLPro and hERG.
   seed 42, and learning rate `4e-4`.
 - **Log:** `outputs/audit/revision_clean_small_v1/global_shuffle_debug_train.log`.
 
-## Open points before step 3
+## Decisions and checks for step 3
 
 1. **Pretraining data order: implementation changed, full run pending.** The
    archived loader streams the ChEMBL-ID-ordered `train.parquet` through a
@@ -212,8 +212,19 @@ in CYP2C9-substrate, CYP2D6-substrate, 3CLPro and hERG.
    588-token vocabulary. The revised builder sets them to molecular BOS 0 and
    EOS 2. The debug `final_model/config.json` confirms these IDs. The released
    historical config remains unchanged; verify the full-run config as well.
-3. **Precision and hardware.** The guide uses `--no-bf16`; the archived runs
-   used bf16. Record the actual choice.
+3. **Precision and hardware.** The new full run uses MPS and `--no-bf16`;
+   the archived runs used bf16. This is a documented recipe difference.
 4. **Benchmark coverage.** 168 test rows will fail embedding. Report per-model
    coverage from `build_common_row_benchmark.py` rather than adding benchmark
    symbols.
+
+## Step 3: full encoder pretraining launch
+
+- **Code revision:** `4b9d1b8` (`first-sweep`).
+- **Command:** [revision_run.md](revision_run.md) §3, launched 2026-09-29
+  03:11 UTC on MPS. The log confirms `bf16=False`, the 588-token corpus-only
+  vocabulary, valid token IDs, and loading the full 2,390,314-row training
+  Parquet with global shuffle.
+- **Local outputs:** `runs/revision_clean_small_v1/` and
+  `outputs/audit/revision_clean_small_v1/full_train.log`. The 30,000-step
+  result, best checkpoint, reload, and downstream evaluation are pending.

@@ -97,6 +97,41 @@ def test_heads_selected_by_cv_and_scored_on_common_rows(tmp_path):
     assert candidates["selected"].sum() == 2
 
 
+def test_head_selection_uses_same_candidate_set_for_all_embedders(tmp_path):
+    results_path, predictions, prepared = _write_inputs(tmp_path)
+    results = pd.read_csv(results_path)
+    results.loc[len(results)] = {
+        "embedder": "A",
+        "model": "knn",
+        "cv_metric": 1.0,
+        "test_metric": 1.0,
+        "dataset": "toy",
+        "cv_metric_name": "roc_auc",
+        "test_metric_name": "roc_auc",
+    }
+    results.to_csv(results_path, index=False)
+    out = tmp_path / "out"
+    main(
+        [
+            "--results",
+            str(results_path),
+            "--predictions-dir",
+            str(predictions),
+            "--prepared-dir",
+            str(prepared),
+            "--output-dir",
+            str(out),
+        ]
+    )
+    selected = pd.read_csv(out / "selected_heads.csv").set_index("embedder")
+    candidates = pd.read_csv(out / "head_candidates.csv")
+    assert selected.loc["A", "model"] == "rf"
+    assert selected.loc["B", "model"] == "ridge"
+    knn = candidates.loc[candidates["model"].eq("knn")].iloc[0]
+    assert not knn["eligible_head"]
+    assert not knn["selected"]
+
+
 def test_score_mismatch_excludes_model_from_common_rows(tmp_path):
     selected, common, _ = _run(tmp_path, overrides={("B", "ridge"): 0.5})
     assert selected.loc["B", "archive_status"] == "score_mismatch"

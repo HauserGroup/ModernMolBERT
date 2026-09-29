@@ -199,7 +199,8 @@ modifies them.
 
 For each dataset × embedder it:
 
-- picks the head with the best training-side CV ROC-AUC;
+- restricts candidate heads to those available for every included embedder
+  in that dataset, then picks the head with the best training-side CV ROC-AUC;
 - checks that the saved predictions reproduce the archived `test_metric`,
   that their source rows are unique prepared test rows, and that the labels at
   those rows match the prepared labels;
@@ -208,7 +209,9 @@ For each dataset × embedder it:
 For each dataset it then rescores the models that passed those checks on the
 test rows all of them predicted. ROC-AUC, average precision, and positive
 counts come from the same fixed predictions, and average precision never
-influences head selection. Pass every run that should share a comparison in
+influences head selection. `head_candidates.csv` flags heads excluded from
+the shared candidate set; `manifest.json` records that set per dataset. Pass
+every run that should share a comparison in
 one call:
 
 ```bash

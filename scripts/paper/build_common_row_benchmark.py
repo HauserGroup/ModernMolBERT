@@ -28,12 +28,23 @@ Archives without ``test_source_row_indices`` (all pre-``112efc5`` runs) or
 without a matching ``prepared_data_sha256`` are reported but excluded from the
 common-row comparison.
 
+Baselines can come from a head-level table scored elsewhere, such as the
+imported Praski et al. results (``--table-results`` with ``--table-embedders``).
+Their heads are chosen by the same CV rule from the same shared candidate
+set, but they have no prediction archives: their status is ``table_only``,
+their test scores are used as published, and they take no part in
+common-row or paired per-dataset comparisons. Whether their test molecules
+match ours cannot be checked.
+
 Outputs in ``--output-dir``:
     head_candidates.csv    every head row, with ``eligible_head`` and ``selected`` flags
     selected_heads.csv     CV-selected heads with archive checks and coverage
     common_row_scores.csv  per dataset x embedder scores on common test rows
     common_row_scores_no_split_overlap.csv  optional paired sensitivity output
     paired_task_differences.csv  per dataset x model pair ROC-AUC difference and interval
+    task_matrix.csv        dataset x embedder test ROC-AUC of the CV-selected head, for
+                           verified archives and table-only baselines; the input to
+                           compute_bootstrap_cis.py
     manifest.json          input hashes, code revision and arguments
 
 Usage:
@@ -69,6 +80,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Select downstream heads by CV and compare models on common test rows."
     )
     parser.add_argument("--results", type=Path, nargs="+", required=True)
+    parser.add_argument(
+        "--table-results",
+        type=Path,
+        nargs="+",
+        default=[],
+        help="Head-level CSVs scored elsewhere, without prediction archives (e.g. the Praski table).",
+    )
+    parser.add_argument(
+        "--table-embedders",
+        nargs="+",
+        default=[],
+        help="Embedders to take from --table-results; required with it.",
+    )
+    parser.add_argument(
+        "--matrix-labels",
+        nargs="*",
+        default=[],
+        metavar="EMBEDDER=LABEL",
+        help="Column labels for task_matrix.csv.",
+    )
     parser.add_argument("--predictions-dir", type=Path, default=Path("data/predictions"))
     parser.add_argument("--prepared-dir", type=Path, default=Path("data/prepared"))
     parser.add_argument(
@@ -90,7 +121,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--n-boot", type=int, default=2000, help="Paired bootstrap resamples.")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", type=Path, required=True)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if bool(args.table_results) != bool(args.table_embedders):
+        parser.error("--table-results and --table-embedders must be given together")
+    return args
 
 
 def load_head_results(paths: list[Path]) -> pd.DataFrame:
@@ -100,6 +134,40 @@ def load_head_results(paths: list[Path]) -> pd.DataFrame:
         frame["result_source"] = str(path.resolve())
         frames.append(frame)
     return pd.concat(frames, ignore_index=True)
+
+
+def load_table_heads(paths: list[Path], embedders: list[str]) -> pd.DataFrame:
+    """Head rows for the requested embedders from tables without prediction archives.
+
+    In the imported Praski table ``library_hash`` is a per-batch Python hash,
+    not a grid identity: the hERG-Karim fingerprint kNN rows were scored in a
+    later batch than their other heads. It is kept as ``table_batch_id`` so the
+    run-provenance check applied to our own results does not reject it.
+    """
+    table = load_head_results(paths)
+    table = table.loc[table["embedder"].isin(embedders)].copy()
+    if "library_hash" in table.columns:
+        table = table.rename(columns={"library_hash": "table_batch_id"})
+    if missing := sorted(set(embedders) - set(table["embedder"])):
+        raise ValueError(f"Table embedders not found in --table-results: {missing}")
+    return table.assign(score_source="table")
+
+
+def parse_labels(values: list[str]) -> dict[str, str]:
+    labels = {}
+    for value in values:
+        embedder, sep, label = value.partition("=")
+        if not sep or not embedder or not label:
+            raise ValueError(f"Expected EMBEDDER=LABEL, got {value!r}")
+        labels[embedder] = label
+    return labels
+
+
+def task_matrix(selected: pd.DataFrame, labels: dict[str, str]) -> pd.DataFrame:
+    """Test ROC-AUC of each CV-selected head that is verified or taken from a table."""
+    usable = selected.loc[selected["archive_status"].isin(["ok", "table_only"])]
+    matrix = usable.pivot(index="dataset", columns="embedder", values="test_metric")
+    return matrix.rename(columns=labels).rename_axis(index=None, columns=None)
 
 
 def common_candidate_heads(heads: pd.DataFrame) -> dict[str, set[str]]:
@@ -406,9 +474,15 @@ def git_revision() -> dict[str, object]:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    heads = load_head_results(args.results)
+    labels = parse_labels(args.matrix_labels)
+    heads = load_head_results(args.results).assign(score_source="archive")
     if args.embedders:
         heads = heads.loc[heads["embedder"].isin(args.embedders)]
+    if args.table_results:
+        table = load_table_heads(args.table_results, args.table_embedders)
+        if clash := sorted(set(table["embedder"]) & set(heads["embedder"])):
+            raise ValueError(f"Embedders appear in both --results and --table-results: {clash}")
+        heads = pd.concat([heads, table], ignore_index=True)
     heads = heads.loc[~heads["dataset"].isin(args.exclude_datasets)].reset_index(drop=True)
     if heads.empty:
         raise ValueError("No head results left after filtering")
@@ -432,11 +506,23 @@ def main(argv: list[str] | None = None) -> None:
         dataset = str(row["dataset"])
         if dataset not in prepared_cache:
             path = args.prepared_dir / f"{dataset}.json"
-            test_rows, labels = load_prepared_test(path)
-            prepared_cache[dataset] = (test_rows, labels, file_sha256(path))
-        test_rows, labels, prepared_sha = prepared_cache[dataset]
-        archive = args.predictions_dir / dataset / str(row["embedder"]) / f"{row['model']}.npz"
-        check = check_archive(archive, float(row["test_metric"]), test_rows, labels, prepared_sha)
+            test_rows, row_labels = load_prepared_test(path)
+            prepared_cache[dataset] = (test_rows, row_labels, file_sha256(path))
+        test_rows, prepared_labels, prepared_sha = prepared_cache[dataset]
+        if row["score_source"] == "table":
+            check: dict[str, object] = {
+                "prediction_path": None,
+                "archive_sha256": None,
+                "archive_test_metric": np.nan,
+                "n_predicted_test": np.nan,
+                "archive_prepared_sha256": None,
+                "archive_status": "table_only",
+            }
+        else:
+            archive = args.predictions_dir / dataset / str(row["embedder"]) / f"{row['model']}.npz"
+            check = check_archive(
+                archive, float(row["test_metric"]), test_rows, prepared_labels, prepared_sha
+            )
         n_test = len(test_rows)
         n_predicted = float(str(check["n_predicted_test"]))
         checks.append(
@@ -466,11 +552,15 @@ def main(argv: list[str] | None = None) -> None:
     if sensitivity is not None:
         sensitivity.to_csv(args.output_dir / "common_row_scores_no_split_overlap.csv", index=False)
     paired.to_csv(args.output_dir / "paired_task_differences.csv", index=False)
+    task_matrix(selected, labels).to_csv(args.output_dir / "task_matrix.csv")
     manifest = {
         "script": "scripts/paper/build_common_row_benchmark.py",
         "code": git_revision(),
         "arguments": {key: str(value) for key, value in vars(args).items()},
         "results_sha256": {str(path): file_sha256(path) for path in args.results},
+        "table_results_sha256": {str(path): file_sha256(path) for path in args.table_results},
+        "table_embedders": args.table_embedders,
+        "matrix_labels": labels,
         "selection_rule": (
             "common candidate heads per dataset, then max training-side "
             "CV ROC-AUC per dataset x embedder"

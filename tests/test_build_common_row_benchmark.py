@@ -355,3 +355,98 @@ def test_main_writes_paired_task_differences(tmp_path):
     paired = pd.read_csv(out / "paired_task_differences.csv")
     assert list(paired[["embedder_a", "embedder_b"]].iloc[0]) == ["A", "B"]
     assert paired["n_common_test_rows"].iloc[0] == 3
+
+
+def _write_table(tmp_path, rows):
+    table = pd.DataFrame(rows, columns=["embedder", "model", "cv_metric", "test_metric"]).assign(
+        dataset="toy", cv_metric_name="roc_auc", test_metric_name="roc_auc"
+    )
+    # As in the Praski table, heads of one model can come from different scoring batches.
+    table["library_hash"] = range(len(table))
+    path = tmp_path / "table.csv"
+    table.to_csv(path, index=False)
+    return path
+
+
+def test_table_baselines_are_cv_selected_but_never_row_compared(tmp_path):
+    results_path, predictions, prepared = _write_inputs(tmp_path)
+    # A knn head with the best CV for A: excluded because the table model lacks knn.
+    results = pd.read_csv(results_path)
+    extra = results.iloc[[0]].assign(model="knn", cv_metric=0.99, test_metric=0.5)
+    pd.concat([results, extra]).to_csv(results_path, index=False)
+    table_path = _write_table(
+        tmp_path,
+        [
+            ("T", "rf", 0.95, 0.70),
+            ("T", "ridge", 0.60, 0.99),
+            ("Unused", "rf", 0.99, 0.99),
+        ],
+    )
+    out = tmp_path / "out"
+    main(
+        [
+            "--results",
+            str(results_path),
+            "--table-results",
+            str(table_path),
+            "--table-embedders",
+            "T",
+            "--matrix-labels",
+            "T=Table model",
+            "--predictions-dir",
+            str(predictions),
+            "--prepared-dir",
+            str(prepared),
+            "--output-dir",
+            str(out),
+            "--n-boot",
+            "20",
+        ]
+    )
+    selected = pd.read_csv(out / "selected_heads.csv").set_index("embedder")
+    assert selected.loc["T", "model"] == "rf"
+    assert selected.loc["T", "archive_status"] == "table_only"
+    assert "Unused" not in selected.index
+    assert selected.loc["A", "model"] == "rf"  # knn not offered for every model
+
+    common = pd.read_csv(out / "common_row_scores.csv")
+    assert set(common["embedder"]) == {"A", "B"}
+    paired = pd.read_csv(out / "paired_task_differences.csv")
+    assert "T" not in set(paired["embedder_a"]) | set(paired["embedder_b"])
+
+    matrix = pd.read_csv(out / "task_matrix.csv", index_col=0)
+    assert matrix.loc["toy", "Table model"] == 0.70
+    assert matrix.loc["toy", "A"] == selected.loc["A", "test_metric"]
+
+
+def test_table_results_need_named_embedders(tmp_path):
+    results_path, predictions, prepared = _write_inputs(tmp_path)
+    table_path = _write_table(tmp_path, [("T", "rf", 0.9, 0.8)])
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--results",
+                str(results_path),
+                "--table-results",
+                str(table_path),
+                "--output-dir",
+                str(tmp_path / "out"),
+            ]
+        )
+    with pytest.raises(ValueError, match="not found"):
+        main(
+            [
+                "--results",
+                str(results_path),
+                "--table-results",
+                str(table_path),
+                "--table-embedders",
+                "Missing",
+                "--predictions-dir",
+                str(predictions),
+                "--prepared-dir",
+                str(prepared),
+                "--output-dir",
+                str(tmp_path / "out"),
+            ]
+        )

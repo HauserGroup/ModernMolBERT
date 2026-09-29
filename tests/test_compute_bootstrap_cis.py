@@ -378,3 +378,19 @@ def test_emit_latex_adds_family_columns(tmp_path: Path):
     assert r"16/0/2 & $[+3.4,\;+6.8]$ & +5.20" in content
     assert r"\model{}-base minus each baseline" in content
     assert "Archived scores." in content
+
+
+def test_build_cis_accepts_named_reference(tmp_path: Path):
+    matrix = _matrix_3task().rename(columns={"MMB-base": "MMB-small (clean)"})
+    matrix_path = tmp_path / "matrix.csv"
+    matrix.to_csv(matrix_path)
+    df = build_cis(
+        matrix_path,
+        tmp_path / "out",
+        n_boot=100,
+        seed=0,
+        comparisons=[("MMB-small (clean)", "ECFP4")],
+        make_figures=False,
+        families_path=None,
+    )
+    assert df["model_a"].tolist() == ["MMB-small (clean)"]

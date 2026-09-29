@@ -9,8 +9,31 @@
 **Decision: a retrain will be done.** One corpus-only small encoder, trained with the frozen recipe in the code repository's `docs/model_retraining_requirement.md`, then re-embedded and re-scored on all 25 datasets. It becomes the submission model. Items tagged **[AFTER RETRAIN]** need its outputs; **[PARTLY AFTER RETRAIN]** items have a part that can be done now.
 
 1. **Run the retrain.** Finish the 30,000-step run: either implement and verify exact resumption from `checkpoint-15000`, or start a fresh run. Record precision and hardware at launch. See *One full clean tokenizer and small-encoder retrain* under Conditional experiments.
-2. **Re-embed and score the baselines through the row-identified pipeline** (can start now). ECFP4 needs no download; ChemBERTa-2, MoLFormer and SELFormer need their checkpoints. See *Use a verified shared evaluation*.
-3. **[AFTER RETRAIN] Score the new encoder, select heads by CV only, and compare all models on shared test rows.** See *Select downstream heads without test data* and *Use a verified shared evaluation*.
+2. **Baselines from the imported Praski table (decided 29 September 2026). IMPLEMENTED; run after the retrain.** Re-select their heads by training-side CV from the table, which records CV and test ROC-AUC for every head; no baseline is re-embedded. `build_common_row_benchmark.py --table-results ... --table-embedders ...` marks them `table_only` and writes `task_matrix.csv` for the bootstrap. Their test molecules cannot be matched to ours: say so in one sentence. Paired per-dataset intervals therefore compare ModernMolBERT models only. See `docs/revision_run.md` §5.
+   After the retrain has been embedded and scored (`docs/revision_run.md` §4), run from the code repository root:
+
+   ```bash
+   uv run python scripts/paper/audit_split_overlap.py \
+     --summary-output outputs/audit/revision_clean_small_v1/split_overlap_summary.csv \
+     --row-output outputs/audit/revision_clean_small_v1/split_overlap_test_rows.csv
+   uv run python scripts/paper/build_common_row_benchmark.py \
+     --results outputs/eval/revision_clean_small_v1/results.csv \
+     --table-results data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv \
+     --table-embedders ECFP ChemBERTa-77M-MLM MoLFormer-XL-both-10pct SELFormer \
+     --matrix-labels modernmolbert_revision_clean_small_v1=MMB-small \
+                     ECFP=ECFP4 ChemBERTa-77M-MLM=ChemBERTa-2 \
+                     MoLFormer-XL-both-10pct=MoLFormer \
+     --exclude-datasets ogbg-moltoxcast \
+     --split-overlap-rows outputs/audit/revision_clean_small_v1/split_overlap_test_rows.csv \
+     --output-dir outputs/eval/revision_clean_small_v1/common_rows
+   uv run python scripts/paper/compute_bootstrap_cis.py \
+     --matrix outputs/eval/revision_clean_small_v1/common_rows/task_matrix.csv \
+     --out_dir outputs/eval/revision_clean_small_v1/bootstrap \
+     --reference MMB-small --baselines SELFormer ChemBERTa-2 ECFP4 MoLFormer
+   ```
+
+   Check `selected_heads.csv`: the new encoder's heads should be `ok` and the four baselines `table_only`. `task_matrix.csv` feeds step 4. Keep `task_families.yaml` unchanged.
+3. **[AFTER RETRAIN] Score the new encoder, select heads by CV only from the same shared candidate set as the table baselines, and build the task matrix.** See *Select downstream heads without test data* and *Use a verified shared evaluation*.
 4. **[AFTER RETRAIN] Rebuild every result from one matrix:** headline and per-task tables, figures, bootstrap and task-family intervals, paired per-dataset wins, and sparse-task endpoint counts. See *Rebuild all derived results together* and the related-task re-run.
 5. **[AFTER RETRAIN] Make the claims match the corrected evidence** across abstract, Results, Discussion and Conclusion. See *Align the central claim throughout*.
 6. **Text fixes that need no new results (can be done now):** the masking-comparison text and Figure 7/10 captions; the factual errors in Figures 1 and 2 (see `FIGURE_1_2_REVISIONS.md`); baseline checkpoint identity and size; the data, tokenizer and settings part of the recipe; a one-sentence justification of the four baselines.
@@ -44,12 +67,13 @@ Historical notes used to make this plan were the September critical review, June
 - [x] **Audit the local pretraining and validation SELFIES.** Counted component dots, strict-parser unknowns, malformed strings, and 128-token truncations; documented the archived local small/base tokenizer that silently drops separators. Added model-free source data and a featurizer identity guard. See `REVISION_LOG.md`.
 - [x] **Audit prepared benchmark inputs before embedding.** Counted conversion failures, component dots, strict-parser unknowns, and truncation by dataset and split across all 26 local prepared datasets; the 25 paper test sets have 964 dot-containing rows among 33,562 prepared rows.
 - [ ] ~~**Finish historical embedding coverage before rescoring.**~~ **NOT PLANNED (29 September 2026).** Moot once every model is re-embedded and re-scored through the row-identified pipeline. Confirm public checkpoint tokenizer revisions and which rows were actually embedded for every model. Audit stereochemistry, charges, isotopes, and component policy; re-embed or exclude affected rows consistently. Include a round-trip identity check (SMILES → SELFIES → decoded SMILES → standard InChIKey) on the training corpus and every benchmark, so conversion that silently changes a molecule is counted separately from outright failure (critical review item 3).
-- [ ] **Use a verified shared evaluation.** **[PARTLY AFTER RETRAIN]** Baselines can be re-embedded and scored through the row-identified pipeline now; the comparison with ModernMolBERT needs the retrained encoder. Reconcile imported Praski baseline scores with ModernMolBERT runs at the level of molecule IDs, labels, endpoint masks, scaffold/OGB split assignments, usable rows, sample counts, failed embeddings, pooling, scaling, fingerprint settings, and classifier selection. New ModernMolBERT embeddings and predictions retain prepared-row identities (code commit `112efc5`); historical baseline predictions do not. Rescore cached embeddings if provenance is sufficient; recompute them only if necessary. Compare paired models on common evaluable test rows and report each model’s separate coverage. Keep the existing scaffold/OGB splits.
+- [ ] **Use a verified shared evaluation.** **[AFTER RETRAIN]** *Scope (29 September 2026): baselines come from the imported Praski table with CV-selected heads (`table_only`); they are not re-embedded, and the paper states that their test rows could not be matched to ours. Common-row and paired comparisons cover ModernMolBERT models only. Code ready (`--table-results`).* New ModernMolBERT embeddings and predictions retain prepared-row identities (code commit `112efc5`); historical baseline predictions do not. Rescore cached embeddings if provenance is sufficient; recompute them only if necessary. Compare paired models on common evaluable test rows and report each model’s separate coverage. Keep the existing scaffold/OGB splits.
   - New prediction archives now also carry the exact prepared-file SHA-256; the common-row script rejects a missing or mismatched hash after checking scores, row IDs and labels. Historical baseline archives still lack this provenance and remain outside verified comparisons until repaired.
   - [x] **Common-row tooling.** The same script:
     - rescores verified models on the test rows every compared model predicted;
     - reports per-model test coverage.
-    Historical archives lack row IDs; they are reported as `no_row_ids` and excluded. Baselines join only after re-embedding and scoring through the same pipeline.
+    Historical archives lack row IDs; they are reported as `no_row_ids` and excluded.
+  - [x] **Table baselines supported (29 September 2026).** `--table-results` with `--table-embedders` adds the Praski table's heads to the shared candidate set, selects them by CV, marks them `table_only`, and writes `task_matrix.csv`; `compute_bootstrap_cis.py --reference/--baselines` reads it. A dry check on the real table selected 125 heads (5 models × 25 datasets), with kNN excluded on HIV and MUV. The table's `library_hash` is a per-batch hash, so it is kept as `table_batch_id` instead of run provenance.
 - [ ] ~~**Include the stronger cheap fingerprint check.**~~ **NOT PLANNED (29 September 2026).** Extra baseline, not needed for defensibility. Reconsider only if the corrected results put ModernMolBERT close to or above binary ECFP4, since Praski et al. recommend count ECFP. Evaluate count ECFP alongside binary ECFP under the repaired protocol; the imported benchmark already contains count-ECFP results, but their comparability still needs verification.
 - [ ] **Rebuild all derived results together.** **[AFTER RETRAIN]** Regenerate the canonical task matrix, per-task and headline tables, win counts, paired differences, bootstrap intervals, group summaries, ablations, captions, and every result-bearing figure from the corrected data. Report task denominators explicitly and retain unrounded source values. Check Figure 3/appendix win-count discrepancies against unrounded values. Describe the result as a corrected retrospective analysis; do not imply previously inspected test data were historically untouched.
 

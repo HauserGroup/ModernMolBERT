@@ -522,12 +522,29 @@ def main() -> None:
         "--no_families", action="store_true", help="Report task-level intervals only."
     )
     parser.add_argument("--caption_note", default="", help="Sentence appended to the caption.")
+    parser.add_argument(
+        "--reference",
+        default=None,
+        help="Matrix column compared with each baseline (default: the four archived comparisons).",
+    )
+    parser.add_argument(
+        "--baselines",
+        nargs="+",
+        default=[b for _, b in COMPARISONS],
+        help="Baseline matrix columns, used with --reference.",
+    )
     args = parser.parse_args()
+    comparisons = (
+        COMPARISONS
+        if args.reference is None
+        else [(args.reference, baseline) for baseline in args.baselines]
+    )
     build_cis(
         args.matrix,
         args.out_dir,
         args.n_boot,
         args.seed,
+        comparisons=comparisons,
         make_figures=not args.no_figures,
         figure_dir=args.figure_dir,
         families_path=None if args.no_families else args.families,

@@ -37,26 +37,27 @@ Also align the downstream-head wording. The Table 2 caption generator now says
 
 ## TODO: re-run related-task and paired intervals on corrected results (2026-09-29)
 
-**Status: archived diagnostic only. Re-run after the retrained encoder and the
-re-scored baselines exist.**
+**Status: archived diagnostic only. Re-run after the retrained encoder exists.**
 
 The task-family bootstrap (code commit `0455b61`) currently runs on the archived
 matrix, whose scores used test-selected heads and imported baseline rows. Its
 numbers in `tab:bootstrap-cis` and Results are provisional, like every other
-archived number. The per-dataset paired intervals cannot run at all yet: they
-need prediction archives with test-row identities for every compared model.
+archived number. The per-dataset paired intervals need prediction archives
+with test-row identities, so they compare ModernMolBERT models only; baselines
+come from the imported Praski table (CV-selected heads, no row identity).
 
-After the retrain and baseline re-scoring, from the repo root:
+After the retrain, from the repo root:
 
 1. `uv run python scripts/paper/build_common_row_benchmark.py ...` (see
    `docs/revision_run.md` §5); it writes `paired_task_differences.csv`.
-2. `uv run python scripts/paper/compute_bootstrap_cis.py --matrix <corrected matrix>`
+2. `uv run python scripts/paper/compute_bootstrap_cis.py --matrix <common_rows>/task_matrix.csv --reference MMB-small ...`
    with the archival caption note removed.
 
 Keep `task_families.yaml` unchanged; the families were fixed before corrected
 results existed. **Manuscript impact:** replace the archived family intervals
-and family win counts in Results and `tab:bootstrap-cis`, and replace raw
-per-dataset win counts with wins whose paired interval excludes zero.
+and family win counts in Results and `tab:bootstrap-cis`. Per-dataset wins
+against baselines stay descriptive; state that baseline test rows could not be
+matched to ours.
 
 ## Hetero-span masking moved to the supplement (2026-09-28)
 

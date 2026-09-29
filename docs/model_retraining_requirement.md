@@ -89,16 +89,19 @@ Keep the partial checkpoints and log as labelled diagnostics.
    heads using training-side CV from a common candidate set per dataset;
    evaluate the selected head on held-out test rows. Head fitting is downstream
    evaluation, not encoder retraining.
-5. Verify baseline row identity and compare models on shared evaluable test
-   rows. Use the prepared-row split-overlap audit for a paired sensitivity that
-   excludes shared InChIKey/stereo-insensitive matches while retaining the
-   configured splits for the primary analysis. Rebuild the manuscript's numeric
+5. Take the baselines from the imported Praski table with CV-selected heads
+   (`--table-results`; see `docs/revision_run.md` §5) and state that their test
+   rows cannot be matched to ours. Compare ModernMolBERT models on shared
+   evaluable test rows, and use the prepared-row split-overlap audit for a
+   paired sensitivity that excludes shared InChIKey/stereo-insensitive matches
+   while retaining the configured splits for the primary analysis. Rebuild the manuscript's numeric
    tables, intervals, plots, and claims from the same versioned result matrix.
 6. Recompute the aggregate intervals with `compute_bootstrap_cis.py` on the
    corrected matrix, including the task-family resampling from the unchanged
-   `task_families.yaml`, and count per-dataset wins only from
-   `paired_task_differences.csv` where the paired interval excludes zero. The
-   current family results are an archived diagnostic.
+   `task_families.yaml`. Between ModernMolBERT models, count per-dataset wins
+   only from `paired_task_differences.csv` where the paired interval excludes
+   zero; wins against table baselines stay descriptive. The current family
+   results are an archived diagnostic.
 
 Until these checks pass, the revised manuscript must label existing scores as
 archival and avoid treating the partial checkpoint as the final model.

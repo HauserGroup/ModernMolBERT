@@ -227,13 +227,26 @@ uv run python scripts/paper/audit_split_overlap.py \
 
 uv run python scripts/paper/build_common_row_benchmark.py \
   --results outputs/eval/revision_clean_small_v1/results.csv \
-            outputs/eval/<baseline_run>/results.csv \
+  --table-results data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv \
+  --table-embedders ECFP ChemBERTa-77M-MLM MoLFormer-XL-both-10pct SELFormer \
+  --matrix-labels modernmolbert_revision_clean_small_v1=MMB-small \
+                  ECFP=ECFP4 ChemBERTa-77M-MLM=ChemBERTa-2 \
+                  MoLFormer-XL-both-10pct=MoLFormer \
   --exclude-datasets ogbg-moltoxcast \
   --split-overlap-rows outputs/audit/revision_clean_small_v1/split_overlap_test_rows.csv \
   --output-dir outputs/eval/revision_clean_small_v1/common_rows
 ```
 
-It writes six files when a split-overlap audit is supplied:
+The baselines come from the imported Praski et al. table, which records
+training-side CV and test ROC-AUC for every head. Their heads are chosen by
+the same CV rule from the same shared candidate set (so kNN drops out on HIV
+and MUV for every model), and their test scores are used as published. They
+have no prediction archives, so they get status `table_only` and stay out of
+the common-row and paired per-dataset outputs; the paper must say that their
+test molecules could not be matched to ours. This keeps the revision minimal:
+no baseline is re-embedded.
+
+It writes seven files when a split-overlap audit is supplied:
 
 - `head_candidates.csv`: the selection record.
 - `selected_heads.csv`: archive checks, coverage, and file hashes.
@@ -247,10 +260,20 @@ It writes six files when a split-overlap audit is supplied:
   a model only when the interval excludes zero; count per-dataset wins from
   this column, not from raw score differences. `--paired-reference` limits
   the pairs to one model against each other, and `--n-boot` sets the resamples.
+- `task_matrix.csv`: test ROC-AUC of each CV-selected head, one column per
+  model (verified archives and table baselines), labelled by `--matrix-labels`.
 - `manifest.json`: input hashes and code revision.
 
 For the aggregate intervals, run `scripts/paper/compute_bootstrap_cis.py` on
-the final task matrix. Besides resampling tasks, it resamples the task
+that task matrix:
+
+```bash
+uv run python scripts/paper/compute_bootstrap_cis.py \
+  --matrix outputs/eval/revision_clean_small_v1/common_rows/task_matrix.csv \
+  --out_dir outputs/eval/revision_clean_small_v1/bootstrap \
+  --reference MMB-small --baselines SELFormer ChemBERTa-2 ECFP4 MoLFormer
+```
+ Besides resampling tasks, it resamples the task
 families in
 `src/modernmolbert/eval/benchmarking_molecular_models/config/task_families.yaml`
 as units and reports a family-weighted mean and family win counts.
@@ -261,9 +284,7 @@ existed; do not regroup tasks after seeing scores.
 Archives from before commit `112efc5` have no source-row indices. They are
 reported with status `no_row_ids` and left out of the common-row comparison. A
 results CSV with repeated or conflicting runs for one head stops the script;
-choose the run explicitly first. Baselines join the comparison only after they
-are embedded and scored through the same pipeline, so that their predictions
-also carry row indices.
+choose the run explicitly first.
 
 Before reporting a cross-model comparison, record dataset/split IDs, the
 number of retained rows for each model and baseline, scoring-grid/version

@@ -33,7 +33,7 @@ including component separators. It does not read validation or benchmark
 molecules and cannot be combined with either `--extra_vocab_*` option.
 
 ```bash
-uv run python -m modernmolbert.train_ape_tokenizer \
+uv run python -m modernmolbert.train_tokenizer \
   --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json \
   --dataset_name data/pretrain/chembl36_selfies \
   --molecule_column selfies --representation SELFIES \

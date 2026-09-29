@@ -24,8 +24,8 @@ SMILES primitive tokens are atoms and bond/ring characters: `C`, `O`, `Br`, `(`,
 ### Production command (ChEMBL36 SELFIES)
 
 ```bash
-uv run python -m modernmolbert.train_ape_tokenizer \
-  --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
+uv run python -m modernmolbert.train_tokenizer \
+  --output_vocab_path tokenizer/custom_selfies_ape.json \
   --dataset_name data/pretrain/chembl36_selfies \
   --molecule_column selfies \
   --representation SELFIES \
@@ -37,16 +37,15 @@ uv run python -m modernmolbert.train_ape_tokenizer \
 ```
 
 This produces:
-- `tokenizer/chembl36_selfies_2m_ape_max2_min3000.json` — vocabulary
-- `tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json` — training provenance and SHA256
+- `tokenizer/custom_selfies_ape.json` — vocabulary
+- `tokenizer/custom_selfies_ape.metadata.json` — training provenance and SHA256
 
 > **Shipped tokenizer predates the current default.** The committed
 > `tokenizer/chembl36_selfies_2m_ape_max2_min3000.json` was built with
 > `--extra_vocab_symbols_path tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt`
 > (42 benchmark-derived symbols added, 631 tokens total; recorded in its
-> `.metadata.json`). The command above does not reproduce that file and will
-> overwrite it. Use a different `--output_vocab_path` until the shipped
-> tokenizer is retrained.
+> `.metadata.json`). The command above writes a separate tokenizer and does
+> not reproduce the shipped file.
 
 The corpus-only replacement for the revision run is
 `tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json`. It has 588
@@ -84,8 +83,8 @@ evaluation-set information into the vocabulary.
 
 ```bash
 # Conservative: more fragmented, longer sequences, lower compression
-uv run python -m modernmolbert.train_ape_tokenizer \
-  --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max4.json \
+uv run python -m modernmolbert.train_tokenizer \
+  --output_vocab_path tokenizer/custom_selfies_ape_max4.json \
   --dataset_name data/pretrain/chembl36_selfies \
   --molecule_column selfies \
   --representation SELFIES \
@@ -96,8 +95,8 @@ uv run python -m modernmolbert.train_ape_tokenizer \
   --seed 42
 
 # Moderate
-uv run python -m modernmolbert.train_ape_tokenizer \
-  --output_vocab_path tokenizer/chembl36_selfies_2m_ape_max8.json \
+uv run python -m modernmolbert.train_tokenizer \
+  --output_vocab_path tokenizer/custom_selfies_ape_max8.json \
   --dataset_name data/pretrain/chembl36_selfies \
   --molecule_column selfies \
   --representation SELFIES \
@@ -197,8 +196,8 @@ ids = tok("[C][C][O]", add_special_tokens=True, return_tensors="pt")
 Train on SMILES instead of SELFIES by switching the representation and pointing at a SMILES column:
 
 ```bash
-uv run python -m modernmolbert.train_ape_tokenizer \
-  --output_vocab_path tokenizer/my_smiles_ape.json \
+uv run python -m modernmolbert.train_tokenizer \
+  --output_vocab_path tokenizer/custom_smiles_ape.json \
   --dataset_name data/pretrain/chembl36_selfies \
   --molecule_column smiles \
   --representation SMILES \
@@ -214,7 +213,8 @@ Validate:
 ```bash
 uv run python -m modernmolbert.validate_tokenizer \
   --representation SMILES \
-  --tokenizer_vocab_path tokenizer/my_smiles_ape.json \
+  --tokenizer_vocab_path tokenizer/custom_smiles_ape.json \
+  --tokenizer_metadata_path tokenizer/custom_smiles_ape.metadata.json \
   --molecule_column smiles \
   --n 1000
 ```

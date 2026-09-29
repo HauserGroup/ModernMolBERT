@@ -27,9 +27,18 @@ The comparison is run on the set of tasks where **both** models have a result
 (``results_matrix_25task.csv`` may have missing cells for some MMB variants).
 Win / tie / loss counts are computed on the full matched set (not resampled).
 
+Related tasks are not independent evidence: the five CYP Veith datasets, for
+example, share an assay source and test molecules. ``task_families.yaml``
+groups such tasks; the family bootstrap resamples whole families instead of
+tasks. It keeps the task-weighted mean as its estimate, so only the interval
+changes. A second estimate weights each family once, and win / tie / loss
+counts are also reported over family means. A separate random stream is used,
+so the task-level intervals are unchanged by the family analysis.
+
 Inputs
 ------
 - ``outputs/eval/paper/results_matrix_25task.csv``  (25 tasks × 8 models)
+- ``src/modernmolbert/eval/benchmarking_molecular_models/config/task_families.yaml``
 
 Outputs
 -------
@@ -43,11 +52,13 @@ Usage
 """
 
 import argparse
+from collections.abc import Iterable
 from pathlib import Path
 
 import matplotlib
 import numpy as np
 import pandas as pd
+import yaml
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -55,6 +66,9 @@ from matplotlib.lines import Line2D
 
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX_PATH = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
+FAMILIES_PATH = (
+    ROOT / "src/modernmolbert/eval/benchmarking_molecular_models/config/task_families.yaml"
+)
 OUT_DIR = ROOT / "outputs/eval/paper"
 FIGURE_DIR = OUT_DIR / "figures"
 
@@ -65,6 +79,8 @@ BREWER_DARK2 = {
 }
 TEXT_COLOR = "#2B2B2B"
 GRID_COLOR = "#D9D9D9"
+
+LATEX_NAMES = {"MMB-base": r"\model{}-base", "MMB-small": r"\model{}-small"}
 
 # Comparisons: (model_a, model_b) — CI is for mean(a − b).
 COMPARISONS: list[tuple[str, str]] = [
@@ -118,6 +134,64 @@ def paired_bootstrap(
     return mean_diff, ci_low, ci_high
 
 
+def read_task_families(path: Path) -> dict[str, str]:
+    """Map each listed task to its family, rejecting a task listed twice."""
+    mapping: dict[str, str] = {}
+    for family, members in yaml.safe_load(path.read_text())["families"].items():
+        for task in members:
+            if task in mapping:
+                raise ValueError(f"Task {task} is listed in two families")
+            mapping[task] = family
+    return mapping
+
+
+def load_task_families(path: Path, tasks: Iterable[str]) -> dict[str, str]:
+    """Map every task to its family; tasks not listed form their own family."""
+    mapping = read_task_families(path)
+    return {str(task): mapping.get(str(task), str(task)) for task in tasks}
+
+
+def cluster_bootstrap(
+    diffs: np.ndarray,
+    groups: np.ndarray,
+    n_boot: int = 10_000,
+    alpha: float = 0.05,
+    rng: np.random.Generator | None = None,
+    weight: str = "task",
+) -> tuple[float, float, float]:
+    """Return (estimate, ci_low, ci_high), resampling whole groups of tasks.
+
+    ``weight="task"`` keeps the mean over tasks, as in ``paired_bootstrap``;
+    ``weight="family"`` averages the group means, so each group counts once.
+    """
+    if len(diffs) != len(groups):
+        raise ValueError(
+            f"diffs and groups must have equal length, got {len(diffs)} vs {len(groups)}"
+        )
+    if len(diffs) == 0:
+        raise ValueError("Cannot bootstrap empty arrays")
+    if weight not in {"task", "family"}:
+        raise ValueError(f"Unknown weight {weight!r}")
+    if rng is None:
+        rng = np.random.default_rng()
+
+    labels = list(dict.fromkeys(groups.tolist()))
+    sums = np.array([diffs[groups == label].sum() for label in labels])
+    counts = np.array([(groups == label).sum() for label in labels])
+    idx = rng.integers(0, len(labels), size=(n_boot, len(labels)))
+    if weight == "task":
+        estimate = float(diffs.mean())
+        boot = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+    else:
+        means = sums / counts
+        estimate = float(means.mean())
+        boot = means[idx].mean(axis=1)
+
+    ci_low = float(np.percentile(boot, 100 * alpha / 2))
+    ci_high = float(np.percentile(boot, 100 * (1 - alpha / 2)))
+    return estimate, ci_low, ci_high
+
+
 # ── per-comparison summary ──────────────────────────────────────────────────
 
 
@@ -127,16 +201,21 @@ def comparison_row(
     model_b: str,
     n_boot: int,
     rng: np.random.Generator,
+    families: dict[str, str] | None = None,
+    family_rng: np.random.Generator | None = None,
 ) -> dict:
-    """Compute summary statistics for one (model_a vs model_b) pair."""
-    matched = matrix[[model_a, model_b]].dropna()
+    """Compute summary statistics for one (model_a vs model_b) pair.
+
+    With ``families``, also resample whole task families (see module notes).
+    """
+    matched = matrix.loc[:, [model_a, model_b]].dropna()
     a = matched[model_a].to_numpy(dtype=np.float64)
     b = matched[model_b].to_numpy(dtype=np.float64)
     diffs = a - b
 
     mean_diff, ci_low, ci_high = paired_bootstrap(a, b, n_boot=n_boot, rng=rng)
 
-    return {
+    row = {
         "model_a": model_a,
         "model_b": model_b,
         "n_tasks": len(matched),
@@ -147,6 +226,27 @@ def comparison_row(
         "ci_low_95": round(ci_low * 100, 2),
         "ci_high_95": round(ci_high * 100, 2),
     }
+    if families is None:
+        return row
+
+    family_rng = rng if family_rng is None else family_rng
+    groups = np.array([families[str(task)] for task in matched.index])
+    _, fam_low, fam_high = cluster_bootstrap(diffs, groups, n_boot, rng=family_rng)
+    weighted, weighted_low, weighted_high = cluster_bootstrap(
+        diffs, groups, n_boot, rng=family_rng, weight="family"
+    )
+    family_diffs = np.array([diffs[groups == g].mean() for g in dict.fromkeys(groups.tolist())])
+    return row | {
+        "n_families": len(family_diffs),
+        "family_wins": int((family_diffs > 0).sum()),
+        "family_ties": int((family_diffs == 0).sum()),
+        "family_losses": int((family_diffs < 0).sum()),
+        "family_ci_low_95": round(fam_low * 100, 2),
+        "family_ci_high_95": round(fam_high * 100, 2),
+        "family_weighted_delta": round(weighted * 100, 2),
+        "family_weighted_ci_low_95": round(weighted_low * 100, 2),
+        "family_weighted_ci_high_95": round(weighted_high * 100, 2),
+    }
 
 
 def run_comparisons(
@@ -154,18 +254,76 @@ def run_comparisons(
     comparisons: list[tuple[str, str]],
     n_boot: int,
     seed: int,
+    families: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Run all comparisons and return a summary DataFrame."""
     rng = np.random.default_rng(seed)
-    rows = [comparison_row(matrix, a, b, n_boot, rng) for a, b in comparisons]
+    family_rng = np.random.default_rng([seed, 1])
+    rows = [
+        comparison_row(matrix, a, b, n_boot, rng, families=families, family_rng=family_rng)
+        for a, b in comparisons
+    ]
     return pd.DataFrame(rows)
 
 
 # ── LaTeX emission ──────────────────────────────────────────────────────────
 
 
-def emit_latex(df: pd.DataFrame, out_path: Path) -> None:
-    """Write a tabular LaTeX fragment for the bootstrap CI table."""
+def _ci(low: float, high: float) -> str:
+    return f"$[{low:+.1f},\\;{high:+.1f}]$"
+
+
+def emit_latex(df: pd.DataFrame, out_path: Path, caption_note: str = "") -> None:
+    """Write the bootstrap CI table; add task-family columns when present."""
+    if "family_ci_low_95" not in df.columns:
+        _emit_task_latex(df, out_path, caption_note)
+        return
+    model_a = " and ".join(
+        LATEX_NAMES.get(str(name), str(name)) for name in dict.fromkeys(df["model_a"])
+    )
+    lines = [
+        r"\begin{table}[htbp]",
+        r"  \centering\small",
+        r"  \setlength{\tabcolsep}{3pt}",
+        r"  \begin{tabular}{l r c r c r c c r}",
+        r"    \toprule",
+        r"    & \multicolumn{4}{c}{\textbf{Tasks}} & \multicolumn{4}{c}{\textbf{Task families}} \\",
+        r"    \cmidrule(lr){2-5}\cmidrule(lr){6-9}",
+        r"    \textbf{Baseline} & $n$ & \textbf{W/T/L} & \textbf{Mean $\Delta$} "
+        r"& \textbf{95\,\% CI} & $n$ & \textbf{W/T/L} & \textbf{95\,\% CI} "
+        r"& \textbf{Family $\Delta$} \\",
+        r"    \midrule",
+    ]
+    for row in df.to_dict("records"):
+        lines.append(
+            f"    {row['model_b']} & {row['n_tasks']} "
+            f"& {row['wins']}/{row['ties']}/{row['losses']} "
+            f"& {row['mean_delta_roc_auc']:+.2f} & {_ci(row['ci_low_95'], row['ci_high_95'])} "
+            f"& {row['n_families']} "
+            f"& {row['family_wins']}/{row['family_ties']}/{row['family_losses']} "
+            f"& {_ci(row['family_ci_low_95'], row['family_ci_high_95'])} "
+            f"& {row['family_weighted_delta']:+.2f} \\\\"
+        )
+    lines += [
+        r"    \bottomrule",
+        r"  \end{tabular}",
+        r"  \caption{%",
+        r"    Paired bootstrap 95\,\% intervals ($B=10{,}000$) on mean $\Delta$ ROC-AUC",
+        f"    ($\\times100$), {model_a} minus each baseline, over the tasks where both",
+        r"    models have a result. \emph{Tasks}: tasks are resampled individually, and",
+        f"    W/T/L counts tasks where {model_a} is above, equal to, or below the baseline.",
+        r"    \emph{Task families}: whole families of related tasks are resampled, keeping",
+        r"    the same task-weighted mean; W/T/L compares family means, and",
+        r"    \emph{Family $\Delta$} weights each family equally.",
+    ]
+    if caption_note:
+        lines.append(f"    {caption_note}")
+    lines += [r"  }%", r"  \label{tab:bootstrap-cis}", r"\end{table}"]
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _emit_task_latex(df: pd.DataFrame, out_path: Path, caption_note: str = "") -> None:
+    """Task-level table, used when no task families are supplied."""
     lines = [
         r"\begin{table}[htbp]",
         r"  \centering\small",
@@ -192,12 +350,10 @@ def emit_latex(df: pd.DataFrame, out_path: Path) -> None:
         r"    computed over the tasks where both models have a result.",
         r"    \emph{Wins}/\emph{Ties}/\emph{Losses} count tasks where \model{}-base is",
         r"    above, equal to, or below the baseline.",
-        r"    A positive mean $\Delta$ and CI entirely above zero indicates a consistent",
-        r"    advantage for \model{}-base.",
-        r"  }%",
-        r"  \label{tab:bootstrap-cis}",
-        r"\end{table}",
     ]
+    if caption_note:
+        lines.append(f"    {caption_note}")
+    lines += [r"  }%", r"  \label{tab:bootstrap-cis}", r"\end{table}"]
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -329,15 +485,20 @@ def build_cis(
     comparisons: list[tuple[str, str]] = COMPARISONS,
     make_figures: bool = True,
     figure_dir: Path = FIGURE_DIR,
+    families_path: Path | None = FAMILIES_PATH,
+    caption_note: str = "",
 ) -> pd.DataFrame:
     """Full pipeline: load matrix → bootstrap → save CSV and LaTeX."""
     out_dir.mkdir(parents=True, exist_ok=True)
     matrix = pd.read_csv(matrix_path, index_col=0)
+    families = (
+        load_task_families(families_path, matrix.index) if families_path is not None else None
+    )
 
-    df = run_comparisons(matrix, comparisons, n_boot=n_boot, seed=seed)
+    df = run_comparisons(matrix, comparisons, n_boot=n_boot, seed=seed, families=families)
 
     df.to_csv(out_dir / "bootstrap_cis.csv", index=False)
-    emit_latex(df, out_dir / "table_bootstrap.tex")
+    emit_latex(df, out_dir / "table_bootstrap.tex", caption_note)
     if make_figures:
         emit_ci_forest_plot(df, figure_dir)
 
@@ -356,6 +517,11 @@ def main() -> None:
     parser.add_argument("--out_dir", type=Path, default=OUT_DIR)
     parser.add_argument("--figure_dir", type=Path, default=FIGURE_DIR)
     parser.add_argument("--no_figures", action="store_true")
+    parser.add_argument("--families", type=Path, default=FAMILIES_PATH)
+    parser.add_argument(
+        "--no_families", action="store_true", help="Report task-level intervals only."
+    )
+    parser.add_argument("--caption_note", default="", help="Sentence appended to the caption.")
     args = parser.parse_args()
     build_cis(
         args.matrix,
@@ -364,6 +530,8 @@ def main() -> None:
         args.seed,
         make_figures=not args.no_figures,
         figure_dir=args.figure_dir,
+        families_path=None if args.no_families else args.families,
+        caption_note=args.caption_note,
     )
 
 

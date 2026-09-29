@@ -19,6 +19,10 @@ rescore models on shared rows.
    the test rows that all of them predicted, so paired differences are taken
    over the same molecules. Average precision and positive counts are computed
    from the same fixed predictions; they are never used for selection.
+4. For each dataset and pair of verified models, the ROC-AUC difference on
+   those common rows gets a paired bootstrap interval: the same resampled test
+   molecules score both models. A per-task win counts only when the interval
+   excludes zero; a small test set can otherwise turn noise into a win.
 
 Archives without ``test_source_row_indices`` (all pre-``112efc5`` runs) or
 without a matching ``prepared_data_sha256`` are reported but excluded from the
@@ -29,6 +33,7 @@ Outputs in ``--output-dir``:
     selected_heads.csv     CV-selected heads with archive checks and coverage
     common_row_scores.csv  per dataset x embedder scores on common test rows
     common_row_scores_no_split_overlap.csv  optional paired sensitivity output
+    paired_task_differences.csv  per dataset x model pair ROC-AUC difference and interval
     manifest.json          input hashes, code revision and arguments
 
 Usage:
@@ -44,11 +49,13 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from scipy.stats import rankdata
 from sklearn.metrics import average_precision_score
 
 from build_benchmark_results_frames import collapse_best_head
 from modernmolbert.eval.benchmarking_molecular_models.common.types import Dataset
 from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
+    _normalize_auc_scores,
     get_skfp_roc_auc,
 )
 from modernmolbert.utils import file_sha256
@@ -76,6 +83,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Optional row audit from audit_split_overlap.py for a paired exclusion sensitivity.",
     )
+    parser.add_argument(
+        "--paired-reference",
+        help="Compare this embedder with each other one (default: every pair of embedders).",
+    )
+    parser.add_argument("--n-boot", type=int, default=2000, help="Paired bootstrap resamples.")
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -209,6 +222,28 @@ def score_rows(y_true: np.ndarray, y_score: np.ndarray) -> dict[str, float | int
     }
 
 
+def aligned_common_rows(
+    group: pd.DataFrame, excluded_rows: set[int] | None = None
+) -> tuple[list[int], dict[str, tuple[np.ndarray, np.ndarray, int]]]:
+    """Return the common test rows and each model's labels and scores on them, in order."""
+    archives = {}
+    for embedder, path in zip(group["embedder"], group["prediction_path"], strict=True):
+        with np.load(str(path), allow_pickle=False) as archive:
+            archives[str(embedder)] = (
+                archive["test_source_row_indices"],
+                archive["y_true"],
+                archive["y_score"],
+            )
+    common_set = set.intersection(*(set(rows.tolist()) for rows, _, _ in archives.values()))
+    common = sorted(common_set - (excluded_rows or set()))
+    aligned = {}
+    for embedder, (rows, y_true, y_score) in archives.items():
+        position = {int(source): i for i, source in enumerate(rows)}
+        take = [position[source] for source in common]
+        aligned[embedder] = (y_true[take], y_score[take], len(rows))
+    return common, aligned
+
+
 def common_row_scores(
     selected: pd.DataFrame, excluded_rows_by_dataset: dict[str, set[int]] | None = None
 ) -> pd.DataFrame:
@@ -216,35 +251,112 @@ def common_row_scores(
     records = []
     verified = selected.loc[selected["archive_status"].eq("ok")]
     for dataset, group in verified.groupby("dataset", sort=True):
-        archives = {}
+        excluded = (excluded_rows_by_dataset or {}).get(str(dataset))
+        common, aligned = aligned_common_rows(group, excluded)
         for row in group.itertuples(index=False):
-            with np.load(str(row.prediction_path), allow_pickle=False) as archive:
-                archives[row.embedder] = (
-                    archive["test_source_row_indices"],
-                    archive["y_true"],
-                    archive["y_score"],
-                )
-        common_set = set.intersection(*(set(rows.tolist()) for rows, _, _ in archives.values()))
-        if excluded_rows_by_dataset:
-            common_set -= excluded_rows_by_dataset.get(str(dataset), set())
-        common = sorted(common_set)
-        for row in group.itertuples(index=False):
-            rows, y_true, y_score = archives[row.embedder]
-            position = {int(source): i for i, source in enumerate(rows)}
-            take = [position[source] for source in common]
+            y_true, y_score, n_predicted = aligned[str(row.embedder)]
             record: dict[str, object] = {
                 "dataset": dataset,
                 "embedder": row.embedder,
                 "model": row.model,
-                "n_models_compared": len(archives),
-                "models_compared": ";".join(sorted(archives)),
+                "n_models_compared": len(aligned),
+                "models_compared": ";".join(sorted(aligned)),
                 "n_common_test_rows": len(common),
-                "n_predicted_test": len(rows),
+                "n_predicted_test": n_predicted,
                 "test_metric_archived": row.test_metric,
             }
             if common:
-                record |= score_rows(y_true[take], y_score[take])
+                record |= score_rows(y_true, y_score)
             records.append(record)
+    return pd.DataFrame(records)
+
+
+def rank_roc_auc(labels: np.ndarray, scores: np.ndarray) -> float:
+    """ROC-AUC from average ranks; equal to sklearn's value, including ties."""
+    positive = labels == 1
+    n_positive = int(positive.sum())
+    n_negative = len(labels) - n_positive
+    ranks = rankdata(scores)
+    return float(
+        (ranks[positive].sum() - n_positive * (n_positive + 1) / 2) / (n_positive * n_negative)
+    )
+
+
+def endpoint_scores(y_true: np.ndarray, y_score: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Labels and positive-class scores as (rows, endpoints) float matrices."""
+    labels = _as_label_matrix(y_true)
+    scores = _normalize_auc_scores(y_score, n_outputs=labels.shape[1], n_samples=len(labels))
+    return labels, _as_label_matrix(scores)
+
+
+def paired_auc_difference(
+    labels: np.ndarray, scores_a: np.ndarray, scores_b: np.ndarray, rows: np.ndarray
+) -> float:
+    """Mean ROC-AUC of a minus b over endpoints with both classes among ``rows``."""
+    differences = []
+    for column in range(labels.shape[1]):
+        observed = rows[np.isfinite(labels[rows, column])]
+        y = labels[observed, column]
+        if 0 < y.sum() < len(y):
+            differences.append(
+                rank_roc_auc(y, scores_a[observed, column])
+                - rank_roc_auc(y, scores_b[observed, column])
+            )
+    return float(np.mean(differences)) if differences else float("nan")
+
+
+def paired_task_differences(
+    selected: pd.DataFrame,
+    *,
+    reference: str | None = None,
+    n_boot: int = 2000,
+    seed: int = 42,
+    alpha: float = 0.05,
+) -> pd.DataFrame:
+    """Bootstrap each dataset's paired ROC-AUC difference over its common test rows."""
+    rng = np.random.default_rng(seed)
+    records = []
+    verified = selected.loc[selected["archive_status"].eq("ok")]
+    for dataset, group in verified.groupby("dataset", sort=True):
+        common, aligned = aligned_common_rows(group)
+        embedders = sorted(aligned)
+        if reference is None:
+            pairs = [(a, b) for i, a in enumerate(embedders) for b in embedders[i + 1 :]]
+        elif reference in aligned:
+            pairs = [(reference, other) for other in embedders if other != reference]
+        else:
+            pairs = []
+        for model_a, model_b in pairs:
+            labels, scores_a = endpoint_scores(*aligned[model_a][:2])
+            _, scores_b = endpoint_scores(*aligned[model_b][:2])
+            n = len(common)
+            observed = paired_auc_difference(labels, scores_a, scores_b, np.arange(n))
+            boot = np.array(
+                [
+                    paired_auc_difference(labels, scores_a, scores_b, rng.integers(0, n, size=n))
+                    for _ in range(n_boot if n else 0)
+                ]
+            )
+            boot = boot[np.isfinite(boot)]
+            low, high = (
+                np.percentile(boot, [100 * alpha / 2, 100 * (1 - alpha / 2)])
+                if len(boot)
+                else (np.nan, np.nan)
+            )
+            records.append(
+                {
+                    "dataset": dataset,
+                    "embedder_a": model_a,
+                    "embedder_b": model_b,
+                    "n_common_test_rows": n,
+                    "roc_auc_difference": observed,
+                    "ci_low": float(low),
+                    "ci_high": float(high),
+                    "n_boot": n_boot,
+                    "n_valid_boot": len(boot),
+                    "clear_winner": (model_a if low > 0 else model_b if high < 0 else "neither"),
+                }
+            )
     return pd.DataFrame(records)
 
 
@@ -343,6 +455,9 @@ def main(argv: list[str] | None = None) -> None:
         else None
     )
     sensitivity = common_row_scores(selected, excluded) if excluded is not None else None
+    paired = paired_task_differences(
+        selected, reference=args.paired_reference, n_boot=args.n_boot, seed=args.seed
+    )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     candidates.to_csv(args.output_dir / "head_candidates.csv", index=False)
@@ -350,6 +465,7 @@ def main(argv: list[str] | None = None) -> None:
     common.to_csv(args.output_dir / "common_row_scores.csv", index=False)
     if sensitivity is not None:
         sensitivity.to_csv(args.output_dir / "common_row_scores_no_split_overlap.csv", index=False)
+    paired.to_csv(args.output_dir / "paired_task_differences.csv", index=False)
     manifest = {
         "script": "scripts/paper/build_common_row_benchmark.py",
         "code": git_revision(),
@@ -363,6 +479,12 @@ def main(argv: list[str] | None = None) -> None:
             dataset: sorted(models) for dataset, models in common_heads.items()
         },
         "archive_status_counts": selected["archive_status"].value_counts().to_dict(),
+        "paired_task_bootstrap": {
+            "resamples": args.n_boot,
+            "seed": args.seed,
+            "interval": "95% percentile; test rows resampled jointly for both models",
+            "clear_winner_rule": "interval excludes zero",
+        },
     }
     if excluded is not None:
         manifest["split_overlap_sensitivity"] = {

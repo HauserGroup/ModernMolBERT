@@ -16,7 +16,8 @@ paper. No model training. Tested scripts have unit tests under `tests/`.
 |--------|---------|--------|
 | `build_benchmark_results_frames.py` | Build unified benchmark result frames from the Praski benchmark CSV and our own `outputs/eval` results | |
 | `build_paper_results.py` | Derive all paper-facing numbers (incl. Wilcoxon tests) from `outputs/eval/best_metric_by_dataset_embedder.csv` | |
-| `compute_bootstrap_cis.py` | Paired bootstrap 95% CIs on mean ΔROC-AUC for the four key ModernMolBERT-vs-baseline comparisons | ✓ |
+| `compute_bootstrap_cis.py` | Paired bootstrap 95% CIs on mean ΔROC-AUC for the four key ModernMolBERT-vs-baseline comparisons, resampling tasks and, as a sensitivity, the task families in `config/task_families.yaml` | ✓ |
+| `audit_task_overlap.py` | Test molecules shared by every pair of benchmark datasets, flagged by task family; checks the families file against the dataset config | ✓ |
 | `compute_property_regression.py` | Ridge regression of mean-pooled embeddings → 9 ChEMBL physicochemical descriptors; reports test R² | ✓ |
 | `make_ape_token_table.py` | Supplementary table of the most frequent APE merged tokens (Appendix B) | ✓ |
 | `make_appendix_table.py` | Per-task full ROC-AUC table (Appendix C / S3) from the main-analysis matrix | |

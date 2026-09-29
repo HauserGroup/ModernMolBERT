@@ -9,13 +9,18 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
 from compute_bootstrap_cis import (
+    FAMILIES_PATH,
     build_cis,
+    cluster_bootstrap,
     comparison_row,
     emit_ci_forest_plot,
     emit_latex,
+    load_task_families,
     paired_bootstrap,
+    read_task_families,
     run_comparisons,
 )
 
@@ -265,3 +270,111 @@ def test_build_cis_end_to_end(tmp_path: Path):
     sel_row = df[df["model_b"] == "SELFormer"].iloc[0]
     assert sel_row["wins"] == 3
     assert sel_row["ci_low_95"] > 0
+
+
+# ── task families ────────────────────────────────────────────────────────────
+
+
+def test_cluster_bootstrap_with_singletons_matches_task_bootstrap():
+    diffs = np.array([0.10, -0.02, 0.05, 0.03, -0.01, 0.07])
+    groups = np.array([f"t{i}" for i in range(len(diffs))])
+    _, lo_task, hi_task = paired_bootstrap(
+        diffs, np.zeros_like(diffs), n_boot=4000, rng=np.random.default_rng(5)
+    )
+    est, lo_fam, hi_fam = cluster_bootstrap(
+        diffs, groups, n_boot=4000, rng=np.random.default_rng(5)
+    )
+    assert est == pytest.approx(diffs.mean())
+    assert lo_fam == pytest.approx(lo_task, abs=1e-12)
+    assert hi_fam == pytest.approx(hi_task, abs=1e-12)
+
+
+def test_family_weighting_counts_each_family_once():
+    diffs = np.array([1.0, 1.0, 1.0, 5.0])
+    groups = np.array(["F", "F", "F", "single"])
+    task, _, _ = cluster_bootstrap(diffs, groups, n_boot=100, rng=np.random.default_rng(0))
+    family, _, _ = cluster_bootstrap(
+        diffs, groups, n_boot=100, rng=np.random.default_rng(0), weight="family"
+    )
+    assert task == pytest.approx(2.0)
+    assert family == pytest.approx(3.0)
+
+
+def test_duplicated_evidence_widens_the_family_interval():
+    """Five identical tasks look like five confirmations to the task bootstrap."""
+    diffs = np.array([3.0] * 5 + [-1.0, 0.5, -0.5, 1.0, 0.0])
+    groups = np.array(["F"] * 5 + [f"s{i}" for i in range(5)])
+    _, lo_task, hi_task = paired_bootstrap(
+        diffs, np.zeros_like(diffs), n_boot=5000, rng=np.random.default_rng(1)
+    )
+    _, lo_fam, hi_fam = cluster_bootstrap(diffs, groups, n_boot=5000, rng=np.random.default_rng(1))
+    assert hi_fam - lo_fam > hi_task - lo_task
+
+
+def test_cluster_bootstrap_rejects_bad_input():
+    with pytest.raises(ValueError, match="equal length"):
+        cluster_bootstrap(np.array([0.1, 0.2]), np.array(["a"]))
+    with pytest.raises(ValueError, match="weight"):
+        cluster_bootstrap(np.array([0.1]), np.array(["a"]), weight="dataset")
+
+
+def test_unlisted_tasks_are_their_own_family(tmp_path: Path):
+    path = tmp_path / "families.yaml"
+    path.write_text("families:\n  pair: [task_A, task_B]\n")
+    assert load_task_families(path, ["task_A", "task_B", "task_C"]) == {
+        "task_A": "pair",
+        "task_B": "pair",
+        "task_C": "task_C",
+    }
+    path.write_text("families:\n  one: [task_A]\n  two: [task_A]\n")
+    with pytest.raises(ValueError, match="two families"):
+        read_task_families(path)
+
+
+def test_shipped_families_name_configured_datasets():
+    config = FAMILIES_PATH.with_name("datasets.yaml")
+    names = {entry["name"] for entry in yaml.safe_load(config.read_text())["datasets"].values()}
+    families = read_task_families(FAMILIES_PATH)
+    assert set(families) <= names
+    assert len(set(families.values())) == 3
+
+
+def test_comparison_row_reports_family_summary():
+    matrix = _matrix_3task()
+    families = {"task_A": "F", "task_B": "F", "task_C": "task_C"}
+    # MMB-base − ECFP4 diffs: [-0.05, +0.02, -0.02]; family means: F -0.015, task_C -0.02
+    row = comparison_row(
+        matrix, "MMB-base", "ECFP4", n_boot=500, rng=np.random.default_rng(0), families=families
+    )
+    assert row["n_families"] == 2
+    assert (row["family_wins"], row["family_losses"]) == (0, 2)
+    assert row["family_weighted_delta"] == pytest.approx(-1.75)
+    assert row["mean_delta_roc_auc"] == pytest.approx(-1.67)
+
+
+def test_family_rng_leaves_task_intervals_unchanged():
+    matrix = _matrix_3task()
+    comps = [("MMB-base", "SELFormer"), ("MMB-base", "ECFP4")]
+    families = {"task_A": "F", "task_B": "F", "task_C": "task_C"}
+    plain = run_comparisons(matrix, comps, n_boot=300, seed=3)
+    grouped = run_comparisons(matrix, comps, n_boot=300, seed=3, families=families)
+    pd.testing.assert_frame_equal(grouped[plain.columns], plain)
+
+
+def test_emit_latex_adds_family_columns(tmp_path: Path):
+    df = _make_ci_df().assign(
+        n_families=18,
+        family_wins=[16, 6],
+        family_ties=0,
+        family_losses=[2, 12],
+        family_ci_low_95=[3.4, -3.3],
+        family_ci_high_95=[6.8, -0.2],
+        family_weighted_delta=[5.2, -1.9],
+    )
+    out = tmp_path / "table.tex"
+    emit_latex(df, out, caption_note="Archived scores.")
+    content = out.read_text()
+    assert "Task families" in content
+    assert r"16/0/2 & $[+3.4,\;+6.8]$ & +5.20" in content
+    assert r"\model{}-base minus each baseline" in content
+    assert "Archived scores." in content

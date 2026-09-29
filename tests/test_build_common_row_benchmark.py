@@ -3,7 +3,13 @@ import pandas as pd
 import pytest
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from build_common_row_benchmark import main, multioutput_average_precision, score_rows
+from build_common_row_benchmark import (
+    main,
+    multioutput_average_precision,
+    paired_task_differences,
+    rank_roc_auc,
+    score_rows,
+)
 from modernmolbert.eval.benchmarking_molecular_models.common.types import Dataset
 from modernmolbert.utils import file_sha256
 
@@ -288,3 +294,64 @@ def test_split_overlap_sensitivity_excludes_same_rows_for_every_model(tmp_path):
                 str(tmp_path / "bad_out"),
             ]
         )
+
+
+def test_rank_roc_auc_matches_sklearn_with_ties():
+    rng = np.random.default_rng(0)
+    labels = rng.integers(0, 2, size=200).astype(float)
+    scores = np.round(rng.random(200), 1)
+    assert rank_roc_auc(labels, scores) == pytest.approx(roc_auc_score(labels, scores))
+
+
+def _paired_archives(tmp_path, n=200):
+    rng = np.random.default_rng(1)
+    labels = np.tile([0.0, 1.0], n // 2)
+    rows = np.arange(n)
+    scores = {
+        "good": labels * 0.6 + rng.random(n) * 0.5,
+        "noisy": rng.random(n),
+        "twin": labels * 0.6 + rng.random(n) * 0.5,
+    }
+    records = []
+    for embedder, y_score in scores.items():
+        path = tmp_path / f"{embedder}.npz"
+        np.savez(path, y_true=labels, y_score=y_score, test_source_row_indices=rows)
+        records.append(
+            {
+                "dataset": "toy",
+                "embedder": embedder,
+                "prediction_path": str(path),
+                "archive_status": "ok",
+            }
+        )
+    return pd.DataFrame(records)
+
+
+def test_paired_bootstrap_names_a_winner_only_when_clear(tmp_path):
+    selected = _paired_archives(tmp_path)
+    paired = paired_task_differences(selected, n_boot=300, seed=0).set_index(
+        ["embedder_a", "embedder_b"]
+    )
+    assert len(paired) == 3
+    good_vs_noisy = paired.loc[("good", "noisy")]
+    assert good_vs_noisy["ci_low"] > 0
+    assert good_vs_noisy["clear_winner"] == "good"
+    assert paired.loc[("good", "twin"), "clear_winner"] == "neither"
+    assert (paired["n_valid_boot"] == 300).all()
+    assert (paired["ci_low"] <= paired["roc_auc_difference"]).all()
+
+
+def test_paired_reference_limits_the_pairs(tmp_path):
+    selected = _paired_archives(tmp_path)
+    paired = paired_task_differences(selected, reference="noisy", n_boot=50, seed=0)
+    assert set(zip(paired["embedder_a"], paired["embedder_b"], strict=True)) == {
+        ("noisy", "good"),
+        ("noisy", "twin"),
+    }
+
+
+def test_main_writes_paired_task_differences(tmp_path):
+    _, _, out = _run(tmp_path)
+    paired = pd.read_csv(out / "paired_task_differences.csv")
+    assert list(paired[["embedder_a", "embedder_b"]].iloc[0]) == ["A", "B"]
+    assert paired["n_common_test_rows"].iloc[0] == 3

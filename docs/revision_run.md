@@ -233,7 +233,7 @@ uv run python scripts/paper/build_common_row_benchmark.py \
   --output-dir outputs/eval/revision_clean_small_v1/common_rows
 ```
 
-It writes five files when a split-overlap audit is supplied:
+It writes six files when a split-overlap audit is supplied:
 
 - `head_candidates.csv`: the selection record.
 - `selected_heads.csv`: archive checks, coverage, and file hashes.
@@ -241,7 +241,22 @@ It writes five files when a split-overlap audit is supplied:
 - `common_row_scores_no_split_overlap.csv`: paired sensitivity after removing
   prepared test rows that share an InChIKey or stereo-insensitive canonical
   SMILES with training-side rows; the primary scores retain the configured splits.
+- `paired_task_differences.csv`: for each dataset and pair of verified models,
+  the ROC-AUC difference on the common rows with a paired bootstrap interval
+  (the same resampled test molecules score both models). `clear_winner` names
+  a model only when the interval excludes zero; count per-dataset wins from
+  this column, not from raw score differences. `--paired-reference` limits
+  the pairs to one model against each other, and `--n-boot` sets the resamples.
 - `manifest.json`: input hashes and code revision.
+
+For the aggregate intervals, run `scripts/paper/compute_bootstrap_cis.py` on
+the final task matrix. Besides resampling tasks, it resamples the task
+families in
+`src/modernmolbert/eval/benchmarking_molecular_models/config/task_families.yaml`
+as units and reports a family-weighted mean and family win counts.
+`scripts/paper/audit_task_overlap.py` records the test-molecule overlap that
+supports those families. The families were fixed before corrected results
+existed; do not regroup tasks after seeing scores.
 
 Archives from before commit `112efc5` have no source-row indices. They are
 reported with status `no_row_ids` and left out of the common-row comparison. A

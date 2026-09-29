@@ -22,13 +22,14 @@ class ModernMolBERTSelfiesFeaturizer:
     The checkpoint's tokenizer fixes the model input: SMILES are encoded as
     SELFIES for a SELFIES checkpoint and passed through unchanged for a SMILES
     checkpoint. Inputs that cannot be converted, or that the tokenizer does not
-    reproduce exactly, are marked invalid rather than embedded.
+    reproduce exactly, are marked invalid rather than embedded. Inputs longer
+    than the checkpoint's trained context are rejected and counted.
     """
 
     model_dir: str | Path
     tokenizer_path: str | Path | None = None
     name: str = "modernmolbert_selfies"
-    max_seq_length: int = 256
+    max_seq_length: int | None = None
     pooling: Literal["mean", "cls"] = "mean"
     device: str = "auto"
     batch_size: int = 32
@@ -49,6 +50,14 @@ class ModernMolBERTSelfiesFeaturizer:
         self.model = AutoModel.from_pretrained(self.model_dir)
         self.model.to(self._device)
         self.model.eval()
+        trained_context = int(self.model.config.max_position_embeddings)
+        if self.max_seq_length is None:
+            self.max_seq_length = trained_context
+        elif not 0 < self.max_seq_length <= trained_context:
+            raise ValueError(
+                f"Embedding context {self.max_seq_length} exceeds trained context "
+                f"{trained_context} or is not positive"
+            )
 
     def featurize_smiles(
         self,
@@ -67,6 +76,7 @@ class ModernMolBERTSelfiesFeaturizer:
         n_tokenization_failures = 0
         n_truncated = 0
         special_ids = self._special_token_ids()
+        assert self.max_seq_length is not None
 
         for i, smi in enumerate(smiles):
             if smi is None:
@@ -94,7 +104,9 @@ class ModernMolBERTSelfiesFeaturizer:
             if not content_ids or any(token_id in special_ids for token_id in content_ids):
                 n_tokenization_failures += 1
                 continue
-            n_truncated += int(len(content_ids) + 2 > self.max_seq_length)
+            if len(content_ids) + 2 > self.max_seq_length:
+                n_truncated += 1
+                continue
             model_inputs.append(text)
             valid_mask[i] = True
 
@@ -241,8 +253,7 @@ class ModernMolBERTSelfiesFeaturizer:
         encoded = self.tokenizer(
             model_inputs,
             padding=True,
-            truncation=True,
-            max_length=self.max_seq_length,
+            truncation=False,
             return_tensors="pt",
         )
 

@@ -23,8 +23,8 @@ VOCAB_FILES_NAMES = {
     "smiles_vocab_file": "smiles_vocab.json",
 }
 SELFIES_RE = re.compile(r"\[[^\]]+\]|\.")
-# Only the organic subset (B C N O P S F Cl Br I) may appear unbracketed in
-# canonical SMILES; two-letter metals (Si, Se, Na, Mg, Al, Ca, Fe, Zn, ...) are
+# The pattern accepts the usual organic subset plus legacy bare K and H. In
+# canonical molecular input, two-letter metals (Si, Se, Na, Mg, Al, Ca, Fe, Zn, ...) are
 # always bracketed and matched by the leading \[[^\]]+\] branch. The previous
 # pattern listed those metals as optional-second-letter alternatives (Si?, Na?,
 # ...), which could match bare invalid single letters (L, M, A, Z) and was dead

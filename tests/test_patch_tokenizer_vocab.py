@@ -122,9 +122,9 @@ def test_patch_updates_companion_metadata(tmp_path: Path) -> None:
     extra_path = _make_extra(tmp_path, ["[O]"])
     out_path = tmp_path / "vocab_out.json"
 
-    # Write companion metadata (same stem + "_metadata.json")
-    metadata_path = out_path.with_name(out_path.stem + "_metadata.json")
-    metadata_path.write_text(
+    # The input's companion metadata is the source of truth for a new output stem.
+    input_metadata_path = vocab_path.with_suffix(".metadata.json")
+    input_metadata_path.write_text(
         json.dumps({"vocab_size": 2, "tokenizer_sha256": "old_hash"}), encoding="utf-8"
     )
 
@@ -145,9 +145,38 @@ def test_patch_updates_companion_metadata(tmp_path: Path) -> None:
         text=True,
     )
 
-    meta = json.loads(metadata_path.read_text(encoding="utf-8"))
+    meta = json.loads(out_path.with_suffix(".metadata.json").read_text(encoding="utf-8"))
     assert meta["vocab_size"] == 3
     assert meta["tokenizer_sha256"] != "old_hash"
     assert "patch_history" in meta
     assert len(meta["patch_history"]) == 1
     assert meta["patch_history"][0]["symbols_added"] == 1
+
+
+def test_patch_deduplicates_requested_symbols(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    vocab_path = _make_vocab(tmp_path, {"<s>": 0, "[C]": 1})
+    extra_path = _make_extra(tmp_path, ["[O]", "[O]", "[N]"])
+    out_path = tmp_path / "vocab_out.json"
+
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "modernmolbert.tokenization.patch_tokenizer_vocab",
+            "--input_file",
+            str(vocab_path),
+            "--extra_file",
+            str(extra_path),
+            "--output_file",
+            str(out_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    vocab = json.loads(out_path.read_text(encoding="utf-8"))
+    assert vocab == {"<s>": 0, "[C]": 1, "[O]": 2, "[N]": 3}

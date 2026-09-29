@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config-dir", default="config")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--max-seq-length", type=int, default=256)
+    parser.add_argument("--max-seq-length", type=int, default=None)
     parser.add_argument("--pooling", choices=["mean", "cls"], default="mean")
     parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     return parser.parse_args()
@@ -106,6 +106,26 @@ def load_prepared_dataset(path: Path) -> Dataset:
     return joblib.load(path)
 
 
+def assert_reusable_embedding(output_path: Path, prepared_path: Path) -> None:
+    """Never skip a stale or unreadable pickle as if it matched the prepared cohort."""
+    source_path = prepared_path.with_suffix(".json")
+    if not source_path.exists():
+        source_path = prepared_path
+    try:
+        embedded = joblib.load(output_path)
+    except (ModuleNotFoundError, AttributeError) as exc:
+        raise ValueError(
+            f"Existing embedding {output_path} uses an obsolete pickle class; "
+            "regenerate it with --overwrite"
+        ) from exc
+    recorded = getattr(embedded, "metadata", {}).get("prepared_data_sha256")
+    if recorded != file_sha256(source_path):
+        raise ValueError(
+            f"Existing embedding {output_path} has a different prepared-data hash; "
+            "regenerate it with --overwrite"
+        )
+
+
 def make_featurizer(args: argparse.Namespace):
     from modernmolbert.eval.featurizers.modernmolbert_selfies import (
         ModernMolBERTSelfiesFeaturizer,
@@ -162,6 +182,7 @@ def main() -> None:
         output_path = output_dir / f"{args.embedder}.joblib"
 
         if output_path.exists() and not args.overwrite:
+            assert_reusable_embedding(output_path, prepared_path)
             print(
                 f"[{idx:>2}/{n_total}] SKIP  {dataset_name} — embedding exists",
                 flush=True,

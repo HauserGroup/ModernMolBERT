@@ -1,5 +1,6 @@
 import argparse
 import sys
+from pathlib import Path
 
 import pytest
 import torch
@@ -8,8 +9,12 @@ from transformers.models.modernbert.configuration_modernbert import ModernBertCo
 
 from modernmolbert.train_selfies_ape_modernbert import (
     build_modernbert_config,
+    compute_metrics,
+    _encode_without_truncation,
     make_eval_dataset,
     make_train_iterable_dataset,
+    prepare_run_directory,
+    preprocess_logits_for_metrics,
     sequence_bucket,
     validate_args,
 )
@@ -112,3 +117,55 @@ def test_pretokenized_rows_use_stable_hash_split(monkeypatch):
 
     assert [row["input_ids"] for row in train_rows] == [[0, 6, 2]]
     assert eval_dataset["input_ids"] == [[0, 5, 2]]
+
+
+def test_training_encoding_rejects_over_context_molecule():
+    class Tokenizer:
+        def __call__(self, *_args, **_kwargs):
+            return {"input_ids": [0, 5, 6, 7, 2]}
+
+    with pytest.raises(ValueError, match="exceeding context 4"):
+        _encode_without_truncation(Tokenizer(), "CCO", 4)  # type: ignore[arg-type]
+
+
+def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path):
+    tokenizer = tmp_path / "tokenizer.json"
+    metadata = tmp_path / "tokenizer.metadata.json"
+    tokenizer.write_text("original")
+    metadata.write_text("metadata")
+    output = tmp_path / "run"
+    args = argparse.Namespace(
+        output_dir=str(output),
+        resume_from_checkpoint=None,
+        data_files=None,
+        dataset_name="remote-dataset",
+        train_split="train",
+        use_validation_split=False,
+        seed=42,
+        max_steps=30_000,
+    )
+    assert prepare_run_directory(args, tokenizer, metadata) is None
+    original = (output / "run_args.json").read_bytes()
+
+    checkpoint = output / "checkpoint-5000"
+    checkpoint.mkdir()
+    args.resume_from_checkpoint = checkpoint
+    with pytest.raises(ValueError, match="Incomplete resume checkpoint"):
+        prepare_run_directory(args, tokenizer, metadata)
+
+    for filename in ("trainer_state.json", "optimizer.pt", "scheduler.pt", "rng_state.pth"):
+        (checkpoint / filename).write_text("state")
+    assert prepare_run_directory(args, tokenizer, metadata) == checkpoint
+    assert (output / "run_args.json").read_bytes() == original
+
+    tokenizer.write_text("changed")
+    with pytest.raises(ValueError, match="input hashes differ"):
+        prepare_run_directory(args, tokenizer, metadata)
+
+
+def test_masked_accuracy_reduces_logits_before_accumulation():
+    logits = torch.tensor([[[0.0, 3.0], [4.0, 0.0]]])
+    labels = torch.tensor([[1, -100]])
+    predictions = preprocess_logits_for_metrics(logits, labels)
+    assert predictions.shape == labels.shape
+    assert compute_metrics((predictions.numpy(), labels.numpy())) == {"masked_accuracy": 1.0}

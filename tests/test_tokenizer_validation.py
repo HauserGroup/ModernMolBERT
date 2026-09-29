@@ -95,6 +95,15 @@ def test_tokenization_stats_and_metadata_helpers(tmp_path: Path):
     assert stats["mean_len"] > 0
     assert stats["truncation_rate"] == 0.0
 
+    long_stats = compute_tokenization_stats(
+        tokenizer=tokenizer,
+        sequences=["[C]" * 20],
+        max_seq_length=8,
+        special_ids=special_ids,
+    )
+    assert long_stats["max_len"] == 22
+    assert long_stats["truncation_rate"] == 1.0
+
     vocab_path = tmp_path / "selfies_ape_tokenizer.json"
     tokenizer.save_vocabulary_file(vocab_path)
     metadata_path = metadata_path_for_vocab(vocab_path)

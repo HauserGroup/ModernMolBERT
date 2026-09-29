@@ -144,14 +144,26 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--eval_size", type=int, default=100_000)
+    parser.add_argument(
+        "--validation_row_ids_path",
+        type=Path,
+        default=None,
+        help="Persisted source-row IDs for the common finite validation cohort.",
+    )
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument(
         "--global_train_shuffle",
         action="store_true",
         help=(
             "Load the exact local train Parquet as an Arrow dataset, shuffle all rows "
-            "before streaming, then apply the usual buffer shuffle. Avoids source-order bias."
+            "before streaming. Avoids source-order bias."
         ),
+    )
+    parser.add_argument(
+        "--train_order_path",
+        type=Path,
+        default=None,
+        help="Persisted source-row permutation shared by every factorial run.",
     )
     parser.add_argument("--seed", type=int, default=13)
 
@@ -240,6 +252,12 @@ def parse_args() -> argparse.Namespace:
 
     # Training
     parser.add_argument("--max_steps", type=int, default=150_000)
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        type=Path,
+        default=None,
+        help="Resume this run from one of its complete checkpoint-* directories.",
+    )
     parser.add_argument("--per_device_train_batch_size", type=int, default=128)
     parser.add_argument("--per_device_eval_batch_size", type=int, default=128)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2)
@@ -314,6 +332,84 @@ def parse_args() -> argparse.Namespace:
 
 def log(message: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
+
+
+def _serializable_args(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        key: str(value) if isinstance(value, Path) else value
+        for key, value in vars(args).items()
+        if key != "resume_from_checkpoint"
+    }
+
+
+def _run_input_hashes(
+    args: argparse.Namespace, vocab_path: Path, metadata_path: Path
+) -> dict[str, str]:
+    paths = {
+        "tokenizer": vocab_path,
+        "tokenizer_metadata": metadata_path,
+        "modernbert_base_config": _MODERNBERT_BASE_CONFIG,
+        "uv_lock": Path(__file__).resolve().parents[2] / "uv.lock",
+    }
+    root = Path(args.dataset_name)
+    if args.data_files is not None:
+        paths["train_parquet"] = Path(args.data_files)
+    elif root.is_dir():
+        paths["train_parquet"] = root / f"{args.train_split}.parquet"
+    if root.is_dir() and args.use_validation_split:
+        paths["validation_parquet"] = root / f"{args.validation_split}.parquet"
+    train_order_path = getattr(args, "train_order_path", None)
+    if train_order_path is not None:
+        if not train_order_path.is_file():
+            raise FileNotFoundError(f"Frozen training order is missing: {train_order_path}")
+        paths["train_order"] = train_order_path
+    validation_row_ids_path = getattr(args, "validation_row_ids_path", None)
+    if validation_row_ids_path is not None:
+        if not validation_row_ids_path.is_file():
+            raise FileNotFoundError(
+                f"Frozen validation row IDs are missing: {validation_row_ids_path}"
+            )
+        paths["validation_row_ids"] = validation_row_ids_path
+    for key, path in paths.items():
+        if not path.is_file():
+            raise FileNotFoundError(f"Run input {key} is missing: {path}")
+    return {key: file_sha256(path) for key, path in paths.items()}
+
+
+def prepare_run_directory(
+    args: argparse.Namespace, vocab_path: Path, metadata_path: Path
+) -> Path | None:
+    """Pin a fresh run's inputs, or fail before altering an incompatible run."""
+    output_dir = Path(args.output_dir)
+    manifest_path = output_dir / "run_identity.json"
+    identity = {
+        "args": _serializable_args(args),
+        "input_sha256": _run_input_hashes(args, vocab_path, metadata_path),
+    }
+    checkpoint = args.resume_from_checkpoint
+    if checkpoint is not None:
+        checkpoint = checkpoint.resolve()
+        if checkpoint.parent != output_dir.resolve() or not checkpoint.name.startswith(
+            "checkpoint-"
+        ):
+            raise ValueError("Resume checkpoint must be a checkpoint-* directory in output_dir")
+        for filename in ("trainer_state.json", "optimizer.pt", "scheduler.pt", "rng_state.pth"):
+            if not (checkpoint / filename).is_file():
+                raise ValueError(f"Incomplete resume checkpoint: missing {filename}")
+        if not manifest_path.is_file():
+            raise ValueError("Cannot resume: original run_identity.json is missing")
+        if json.loads(manifest_path.read_text(encoding="utf-8")) != identity:
+            raise ValueError("Cannot resume: run arguments or input hashes differ from original")
+        return checkpoint
+
+    if output_dir.exists() and any(output_dir.iterdir()):
+        raise ValueError(f"Fresh run destination is not empty: {output_dir}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(json.dumps(identity, indent=2, sort_keys=True), encoding="utf-8")
+    (output_dir / "run_args.json").write_text(
+        json.dumps(identity["args"], indent=2), encoding="utf-8"
+    )
+    return None
 
 
 def sequence_bucket(seq: str, mod: int) -> int:
@@ -504,8 +600,21 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
 def _pretokenized_example(row: dict[str, Any], max_seq_length: int | None) -> dict[str, list[int]]:
     ids = [int(token_id) for token_id in row["input_ids"]]
     if max_seq_length is not None and len(ids) > max_seq_length:
-        ids = ids[: max_seq_length - 1] + [ids[-1]]
+        raise ValueError(
+            f"Pretokenized molecule has {len(ids)} tokens, exceeding context {max_seq_length}"
+        )
     return {"input_ids": ids, "attention_mask": [1] * len(ids)}
+
+
+def _encode_without_truncation(
+    tokenizer: "PreTrainedTokenizerBase", seq: str, max_seq_length: int | None
+) -> dict[str, list[int]]:
+    encoded = encode_sequence(tokenizer, seq, None)
+    if max_seq_length is not None and len(encoded["input_ids"]) > max_seq_length:
+        raise ValueError(
+            f"Molecule has {len(encoded['input_ids'])} tokens, exceeding context {max_seq_length}"
+        )
+    return encoded
 
 
 def _split_key(row: dict[str, Any], molecule_column: str) -> str | None:
@@ -645,13 +754,25 @@ def make_train_iterable_dataset(
         indexed = Dataset.from_parquet(str(source), columns=input_columns, cache_dir=str(cache_dir))
         if not len(indexed):
             raise ValueError(f"No training rows in {source}")
-        # The source Parquet is ChEMBL-ID ordered. An index-level Arrow shuffle
-        # distributes all compounds across the first epoch without changing the
-        # hashed training file or the tokenizer's corpus-only coverage proof.
-        indexed = indexed.shuffle(seed=args.seed + 100)
+        order_path = getattr(args, "train_order_path", None)
+        if order_path is not None:
+            order = np.load(order_path, allow_pickle=False)
+            if order.ndim != 1 or len(order) != len(indexed):
+                raise ValueError("Training order length differs from source Parquet")
+            if not np.issubdtype(order.dtype, np.integer) or not np.array_equal(
+                np.sort(order), np.arange(len(indexed))
+            ):
+                raise ValueError("Training order must be a permutation of source row IDs")
+            indexed = indexed.select(order.tolist())
+            log(f"Using frozen source-row order {order_path}: {file_sha256(order_path)}")
+        else:
+            # Compatibility path for previous runs. Factorial runs supply an
+            # explicit order file and pin its hash in run_identity.json.
+            indexed = indexed.shuffle(seed=args.seed + 100)
         ds = indexed.to_iterable_dataset(num_shards=min(64, len(indexed)))
-        ds = ds.shuffle(seed=args.seed + 101, buffer_size=args.shuffle_buffer_size)
-        log(f"Training rows globally shuffled from {source}: {len(indexed):,}")
+        if order_path is None:
+            ds = ds.shuffle(seed=args.seed + 101, buffer_size=args.shuffle_buffer_size)
+        log(f"Training rows globally ordered from {source}: {len(indexed):,}")
     else:
         ds = get_streaming_dataset(
             args.dataset_name,
@@ -680,7 +801,7 @@ def make_train_iterable_dataset(
         seq = normalize_sequence(row, args.molecule_column)
         if seq is None:
             raise ValueError(f"Training row is missing {args.molecule_column!r} and input_ids.")
-        return encode_sequence(tokenizer, seq, args.max_seq_length)
+        return _encode_without_truncation(tokenizer, seq, args.max_seq_length)
 
     return ds.map(preprocess)
 
@@ -696,6 +817,34 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: "PreTrainedTokenizerB
         f"max_eval_batches={args.max_eval_batches or 'none'}, "
         f"actual_eval_size={n_eval}"
     )
+
+    validation_row_ids_path = getattr(args, "validation_row_ids_path", None)
+    if validation_row_ids_path is not None:
+        if not args.use_validation_split:
+            raise ValueError("Frozen validation row IDs require --use_validation_split")
+        source = Path(args.dataset_name) / f"{args.validation_split}.parquet"
+        if not source.is_file():
+            raise FileNotFoundError(f"Frozen validation Parquet is missing: {source}")
+        indices = np.load(validation_row_ids_path, allow_pickle=False)
+        if indices.ndim != 1 or len(indices) != n_eval:
+            raise ValueError("Frozen validation row ID count differs from eval_size")
+        frame = Dataset.from_parquet(str(source), columns=[args.molecule_column])
+        if (
+            not np.issubdtype(indices.dtype, np.integer)
+            or len(np.unique(indices)) != len(indices)
+            or np.any(indices < 0)
+            or np.any(indices >= len(frame))
+        ):
+            raise ValueError("Frozen validation row IDs must be unique in-range integers")
+        selected = frame.select(indices.tolist())
+        rows = [
+            _encode_without_truncation(tokenizer, row[args.molecule_column], args.max_seq_length)
+            for row in selected
+        ]
+        log(
+            f"Using frozen validation rows {validation_row_ids_path}: {file_sha256(validation_row_ids_path)}"
+        )
+        return Dataset.from_list(rows)
 
     eval_split = args.validation_split if args.use_validation_split else args.train_split
     ds = get_streaming_dataset(
@@ -723,7 +872,7 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: "PreTrainedTokenizerB
         else:
             if seq is None:
                 continue
-            rows.append(encode_sequence(tokenizer, seq, args.max_seq_length))
+            rows.append(_encode_without_truncation(tokenizer, seq, args.max_seq_length))
         pbar.update(1)
         if len(rows) >= n_eval:
             break
@@ -744,10 +893,10 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: "PreTrainedTokenizerB
     return Dataset.from_list(rows)
 
 
-# Official base config, used only to inherit ModernBERT-specific fields (rotary embedding
-# settings, attention defaults) that the presets below override in part. No pretrained
-# weights are loaded — all models train from scratch with our molecular vocabulary.
-_MODERNBERT_BASE_CONFIG = "answerdotai/ModernBERT-base"
+# Pinned upstream configuration only; no pretrained weights are loaded.
+_MODERNBERT_BASE_CONFIG = (
+    Path(__file__).resolve().parents[2] / "configs" / "modernbert_base_config.json"
+)
 
 # Both presets use a 128-token context; --max_seq_length overrides it.
 DEFAULT_MAX_SEQ_LENGTH = 128
@@ -761,7 +910,7 @@ LOCAL_MODERNBERT_PRESETS = {
     #   from modernmolbert.train_selfies_ape_modernbert import build_modernbert_config, LOCAL_MODERNBERT_PRESETS
     #   import types
     #   args = types.SimpleNamespace(model_size='small', max_seq_length=256)
-    #   config = build_modernbert_config(args, vocab_size=5000, special_ids={'pad_token':0,'bos_token':1,'eos_token':2,'unk_token':3,'mask_token':4})
+    #   config = build_modernbert_config(args, vocab_size=5000, special_ids={'bos_token':0,'pad_token':1,'eos_token':2,'unk_token':3,'mask_token':4})
     #   model = AutoModelForMaskedLM.from_config(config)
     #   print(f'{sum(p.numel() for p in model.parameters())/1e6:.2f}M parameters')
     #   "
@@ -795,6 +944,11 @@ def build_modernbert_config(
 ):
     # Start from the official base config to preserve ModernBERT-specific fields,
     # then override only the scale-related fields for the chosen preset.
+    provenance = json.loads(
+        _MODERNBERT_BASE_CONFIG.with_suffix(".provenance.json").read_text(encoding="utf-8")
+    )
+    if file_sha256(_MODERNBERT_BASE_CONFIG) != provenance["sha256"]:
+        raise ValueError("Pinned ModernBERT base configuration hash mismatch")
     config = AutoConfig.from_pretrained(_MODERNBERT_BASE_CONFIG)
     for key, value in LOCAL_MODERNBERT_PRESETS[args.model_size].items():
         setattr(config, key, value)
@@ -832,13 +986,20 @@ def build_modernbert_config(
 
 def compute_metrics(eval_pred: Any) -> dict[str, float]:
     logits, labels = eval_pred
-    preds = np.argmax(logits, axis=-1)
+    preds = logits if logits.ndim == labels.ndim else np.argmax(logits, axis=-1)
     mask = labels != -100
 
     if mask.sum() == 0:
         return {"masked_accuracy": 0.0}
 
     return {"masked_accuracy": float((preds[mask] == labels[mask]).mean())}
+
+
+def preprocess_logits_for_metrics(logits: Any, _labels: Any) -> torch.Tensor:
+    """Keep token predictions rather than a full [batch, sequence, vocabulary] tensor."""
+    if isinstance(logits, tuple):
+        logits = logits[0]
+    return torch.argmax(logits, dim=-1)
 
 
 def log_training_plan(
@@ -949,7 +1110,7 @@ def write_run_metadata(
 
 """
 
-    with (output_dir / "ape_tokenizer_metadata.json").open("w", encoding="utf-8") as f:
+    with (output_dir / "run_metadata.json").open("w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=2)
 
     final_eval_metrics_text = json.dumps(final_eval_metrics or {}, indent=2, sort_keys=True)
@@ -1083,16 +1244,9 @@ def main() -> None:
         args.max_seq_length = DEFAULT_MAX_SEQ_LENGTH
 
     output_dir = Path(args.output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    resume_checkpoint = prepare_run_directory(args, tokenizer_vocab_path, tokenizer_metadata_path)
 
     set_seed(args.seed)
-
-    with (output_dir / "run_args.json").open("w", encoding="utf-8") as f:
-        json.dump(
-            {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
-            f,
-            indent=2,
-        )
 
     log(f"Backend: {backend}")
     log(f"bf16={args.bf16}, fp16={args.fp16}")
@@ -1219,6 +1373,8 @@ def main() -> None:
         remove_unused_columns=False,
         prediction_loss_only=not args.compute_masked_accuracy,
         report_to=report_to,
+        seed=args.seed,
+        data_seed=args.seed,
     )
 
     world_size = training_args.world_size if hasattr(training_args, "world_size") else 1
@@ -1239,6 +1395,9 @@ def main() -> None:
         eval_dataset=eval_dataset,
         data_collator=collator,
         compute_metrics=compute_metrics if args.compute_masked_accuracy else None,
+        preprocess_logits_for_metrics=(
+            preprocess_logits_for_metrics if args.compute_masked_accuracy else None
+        ),
     )
 
     log("Starting training...")
@@ -1248,12 +1407,34 @@ def main() -> None:
     log(f"Only the most recent {args.save_total_limit} checkpoints will be kept.")
     log(f"Intermediate checkpoints: {output_dir}/checkpoint-*")
     log(f"Final model will be saved to: {output_dir}/final_model")
-    train_result = trainer.train()
+    train_result = trainer.train(
+        resume_from_checkpoint=str(resume_checkpoint) if resume_checkpoint else None
+    )
 
     print("Saving final model...")
 
     final_dir = output_dir / "final_model"
     trainer.save_model(str(final_dir))
+    selected_step = int(trainer.state.global_step)
+    if selected_step != args.max_steps:
+        raise RuntimeError(
+            f"Training stopped at step {selected_step}, expected terminal step {args.max_steps}"
+        )
+    (final_dir / "selection.json").write_text(
+        json.dumps(
+            {
+                "selected_step": selected_step,
+                "selection_rule": (
+                    "best_validation" if args.load_best_model_at_end else "terminal_step"
+                ),
+                "loaded_best_checkpoint": getattr(trainer.state, "best_model_checkpoint", None)
+                if args.load_best_model_at_end
+                else None,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     copy_tokenizer_artifacts(
         vocab_path=tokenizer_vocab_path,

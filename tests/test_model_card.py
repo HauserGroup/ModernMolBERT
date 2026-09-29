@@ -24,6 +24,7 @@ def _write_checkpoint_stub(tmp_path: Path) -> tuple[Path, Path]:
         json.dumps(
             {
                 "model_type": "modernbert",
+                "vocab_size": VOCAB_SIZE,
                 "hidden_size": 512,
                 "num_hidden_layers": 8,
                 "num_attention_heads": 8,

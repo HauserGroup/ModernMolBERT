@@ -1,0 +1,47 @@
+{
+  "algorithm": "BPE",
+  "aligned_sample": {
+    "row_indices_order_sha256": "1d983d91659422f2068fa9b1c5dc6579f0e5dcf1bebc6aa1d04b3d69a97b7f40",
+    "row_indices_path": "data/pretrain/chembl36_selfies/tokenizer_sample_seed42_2m.npy",
+    "row_indices_sha256": "6df2f3be915cb316c27eec56aac6616a00aea72b32fbcdf680b7e05c896eed6a",
+    "sample_order": "numpy.default_rng(seed).permutation(source_rows)[:sample_size]",
+    "sample_seed": 42,
+    "sample_size": 2000000,
+    "source_parquet": "data/pretrain/chembl36_selfies/train.parquet",
+    "source_rows": 2390314,
+    "source_sha256": "5ba76a62d62c7dc628e5af4a6707eb05f4e03f79d563fd895484e4ac6fccdc7e"
+  },
+  "corpus_primitive_scan": {
+    "n_added_to_initial_alphabet": 0,
+    "n_distinct_primitives": 55,
+    "n_rows": 2390314,
+    "path": "data/pretrain/chembl36_selfies/train.parquet",
+    "sha256": "5ba76a62d62c7dc628e5af4a6707eb05f4e03f79d563fd895484e4ac6fccdc7e"
+  },
+  "created_at_utc": "2026-09-29T20:39:52.409947+00:00",
+  "creation_command": "python -m modernmolbert.train_tokenizer",
+  "dataset_name": "data/pretrain/chembl36_selfies",
+  "extra_vocab_selfies_path": null,
+  "extra_vocab_symbols_added": 0,
+  "extra_vocab_symbols_path": null,
+  "extra_vocab_symbols_requested": 0,
+  "max_merge_pieces": null,
+  "max_vocab_size": 2000,
+  "min_freq_for_merge": 3000,
+  "molecule_column": "smiles_canonical_clean",
+  "representation": "SMILES",
+  "seed": 42,
+  "shuffle_buffer_size": 100000,
+  "special_ids": {
+    "bos_token": 0,
+    "eos_token": 2,
+    "mask_token": 4,
+    "pad_token": 1,
+    "unk_token": 3
+  },
+  "tokenizer_path": "tokenizer/revision_factorial_v1/bpe_smiles.json",
+  "tokenizer_sha256": "b08c4285f505cb94ba522209e499c291dcd6e9c66fb4252bde0f89c43d169d5f",
+  "tokenizer_train_size": 2000000,
+  "tokenizers_version": "0.23.2",
+  "vocab_size": 1602
+}

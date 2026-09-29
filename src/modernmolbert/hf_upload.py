@@ -6,7 +6,6 @@ upload entry points can import these without pulling in torch via utils.
 
 import hashlib
 import os
-import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -42,14 +41,14 @@ def resolve_hf_token(hf_login: bool = False) -> str | None:
 def make_staging_dir(keep_staging_dir: Path | None) -> tuple[Path, Callable[[], None]]:
     """Return a staging directory and a cleanup callback.
 
-    When ``keep_staging_dir`` is given, that directory is (re)created and kept
+    When ``keep_staging_dir`` is given, an empty directory is created and kept
     for inspection; cleanup is a no-op. Otherwise a temporary directory is used
     and cleanup removes it.
     """
     if keep_staging_dir is not None:
         tmp = Path(keep_staging_dir)
-        if tmp.exists():
-            shutil.rmtree(tmp)
+        if tmp.exists() and (not tmp.is_dir() or any(tmp.iterdir())):
+            raise ValueError(f"Staging directory must be empty: {tmp}")
         tmp.mkdir(parents=True, exist_ok=True)
         return tmp, lambda: None
 

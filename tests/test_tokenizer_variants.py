@@ -3,12 +3,15 @@
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from modernmolbert.tokenization.load import load_checkpoint_tokenizer, load_verified_tokenizer
 from modernmolbert.tokenization.ape import train_ape
 from modernmolbert.tokenization.bpe import train_bpe
-from modernmolbert.train_tokenizer import main
+from modernmolbert.train_tokenizer import collect_aligned_sample, main
 from modernmolbert.utils import metadata_path_for_vocab, resolve_special_ids
 
 
@@ -84,3 +87,26 @@ def test_vocabulary_limit_must_hold_initial_alphabet() -> None:
         )
     with pytest.raises(ValueError, match="initial characters"):
         train_bpe(["CO"], vocab_size=6, min_frequency=1)
+
+
+def test_aligned_sample_uses_same_source_rows_for_both_representations(tmp_path: Path) -> None:
+    parquet = tmp_path / "paired.parquet"
+    indices = tmp_path / "indices.npy"
+    pq.write_table(
+        pa.table(
+            {
+                "smiles": ["C", "O", "N", "CO"],
+                "selfies": ["[C]", "[O]", "[N]", "[C][O]"],
+            }
+        ),
+        parquet,
+    )
+    smiles, smiles_meta = collect_aligned_sample(parquet, indices, "smiles", 3, 42)
+    selfies, selfies_meta = collect_aligned_sample(parquet, indices, "selfies", 3, 42)
+    pairs = {"C": "[C]", "O": "[O]", "N": "[N]", "CO": "[C][O]"}
+    assert [pairs[value] for value in smiles] == selfies
+    assert smiles_meta == selfies_meta
+
+    np.save(indices, np.load(indices)[::-1], allow_pickle=False)
+    with pytest.raises(ValueError, match="declared seed"):
+        collect_aligned_sample(parquet, indices, "smiles", 3, 42)

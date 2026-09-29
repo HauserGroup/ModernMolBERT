@@ -4,6 +4,7 @@ import sys
 import joblib
 import numpy as np
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models.embed_modernmolbert import (
     embed_dataset,
@@ -271,6 +272,11 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
     embed_modernmolbert.main()
     skipped = joblib.load(output_path)
     assert skipped.X[:, 1].tolist() == [1.0, 1.0]
+
+    (prepared_dir / "tiny.joblib").write_bytes(b"changed prepared cohort")
+    with pytest.raises(ValueError, match="different prepared-data hash"):
+        embed_modernmolbert.main()
+    joblib.dump(dataset, prepared_dir / "tiny.joblib")
 
     monkeypatch.setattr(
         sys,

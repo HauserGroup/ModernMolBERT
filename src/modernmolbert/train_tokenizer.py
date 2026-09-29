@@ -25,6 +25,7 @@ uv run python -m modernmolbert.train_tokenizer \\
 """
 
 import argparse
+import hashlib
 import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -165,6 +166,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--shuffle_buffer_size", type=int, default=100_000)
     parser.add_argument("--seed", type=int, default=13)
     parser.add_argument(
+        "--aligned_sample_parquet",
+        type=Path,
+        default=None,
+        help="Local paired-molecule Parquet for one shared row-index sample across representations.",
+    )
+    parser.add_argument(
+        "--sample_indices_path",
+        type=Path,
+        default=None,
+        help="Persist/reuse the exact zero-based row indices of --aligned_sample_parquet.",
+    )
+    parser.add_argument(
         "--show_progress",
         action="store_true",
         help="Show tqdm progress bar while collecting corpus.",
@@ -189,6 +202,15 @@ def validate_args(args: argparse.Namespace) -> None:
     for name, value in positive.items():
         if value <= 0:
             raise ValueError(f"--{name} must be positive, got {value}")
+    aligned_sample_parquet = getattr(args, "aligned_sample_parquet", None)
+    sample_indices_path = getattr(args, "sample_indices_path", None)
+    if (aligned_sample_parquet is None) != (sample_indices_path is None):
+        raise ValueError("--aligned_sample_parquet and --sample_indices_path are required together")
+    if (
+        aligned_sample_parquet is not None
+        and args.corpus_primitive_parquet != aligned_sample_parquet
+    ):
+        raise ValueError("Aligned sampling requires the same full-Parquet primitive scan")
 
     injects_symbols = (
         args.extra_vocab_symbols_path is not None or args.extra_vocab_selfies_path is not None
@@ -314,6 +336,56 @@ def _scan_record(path: Path, n_rows: int, n_distinct: int) -> dict[str, Any]:
     }
 
 
+def collect_aligned_sample(
+    parquet_path: Path, indices_path: Path, column: str, sample_size: int, seed: int
+) -> tuple[list[str], dict[str, Any]]:
+    """Use one persisted permutation of physical source rows for all four tokenizers."""
+    import numpy as np
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    source = pq.ParquetFile(parquet_path)
+    if column not in source.schema_arrow.names:
+        raise ValueError(f"Missing {column!r} column in {parquet_path}")
+    n_rows = source.metadata.num_rows
+    if not 0 < sample_size <= n_rows:
+        raise ValueError(f"Tokenizer sample size {sample_size} exceeds {n_rows} source rows")
+    if indices_path.exists():
+        indices = np.load(indices_path, allow_pickle=False)
+    else:
+        indices = np.random.default_rng(seed).permutation(n_rows)[:sample_size].astype("<i8")
+        indices_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(indices_path, indices, allow_pickle=False)
+    if (
+        indices.dtype != np.dtype("<i8")
+        or indices.shape != (sample_size,)
+        or len(np.unique(indices)) != sample_size
+        or np.any(indices < 0)
+        or np.any(indices >= n_rows)
+    ):
+        raise ValueError("Persisted tokenizer sample indices are invalid for this source")
+    expected = np.random.default_rng(seed).permutation(n_rows)[:sample_size]
+    if not np.array_equal(indices, expected):
+        raise ValueError("Persisted tokenizer sample indices differ from the declared seed")
+
+    values = (
+        pq.read_table(parquet_path, columns=[column]).column(0).take(pa.array(indices)).to_pylist()
+    )
+    if any(not isinstance(value, str) or not value for value in values):
+        raise ValueError(f"Aligned sample has missing {column!r} values")
+    return values, {
+        "source_parquet": str(parquet_path),
+        "source_sha256": file_sha256(parquet_path),
+        "source_rows": n_rows,
+        "sample_size": sample_size,
+        "sample_seed": seed,
+        "sample_order": "numpy.default_rng(seed).permutation(source_rows)[:sample_size]",
+        "row_indices_path": str(indices_path),
+        "row_indices_sha256": file_sha256(indices_path),
+        "row_indices_order_sha256": hashlib.sha256(indices.tobytes()).hexdigest(),
+    }
+
+
 def build_ape(args: argparse.Namespace, corpus: list[str], column: str) -> dict[str, Any]:
     """Learn and save an APE vocabulary; return its metadata fields."""
     max_merge_pieces = (
@@ -422,16 +494,26 @@ def main(argv: list[str] | None = None) -> None:
     column = infer_molecule_column(args.dataset_name, args.representation, args.molecule_column)
     args.output_vocab_path.parent.mkdir(parents=True, exist_ok=True)
 
-    corpus = collect_corpus_for_tokenizer(
-        dataset_name=args.dataset_name,
-        column=column,
-        n=args.tokenizer_train_size,
-        seed=args.seed,
-        buffer_size=args.shuffle_buffer_size,
-        data_dir=args.data_dir,
-        data_files=args.data_files,
-        show_progress=args.show_progress,
-    )
+    sample_provenance = None
+    if args.aligned_sample_parquet is not None:
+        corpus, sample_provenance = collect_aligned_sample(
+            args.aligned_sample_parquet,
+            args.sample_indices_path,
+            column,
+            args.tokenizer_train_size,
+            args.seed,
+        )
+    else:
+        corpus = collect_corpus_for_tokenizer(
+            dataset_name=args.dataset_name,
+            column=column,
+            n=args.tokenizer_train_size,
+            seed=args.seed,
+            buffer_size=args.shuffle_buffer_size,
+            data_dir=args.data_dir,
+            data_files=args.data_files,
+            show_progress=args.show_progress,
+        )
     log(f"Corpus collected: {len(corpus)} sequences")
     validate_sample_shape(corpus[: min(512, len(corpus))], args.representation)
 
@@ -463,6 +545,7 @@ def main(argv: list[str] | None = None) -> None:
         "special_ids": special_ids,
         "tokenizer_path": str(args.output_vocab_path),
         "tokenizer_sha256": vocab_sha256,
+        "aligned_sample": sample_provenance,
         **fields,
         "creation_command": "python -m modernmolbert.train_tokenizer",
     }

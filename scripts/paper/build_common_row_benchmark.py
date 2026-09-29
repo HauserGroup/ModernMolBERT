@@ -58,6 +58,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -460,7 +461,6 @@ def paired_task_differences(
     alpha: float = 0.05,
 ) -> pd.DataFrame:
     """Bootstrap each dataset's paired ROC-AUC difference over its common test rows."""
-    rng = np.random.default_rng(seed)
     records = []
     verified = selected.loc[selected["archive_status"].eq("ok")]
     for dataset, group in verified.groupby("dataset", sort=True):
@@ -473,6 +473,8 @@ def paired_task_differences(
         else:
             pairs = []
         for model_a, model_b in pairs:
+            digest = hashlib.sha256("\0".join((dataset, model_a, model_b)).encode("utf-8")).digest()
+            rng = np.random.default_rng([seed, *np.frombuffer(digest[:16], dtype="<u4").tolist()])
             labels, scores_a = endpoint_scores(*aligned[model_a][:2])
             _, scores_b = endpoint_scores(*aligned[model_b][:2])
             n = len(common)

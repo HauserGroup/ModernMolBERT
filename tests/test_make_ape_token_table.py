@@ -123,6 +123,17 @@ def test_emit_latex_creates_file(tmp_path: Path):
     assert out.stat().st_size > 0
 
 
+def test_emit_latex_does_not_interpret_token_metacharacters(tmp_path: Path):
+    df = pd.DataFrame(
+        [{"token": r"[Ring1][#Branch1]", "count": 7}, {"token": r"[C][\C]", "count": 3}]
+    )
+    out = tmp_path / "tokens.tex"
+    emit_latex(df, out, top=2)
+    source = out.read_text()
+    assert r"\texttt{\detokenize{[Ring1][#Branch1]}}" in source
+    assert r"\texttt{\detokenize{[C][\C]}}" in source
+
+
 # ── emit_ape_token_frequency_plot ────────────────────────────────────────────
 
 

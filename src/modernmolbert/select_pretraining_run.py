@@ -156,7 +156,10 @@ def summarize_run(run_dir: Path, metric: str, lower_is_better: bool) -> dict[str
     eval_results = read_json(run_dir / "eval_results.json")
     train_results = read_json(run_dir / "train_results.json")
     trainer_state = read_json(run_dir / "trainer_state.json")
-    metadata = read_json(run_dir / "ape_tokenizer_metadata.json")
+    metadata_path = run_dir / "run_metadata.json"
+    if not metadata_path.exists():
+        metadata_path = run_dir / "ape_tokenizer_metadata.json"
+    metadata = read_json(metadata_path)
 
     final_model = run_dir / "final_model"
     has_final_model = (

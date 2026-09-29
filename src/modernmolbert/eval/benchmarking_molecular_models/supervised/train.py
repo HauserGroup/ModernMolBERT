@@ -97,7 +97,10 @@ def fit_model(
     else:
         raise ValueError(f"Unknown task: {task}")
 
-    if is_multioutput:
+    if task == "regression":
+        scorer = "r2"
+        y_model = y_arr.ravel()
+    elif is_multioutput:
         log.info("Using multioutput AUROC scorer")
         scorer = make_scorer(multioutput_auroc_score, response_method="predict_proba")
         y_model = y_arr
@@ -129,14 +132,14 @@ def fit_model(
         log.error(f"Error fitting model {model_head}: {e}")
         if "lbfgs" not in str(e):
             raise e
-        log.error("L-BFG-S failed, replacing with SVD")
-        if "clf__estimator_solver" in model["params"]:
-            model["params"]["clf__estimator__solver"] = ["svd"]
+        log.error("L-BFG-S failed, replacing with SAGA")
+        if "clf__estimator__solver" in model["params"]:
+            model["params"]["clf__estimator__solver"] = ["saga"]
         elif "clf__solver" in model["params"]:
-            model["params"]["clf__solver"] = ["svd"]
+            model["params"]["clf__solver"] = ["saga"]
         else:
             raise ValueError(
-                "Model parameters do not contain 'solver' or 'estimator__solver' key, cannot replace with SVD"
+                "Model parameters do not contain 'solver' or 'estimator__solver' key"
             ) from e
         grid_search = GridSearchCV(
             model["model"],
@@ -148,6 +151,9 @@ def fit_model(
             refit=True,
         )
         grid_search.fit(X, y_model)
+
+    if not np.isfinite(grid_search.best_score_):
+        raise ValueError(f"All cross-validation scores are nonfinite for {model_head}")
 
     result = {
         "model": model_head,

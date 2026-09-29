@@ -23,8 +23,6 @@ from modernmolbert.hf_upload import make_staging_dir, push_folder_to_hub, resolv
 from modernmolbert.utils import copy_tokenizer_metadata_from_anywhere, repo_root
 
 
-MODEL_MAX_LENGTH = 128
-
 # Default collator parameters per masking strategy.
 # mlm_probability and span params match training runs documented in modernmolbert.model_cards.
 MASKING_DEFAULTS: dict[str, dict[str, Any]] = {
@@ -103,10 +101,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--masking_strategy",
         type=str,
-        default="standard",
+        default=None,
         choices=["standard", "span", "hetero_span"],
         help=(
-            "Masking strategy used during pre-training (default: standard). "
+            "Optional assertion of the strategy recorded in run_args.json. "
             "Written to collator_config.json in the staged upload so users "
             "know what was used and can switch strategies when fine-tuning."
         ),
@@ -187,7 +185,10 @@ def load_and_patch_config(source_dir: Path, run_dir: Path, vocab_size: int) -> d
     config.setdefault("model_type", "modernbert")
     config.setdefault("architectures", ["ModernBertForMaskedLM"])
 
-    config["vocab_size"] = vocab_size
+    if int(config["vocab_size"]) != vocab_size:
+        raise ValueError(
+            f"Tokenizer/model vocab mismatch: tokenizer={vocab_size}, config={config['vocab_size']}"
+        )
     config["bos_token_id"] = EXPECTED_SPECIAL_IDS["bos_token_id"]
     config["pad_token_id"] = EXPECTED_SPECIAL_IDS["pad_token_id"]
     config["eos_token_id"] = EXPECTED_SPECIAL_IDS["eos_token_id"]
@@ -200,8 +201,10 @@ def load_and_patch_config(source_dir: Path, run_dir: Path, vocab_size: int) -> d
     config.pop("auto_map", None)
 
     run_args = load_json_if_exists(run_dir / "run_args.json")
-    if "max_seq_length" in run_args:
-        config.setdefault("max_position_embeddings", int(run_args["max_seq_length"]))
+    if run_args.get("max_seq_length") is not None and int(config["max_position_embeddings"]) != int(
+        run_args["max_seq_length"]
+    ):
+        raise ValueError("Run context differs from the saved model configuration")
 
     return config
 
@@ -221,7 +224,9 @@ def load_direct_ape_tokenizer(tmp: Path):
     return module.APEPreTrainedTokenizer.from_pretrained(str(tmp))
 
 
-def validate_direct_ape_tokenizer(tmp: Path, expected_vocab_size: int) -> None:
+def validate_direct_ape_tokenizer(
+    tmp: Path, expected_vocab_size: int, expected_max_length: int
+) -> None:
     import importlib.util
 
     tokenizer_py = tmp / "tokenization_ape.py"
@@ -240,9 +245,10 @@ def validate_direct_ape_tokenizer(tmp: Path, expected_vocab_size: int) -> None:
             f"Direct tokenizer vocab mismatch: {tokenizer.vocab_size} != {expected_vocab_size}"
         )
 
-    if tokenizer.model_max_length != MODEL_MAX_LENGTH:
+    if tokenizer.model_max_length != expected_max_length:
         raise ValueError(
-            f"Direct tokenizer max length mismatch: {tokenizer.model_max_length} != {MODEL_MAX_LENGTH}"
+            f"Direct tokenizer max length mismatch: "
+            f"{tokenizer.model_max_length} != {expected_max_length}"
         )
 
     print(
@@ -352,11 +358,11 @@ def find_tokenizer_vocab(source_dir: Path, run_dir: Path) -> Path:
 
 def find_tokenization_code(source_dir: Path, run_dir: Path) -> Path:
     candidates = [
-        repo_root() / "src" / "modernmolbert" / "tokenization_ape.py",
         source_dir / "ape_tokenizer" / "tokenization_ape.py",
         source_dir / "tokenization_ape.py",
         run_dir / "final_model" / "ape_tokenizer" / "tokenization_ape.py",
         run_dir / "final_model" / "tokenization_ape.py",
+        repo_root() / "src" / "modernmolbert" / "tokenization_ape.py",
     ]
 
     for candidate in candidates:
@@ -374,7 +380,7 @@ def read_vocab_size(vocab_path: Path) -> int:
     return len(vocab)
 
 
-def write_tokenizer_config(tmp: Path) -> None:
+def write_tokenizer_config(tmp: Path, max_length: int) -> None:
     tokenizer_config_path = tmp / "tokenizer_config.json"
     if not tokenizer_config_path.exists():
         raise FileNotFoundError(f"Missing tokenizer_config.json: {tokenizer_config_path}")
@@ -385,7 +391,7 @@ def write_tokenizer_config(tmp: Path) -> None:
     tokenizer_config.update(
         {
             "representation": "SELFIES",
-            "model_max_length": MODEL_MAX_LENGTH,
+            "model_max_length": max_length,
             "model_input_names": ["input_ids", "attention_mask"],
             "use_fast": False,
             "auto_map": {
@@ -408,17 +414,18 @@ def stage_tokenizer_files(
     run_dir: Path,
     tmp: Path,
     vocab_path: Path,
+    max_length: int,
 ) -> None:
     from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
     tokenizer = APEPreTrainedTokenizer(
         representation="SELFIES",
-        model_max_length=MODEL_MAX_LENGTH,
+        model_max_length=max_length,
     )
     tokenizer.load_vocabulary_file(vocab_path)
     tokenizer.save_pretrained(str(tmp))
 
-    write_tokenizer_config(tmp)
+    write_tokenizer_config(tmp, max_length)
     shutil.copy(tmp / "vocab.json", tmp / "selfies_vocab.json")
 
     tokenization_code = find_tokenization_code(source_dir, run_dir)
@@ -582,22 +589,23 @@ def build_readme(source_dir: Path, run_dir: Path, repo_id: str, vocab_size: int)
 
 
 def build_staging_dir(
-    source_dir: Path, run_dir: Path, repo_id: str, tmp: Path, masking_strategy: str = "standard"
+    source_dir: Path, run_dir: Path, repo_id: str, tmp: Path, masking_strategy: str | None = None
 ) -> None:
     shutil.copy(source_dir / "model.safetensors", tmp / "model.safetensors")
 
     vocab_path = find_tokenizer_vocab(source_dir, run_dir)
     vocab_size = read_vocab_size(vocab_path)
     config = load_and_patch_config(source_dir, run_dir, vocab_size=vocab_size)
+    max_length = int(config["max_position_embeddings"])
     (tmp / "config.json").write_text(
         json.dumps(config, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
-    stage_tokenizer_files(source_dir, run_dir, tmp, vocab_path)
+    stage_tokenizer_files(source_dir, run_dir, tmp, vocab_path, max_length)
     tokenizer_tmp = tmp / "ape_tokenizer"
     tokenizer_tmp.mkdir(parents=True, exist_ok=True)
-    stage_tokenizer_files(source_dir, run_dir, tokenizer_tmp, vocab_path)
+    stage_tokenizer_files(source_dir, run_dir, tokenizer_tmp, vocab_path, max_length)
 
     for name in (
         "run_args.json",
@@ -613,7 +621,7 @@ def build_staging_dir(
         if src.exists():
             shutil.copy(src, tmp / name)
 
-    write_collator_config(tmp, masking_strategy)
+    write_collator_config(tmp, run_dir, masking_strategy)
 
     (tmp / "README.md").write_text(
         build_readme(
@@ -643,9 +651,22 @@ def validate_staged_files(tmp: Path) -> None:
         raise FileNotFoundError(f"Staging directory is missing files: {missing}")
 
 
-def write_collator_config(tmp: Path, masking_strategy: str) -> None:
-    """Write collator_config.json with the training-time defaults for this strategy."""
-    config = dict(MASKING_DEFAULTS[masking_strategy])
+def write_collator_config(tmp: Path, run_dir: Path, masking_strategy: str | None) -> None:
+    """Write the collator settings recorded by the training run."""
+    run_args = load_json_if_exists(run_dir / "run_args.json")
+    strategy = run_args.get("masking_strategy")
+    if strategy is None:
+        if masking_strategy is None:
+            raise ValueError("Missing masking_strategy in run_args.json; pass it explicitly")
+        strategy = masking_strategy
+    if masking_strategy is not None and masking_strategy != strategy:
+        raise ValueError("Requested masking strategy differs from run_args.json")
+    if strategy not in MASKING_DEFAULTS:
+        raise ValueError(f"Unknown masking strategy in training run: {strategy!r}")
+    config = dict(MASKING_DEFAULTS[strategy])
+    for key in ("mlm_probability", "span_p_geom", "span_max_length", "heteroatom_start_weight"):
+        if key in run_args:
+            config[key] = run_args[key]
     config["_note"] = (
         "Collator parameters used during pre-training. "
         "Change masking_strategy to 'standard', 'span', or 'hetero_span' "
@@ -662,7 +683,7 @@ def remove_pycache_dirs(path: Path) -> None:
         shutil.rmtree(pycache, ignore_errors=True)
 
 
-def validate_tokenizer_config(tmp: Path) -> None:
+def validate_tokenizer_config(tmp: Path, expected_max_length: int) -> None:
     tokenizer_config_path = tmp / "tokenizer_config.json"
     tokenizer_config = json.loads(tokenizer_config_path.read_text(encoding="utf-8"))
 
@@ -682,7 +703,7 @@ def validate_tokenizer_config(tmp: Path) -> None:
     if tokenizer_config.get("auto_map") != expected_auto_map:
         raise ValueError(f"Unexpected tokenizer auto_map: {tokenizer_config.get('auto_map')!r}")
 
-    if tokenizer_config.get("model_max_length") != MODEL_MAX_LENGTH:
+    if tokenizer_config.get("model_max_length") != expected_max_length:
         raise ValueError(
             f"Unexpected model_max_length={tokenizer_config.get('model_max_length')!r}"
         )
@@ -715,10 +736,10 @@ def validate_staged_model(tmp: Path) -> None:
             f"{type(auto_tokenizer)!r}"
         )
 
-    if tokenizer.model_max_length != MODEL_MAX_LENGTH:
+    if tokenizer.model_max_length != config.max_position_embeddings:
         raise ValueError(
             f"Tokenizer max length mismatch: tokenizer={tokenizer.model_max_length}, "
-            f"expected={MODEL_MAX_LENGTH}"
+            f"expected={config.max_position_embeddings}"
         )
 
     if tokenizer.bos_token_id != EXPECTED_SPECIAL_IDS["bos_token_id"]:
@@ -799,7 +820,7 @@ def upload_model_to_hub(
     dry_run: bool = False,
     keep_staging_dir: Path | None = None,
     api: HfApi | None = None,
-    masking_strategy: str = "standard",
+    masking_strategy: str | None = None,
 ) -> dict[str, Any]:
     if not run_dir.is_absolute():
         run_dir = repo_root() / run_dir

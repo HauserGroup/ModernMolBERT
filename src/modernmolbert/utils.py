@@ -481,7 +481,35 @@ def get_streaming_dataset(
         )
         return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
 
-    local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
+    explicit_path = (
+        _resolve_dataset_name_as_local_path(dataset_name)
+        if _looks_like_path(dataset_name)
+        else None
+    )
+    if data_dir is None and explicit_path is not None and any(explicit_path.glob("**/*.parquet")):
+        files = _split_parquet_files(explicit_path, split)
+        if not files:
+            available = (
+                ", ".join(sorted(_available_local_parquet_splits(explicit_path))) or "<none>"
+            )
+            raise ValueError(
+                f"Local parquet dataset at {explicit_path} has no split '{split}'. "
+                f"Available splits: {available}"
+            )
+        print(f"[data] Loading local parquet split '{split}': {explicit_path}", flush=True)
+        hf_ds = load_dataset(
+            "parquet",
+            data_files={split: [str(f) for f in files]},
+            split=split,
+            streaming=True,
+        )
+        return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
+
+    local = (
+        find_local_dataset(data_dir=explicit_path)
+        if data_dir is None and explicit_path is not None
+        else find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
+    )
     if local is not None:
         print(f"[data] Loading dataset from disk: {local}", flush=True)
         raw = load_from_disk(str(local))
@@ -502,26 +530,6 @@ def get_streaming_dataset(
                 )
             return raw.shuffle(seed=seed).to_iterable_dataset()
         raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
-
-    local_parquet = _resolve_dataset_name_as_local_path(dataset_name) if dataset_name else None
-    if local_parquet is not None:
-        files = _split_parquet_files(local_parquet, split)
-        if not files:
-            available = (
-                ", ".join(sorted(_available_local_parquet_splits(local_parquet))) or "<none>"
-            )
-            raise ValueError(
-                f"Local parquet dataset at {local_parquet} has no split '{split}'. "
-                f"Available splits: {available}"
-            )
-        print(f"[data] Loading local parquet split '{split}': {local_parquet}", flush=True)
-        hf_ds = load_dataset(
-            "parquet",
-            data_files={split: [str(f) for f in files]},
-            split=split,
-            streaming=True,
-        )
-        return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
 
     print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
     try:
@@ -733,10 +741,9 @@ def compute_tokenization_stats(
         if len(raw_ids) > max_seq_length:
             truncations += 1
 
-        encoded = encode_sequence(tokenizer, seq, max_seq_length)["input_ids"]
-        lengths.append(len(encoded))
+        lengths.append(len(raw_ids))
 
-        eligible = eligible_token_ids(encoded, special_ids)
+        eligible = eligible_token_ids(raw_ids, special_ids)
         if eligible:
             unk_count = sum(1 for tok in eligible if tok == unk_id)
             unknown_tokens += unk_count

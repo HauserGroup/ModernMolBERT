@@ -111,12 +111,12 @@ def count_token_frequencies(
 
 # ── LaTeX emission ──────────────────────────────────────────────────────────
 
-_LATEXSAFE = str.maketrans({"[": r"\texttt{[}", "]": r"]}", "_": r"\_", "&": r"\&"})
-
 
 def _safe(tok: str) -> str:
-    """Escape a SELFIES token for LaTeX verbatim-style rendering."""
-    return r"\texttt{" + tok.replace("[", r"\textbf{[").replace("]", r"]}") + "}"
+    """Render a SELFIES token without interpreting #, backslashes or underscores."""
+    if "{" in tok or "}" in tok:
+        raise ValueError("APE token contains a brace that cannot be used in \\detokenize")
+    return r"\texttt{\detokenize{" + tok + "}}"
 
 
 def emit_latex(df: pd.DataFrame, out_path: Path, top: int = 30) -> None:
@@ -151,7 +151,7 @@ def emit_latex(df: pd.DataFrame, out_path: Path, top: int = 30) -> None:
         r"  \endhead",
     ]
     for _, row in top_df.iterrows():
-        tok_tex = r"\texttt{" + row["token"] + "}"
+        tok_tex = _safe(row["token"])
         frag = row["chemical_fragment"] if row["chemical_fragment"] else r"\emph{(to annotate)}"
         lines.append(f"  {tok_tex} & {int(row['count']):,} & {frag} \\\\")
     lines += [
@@ -274,7 +274,8 @@ def build_table(
     if make_figures:
         emit_ape_token_frequency_plot(df, figure_dir, top=figure_top)
 
-    print(f"Merged tokens: {len(merged)} / {len(merged) + (631 - 256 - 5)} vocab entries")
+    vocab_size = len(json.loads(vocab_path.read_text(encoding="utf-8")))
+    print(f"Merged tokens: {len(merged)} / {vocab_size} vocab entries")
     print(f"Top {top} by frequency:")
     print(df.head(top).to_string(index=False))
     print(f"\nWrote outputs to {out_dir}")

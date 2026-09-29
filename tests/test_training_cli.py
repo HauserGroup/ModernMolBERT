@@ -86,7 +86,7 @@ def test_pretokenized_rows_use_stable_hash_split(monkeypatch):
         train_split="train",
         validation_split=None,
         use_validation_split=False,
-        selfies_column="SELFIES",
+        molecule_column="SELFIES",
         data_dir=None,
         data_files=None,
         seed=13,

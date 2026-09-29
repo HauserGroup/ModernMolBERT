@@ -217,7 +217,7 @@ def test_collect_corpus_passes_data_files(monkeypatch):
 
     corpus = collect_corpus_for_tokenizer(
         dataset_name=PUBCHEM10M_DATASET,
-        representation="SELFIES",
+        column="SELFIES",
         n=2,
         seed=13,
         buffer_size=100,

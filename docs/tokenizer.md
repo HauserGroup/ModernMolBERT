@@ -1,8 +1,62 @@
-# APE Tokenizer
+# Molecular tokenizers
+
+`modernmolbert.train_tokenizer` supports APE and character-level BPE on both
+SELFIES and SMILES. Select a combination with `--algorithm APE|BPE` and
+`--representation SELFIES|SMILES`. The algorithm and representation are saved in
+the adjacent `.metadata.json`; validation, model training and embedding load
+the appropriate tokenizer from this metadata or a checkpoint directory.
+
+APE starts from molecular primitives and preserves those boundaries. BPE starts
+from characters and may merge across primitive boundaries. APE's
+`--max_vocab_size` excludes five special tokens; BPE's includes them. The
+`--max_merge_pieces` and `--extra_vocab_*` flags apply only to APE. Both can use
+`--corpus_primitive_parquet` to include every primitive or character in the
+full training split. For BPE, the initial alphabet and five special tokens must
+fit inside `--max_vocab_size`.
+
+For SMILES BPE, use the training command below with
+`--algorithm BPE --representation SMILES --molecule_column smiles`, omit
+`--max_merge_pieces`, and give the output a `tokenizer.json` filename. APE is
+the default algorithm.
 
 ## What APE is
 
 APE (Atomic Pair Encoding) is a BPE-inspired tokenizer designed for molecular string representations. Starting from a primitive alphabet (individual SELFIES bracket tokens or SMILES atoms/bonds), APE iteratively merges the most-frequent adjacent pair of tokens into a single merged token until a vocabulary size or frequency threshold is reached.
+
+### Training rules in this repository
+
+The [APE paper](https://doi.org/10.1038/s41598-024-76440-8) describes primitive
+molecular tokens followed by repeated adjacent-pair merges. This implementation
+makes the following choices explicit:
+
+- Molecules stay separate: pairs cannot cross a molecule boundary. Malformed
+  SELFIES rows are skipped and counted.
+- Pair selection counts every adjacent occurrence, including overlapping
+  candidates such as the three `[C][C]` pairs in `[C][C][C][C]`. The
+  `--min_freq_for_merge` threshold applies to that candidate count. Ties go to
+  the pair whose first occurrence is earliest in corpus order.
+- A selected pair is replaced left to right without overlapping replacements.
+  The `_freq.json` diagnostic records token occurrences **after** replacement:
+  `[C][C][C][C]` produces two `[C][C]` tokens, not three. Tokens whose final
+  frequency is zero remain in the vocabulary for primitive coverage. Correcting
+  this diagnostic does not change merge selection, vocabulary order, or token IDs.
+- `--max_merge_pieces` limits the primitive span of a merged token. This is a
+  ModernMolBERT extension, not a constraint specified by the paper.
+
+`modernmolbert.train_tokenizer` uses the incremental-count trainer in
+`tokenization/ape.py`. It was checked against an independent small-corpus
+specification and the former array-based implementation. On the first 2 million
+rows of `data/pretrain/chembl36_selfies/train.parquet`, with vocabulary limit
+2000, minimum pair frequency 3000 and span cap 2, both produced identical
+ordered vocabularies and corrected frequencies (581 tokens); the incremental
+trainer took 28.38 seconds versus 92.94 seconds for the array implementation.
+This measurement includes training only, not Parquet reading.
+
+The trainer uses dense pair-count tables whose size grows with the square of
+`--max_vocab_size`. It rejects settings needing more than 512 MiB for the count
+and eligibility tables before allocating them; this is a resource guard, not an
+APE rule from the paper.
+The self-contained `tokenization_ape.py` handles inference and model export.
 
 Key properties:
 
@@ -14,7 +68,7 @@ The implementation lives in `src/modernmolbert/tokenization_ape.py` as `APEPreTr
 
 ## Representations
 
-Pass `--representation SELFIES` or `--representation SMILES`. SELFIES is the default and the representation used for all published ModernMolBERT checkpoints. SMILES support is present but not yet used in the main training pipeline.
+Pass `--representation SELFIES` or `--representation SMILES`. SELFIES is the default and the representation used for all published ModernMolBERT checkpoints. SMILES support is available in tokenizer training, model training and embedding.
 
 SELFIES primitive tokens are bracket tokens: `[C]`, `[=O]`, `[Branch1_2]`, etc.
 SMILES primitive tokens are atoms and bond/ring characters: `C`, `O`, `Br`, `(`, `=`, `%12`, etc.
@@ -73,7 +127,7 @@ evaluation-set information into the vocabulary.
 | Flag | Default | Effect |
 |---|---|---|
 | `--tokenizer_train_size` | 2 000 000 | Molecules sampled from the corpus for merge training |
-| `--max_vocab_size` | 2000 | Stop merging when vocabulary reaches this size |
+| `--max_vocab_size` | 5000 | APE: maximum non-special tokens; BPE: total vocabulary size including five special tokens |
 | `--min_freq_for_merge` | 3000 | Stop merging when best pair frequency falls below this |
 | `--max_merge_pieces` | 8 | Max primitive tokens a merged token may span. 0/negative = no cap |
 | `--extra_vocab_symbols_path` | off (`None`) | Opt-in. Text file with one primitive token per line; force-added after training |

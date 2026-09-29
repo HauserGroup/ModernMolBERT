@@ -2,29 +2,45 @@ import json
 
 import pytest
 
+from modernmolbert.tokenization.ape import train_ape
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
-def test_ape_train_terminates_on_tiny_corpus():
-    tokenizer = APEPreTrainedTokenizer()
-    corpus = ["[C][C][O]", "[C][O][C]", "[C][C][C]"] * 20
-
-    tokenizer.train(
-        corpus=corpus,
-        max_vocab_size=32,
-        min_freq_for_merge=2,
-        save_checkpoint=False,
+def _trained_tokenizer(
+    corpus: list[str],
+    *,
+    representation: str = "SELFIES",
+    max_vocab_size: int = 32,
+    min_freq_for_merge: int = 2,
+) -> APEPreTrainedTokenizer:
+    frequency = train_ape(
+        corpus,
+        representation,
+        max_vocab_size=max_vocab_size,
+        min_freq_for_merge=min_freq_for_merge,
+        max_merge_pieces=8,
+        log=lambda _: None,
     )
+    tokenizer = APEPreTrainedTokenizer(representation=representation)
+    tokenizer.vocabulary = {
+        **tokenizer.special_tokens,
+        **{token: index for index, token in enumerate(frequency, start=5)},
+    }
+    tokenizer.vocabulary_frequency = frequency
+    return tokenizer
+
+
+def test_ape_train_terminates_on_tiny_corpus():
+    corpus = ["[C][C][O]", "[C][O][C]", "[C][C][C]"] * 20
+    tokenizer = _trained_tokenizer(corpus)
 
     assert len(tokenizer.vocabulary) > len(tokenizer.special_tokens)
 
 
 def test_ape_train_skips_malformed_rows_without_crashing():
-    tokenizer = APEPreTrainedTokenizer()
     # A stray non-bracket row must be skipped, not abort the whole run.
     corpus = ["[C][C][O]", "not selfies", "[C][O][C]", "[C][C][C]"] * 20
-
-    tokenizer.train(corpus=corpus, max_vocab_size=32, min_freq_for_merge=2)
+    tokenizer = _trained_tokenizer(corpus)
 
     assert len(tokenizer.vocabulary) > len(tokenizer.special_tokens)
 
@@ -38,10 +54,8 @@ def test_ape_tokenize_maps_malformed_selfies_to_unk():
 
 
 def test_ape_train_freq_debits_merged_constituents():
-    tokenizer = APEPreTrainedTokenizer()
     corpus = ["[C][C]"] * 10
-
-    tokenizer.train(corpus=corpus, max_vocab_size=32, min_freq_for_merge=2)
+    tokenizer = _trained_tokenizer(corpus)
 
     freq = tokenizer.vocabulary_frequency
     # The merge consumes every [C] (20 occurrences across 10 merges of [C]+[C]).
@@ -65,32 +79,18 @@ def test_load_vocabulary_rejects_duplicate_ids(tmp_path) -> None:
 
 
 def test_ape_train_does_not_merge_across_molecule_boundaries():
-    tokenizer = APEPreTrainedTokenizer()
     # Each sample has exactly one token; any pair merge would require crossing
     # molecule boundaries and should therefore never happen.
     corpus = ["[C]", "[O]"] * 40
-
-    tokenizer.train(
-        corpus=corpus,
-        max_vocab_size=32,
-        min_freq_for_merge=2,
-        save_checkpoint=False,
-    )
+    tokenizer = _trained_tokenizer(corpus)
 
     assert "[C][O]" not in tokenizer.vocabulary
     assert "[O][C]" not in tokenizer.vocabulary
 
 
 def test_ape_train_preserves_first_seen_pair_tie_order():
-    tokenizer = APEPreTrainedTokenizer()
     corpus = ["[C][O][C][O]", "[O][C][N]", "[C][O][N]"] * 3
-
-    tokenizer.train(
-        corpus=corpus,
-        max_vocab_size=20,
-        min_freq_for_merge=2,
-        save_checkpoint=False,
-    )
+    tokenizer = _trained_tokenizer(corpus, max_vocab_size=20)
 
     learned_tokens = [
         token
@@ -140,16 +140,8 @@ def test_smiles_encoding_uses_ape_merges_over_smiles_tokens():
 
 
 def test_train_supports_smiles_representation():
-    tokenizer = APEPreTrainedTokenizer(representation="SMILES")
     corpus = ["CCO", "CCN", "CCC"] * 20
-
-    tokenizer.train(
-        corpus=corpus,
-        representation="SMILES",
-        max_vocab_size=32,
-        min_freq_for_merge=2,
-        save_checkpoint=False,
-    )
+    tokenizer = _trained_tokenizer(corpus, representation="SMILES")
 
     assert tokenizer.representation == "SMILES"
     assert "C" in tokenizer.vocabulary

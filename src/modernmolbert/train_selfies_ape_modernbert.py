@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Train a ModernBERT masked-language model for SELFIES molecular strings.
+"""Train a ModernBERT masked-language model on SELFIES or SMILES molecular strings.
 
-Model training requires an existing, vetted tokenizer vocabulary and metadata.
-Tokenizer training is intentionally a separate command:
+Model training requires an existing, vetted tokenizer file and metadata. The
+metadata fixes the tokenizer algorithm (APE or BPE) and the representation the
+model reads. Tokenizer training is intentionally a separate command:
 
-    python -m modernmolbert.train_ape_tokenizer
+    python -m modernmolbert.train_tokenizer
 """
 
 import argparse
@@ -14,7 +15,7 @@ import json
 import math
 import platform
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 import os
 
 from dotenv import load_dotenv
@@ -34,30 +35,35 @@ from transformers import (
 )
 
 from modernmolbert.collator import MolecularMLMCollator
-from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+from modernmolbert.tokenization.load import (
+    APE,
+    load_verified_tokenizer,
+    tokenizer_algorithm,
+    tokenizer_representation,
+)
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
-    assert_metadata_representation,
     assert_representation_compatible,
     assert_special_ids,
     compute_tokenization_stats,
     copy_tokenizer_artifacts,
-    default_selfies_tokenizer_path,
     eligible_token_ids,
     encode_sequence,
     file_sha256,
     find_local_dataset,
     get_streaming_dataset,
-    infer_selfies_column,
+    infer_molecule_column,
     infer_validation_split,
     load_tokenizer_metadata,
-    metadata_path_for_vocab,
     normalize_sequence,
     resolve_special_ids,
     tokenizer_vocab_size,
-    validate_selfies_sample_shape,
+    validate_sample_shape,
 )
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 DATASET_NAME = PUBCHEM10M_DATASET
 torch.set_float32_matmul_precision("high")
@@ -66,7 +72,7 @@ torch._dynamo.config.assume_static_by_default = False
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train SELFIES ModernBERT MLM with a vetted APE tokenizer.",
+        description="Train a molecular ModernBERT MLM with a vetted APE or BPE tokenizer.",
     )
 
     # Paths
@@ -74,14 +80,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--tokenizer_vocab_path",
         type=str,
-        default=str(default_selfies_tokenizer_path()),
-        help="SELFIES tokenizer vocabulary JSON.",
+        required=True,
+        help="Tokenizer file: an APE vocabulary JSON or a BPE tokenizer.json.",
     )
     parser.add_argument(
         "--tokenizer_metadata_path",
         type=str,
         default=None,
-        help="Tokenizer metadata JSON. Defaults to <vocab>.metadata.json.",
+        help="Tokenizer metadata JSON. Defaults to <file>.metadata.json.",
     )
     parser.add_argument(
         "--require_corpus_only_vocab",
@@ -92,10 +98,15 @@ def parse_args() -> argparse.Namespace:
     # Dataset
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
+        "--molecule_column",
         "--selfies_column",
+        dest="molecule_column",
         type=str,
         default=None,
-        help=("Column containing SELFIES strings. Defaults by dataset."),
+        help=(
+            "Column containing molecule strings in the tokenizer's representation. "
+            "Defaults by dataset. --selfies_column is the former name."
+        ),
     )
     parser.add_argument(
         "--train_split",
@@ -188,7 +199,8 @@ def parse_args() -> argparse.Namespace:
             "'standard': independent Bernoulli per token (original). "
             "'span': budget-based contiguous APE-token span masking. "
             "'hetero_span': span masking with span-start positions weighted toward "
-            "APE tokens that contain heteroatoms (N, O, S, P, F, Cl, Br, I, Se, Si)."
+            "APE tokens that contain heteroatoms (N, O, S, P, F, Cl, Br, I, Se, Si); "
+            "APE SELFIES tokenizers only."
         ),
     )
     parser.add_argument(
@@ -356,8 +368,14 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
             raise ValueError("span_p_geom must be in (0, 1)")
         if args.span_max_length < 1:
             raise ValueError("span_max_length must be >= 1")
-    if args.masking_strategy == "hetero_span" and args.heteroatom_start_weight <= 0.0:
-        raise ValueError("heteroatom_start_weight must be > 0")
+    if args.masking_strategy == "hetero_span":
+        if args.heteroatom_start_weight <= 0.0:
+            raise ValueError("heteroatom_start_weight must be > 0")
+        if args.tokenizer_algorithm != APE or args.representation != SELFIES_REPRESENTATION:
+            raise ValueError(
+                "hetero_span finds heteroatoms in whole SELFIES bracket symbols, "
+                "so it needs an APE SELFIES tokenizer"
+            )
 
 
 def adjust_args_for_backend(args: argparse.Namespace, backend: str) -> argparse.Namespace:
@@ -379,7 +397,9 @@ def adjust_args_for_backend(args: argparse.Namespace, backend: str) -> argparse.
 
 
 def resolve_dataset_args(args: argparse.Namespace) -> argparse.Namespace:
-    args.selfies_column = infer_selfies_column(args.dataset_name, args.selfies_column)
+    args.molecule_column = infer_molecule_column(
+        args.dataset_name, args.representation, args.molecule_column
+    )
     args.validation_split = infer_validation_split(
         args.dataset_name,
         args.validation_split,
@@ -394,7 +414,7 @@ def resolve_dataset_args(args: argparse.Namespace) -> argparse.Namespace:
 
 def preview_dataset_and_tokenizer(
     args: argparse.Namespace,
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "PreTrainedTokenizerBase",
     special_ids: dict[str, int],
     n_examples: int = 3,
 ) -> None:
@@ -411,7 +431,7 @@ def preview_dataset_and_tokenizer(
 
     examples: list[str] = []
     for row in ds:
-        seq = normalize_sequence(row, args.selfies_column)
+        seq = normalize_sequence(row, args.molecule_column)
         if seq is None:
             continue
         examples.append(seq)
@@ -420,7 +440,7 @@ def preview_dataset_and_tokenizer(
 
     local = find_local_dataset(args.data_dir, dataset_name=args.dataset_name)
     log(f"Dataset: {args.dataset_name}")
-    log(f"SELFIES column: {args.selfies_column}")
+    log(f"Molecule column: {args.molecule_column}")
     log(f"Train split: {args.train_split}")
     log(f"Validation split: {args.validation_split}")
     log(f"Use validation split: {args.use_validation_split}")
@@ -430,7 +450,7 @@ def preview_dataset_and_tokenizer(
         log(f"Dataset mode: local dataset at {local}")
     else:
         log("Dataset mode: streaming from HuggingFace Hub")
-    log(f"Representation: {SELFIES_REPRESENTATION}")
+    log(f"Representation: {args.representation} ({args.tokenizer_algorithm} tokenizer)")
 
     for i, seq in enumerate(examples, start=1):
         encoded = encode_sequence(tokenizer, seq, args.max_seq_length)
@@ -440,22 +460,15 @@ def preview_dataset_and_tokenizer(
         unk_count = sum(1 for x in eligible if x == special_ids["unk_token"])
         unk_rate = unk_count / max(1, len(eligible))
 
-        # Best effort token display. Adjust if your APE tokenizer has a different method.
-        tokens = None
-        if hasattr(tokenizer, "convert_ids_to_tokens"):
-            try:
-                tokens = tokenizer.convert_ids_to_tokens(input_ids[:30])
-            except Exception:
-                tokens = None
+        tokens = tokenizer.convert_ids_to_tokens(input_ids[:30])
 
         log(f"Example {i}:")
-        print(f"  raw SELFIES: {seq[:300]}{'...' if len(seq) > 300 else ''}", flush=True)
+        print(f"  raw input:   {seq[:300]}{'...' if len(seq) > 300 else ''}", flush=True)
         print(
             f"  token ids:   {input_ids[:30]}{' ...' if len(input_ids) > 30 else ''}",
             flush=True,
         )
-        if tokens is not None:
-            print(f"  tokens:      {tokens}", flush=True)
+        print(f"  tokens:      {tokens}", flush=True)
         print(f"  length:      {len(input_ids)}", flush=True)
         print(f"  unk count:   {unk_count}", flush=True)
         print(f"  unk rate:    {unk_rate:.3f}", flush=True)
@@ -473,7 +486,7 @@ def _sample_train_partition_sequences(args: argparse.Namespace, n: int) -> list[
 
     rows: list[str] = []
     for row in ds:
-        seq = normalize_sequence(row, args.selfies_column)
+        seq = normalize_sequence(row, args.molecule_column)
         if seq is None:
             continue
         if (
@@ -495,8 +508,8 @@ def _pretokenized_example(row: dict[str, Any], max_seq_length: int | None) -> di
     return {"input_ids": ids, "attention_mask": [1] * len(ids)}
 
 
-def _split_key(row: dict[str, Any], selfies_column: str) -> str | None:
-    seq = normalize_sequence(row, selfies_column)
+def _split_key(row: dict[str, Any], molecule_column: str) -> str | None:
+    seq = normalize_sequence(row, molecule_column)
     if seq is not None:
         return seq
     if "input_ids" in row:
@@ -505,7 +518,7 @@ def _split_key(row: dict[str, Any], selfies_column: str) -> str | None:
 
 
 def _is_validation_row(row: dict[str, Any], args: argparse.Namespace) -> bool:
-    key = _split_key(row, args.selfies_column)
+    key = _split_key(row, args.molecule_column)
     return key is not None and sequence_bucket(key, args.val_split_mod) == args.val_split_bucket
 
 
@@ -546,53 +559,29 @@ def assert_corpus_only_vocab(metadata: dict[str, Any], training_parquet: Path) -
         raise ValueError("Corpus-only tokenizer includes added extra vocabulary symbols")
 
 
-def load_and_validate_tokenizer(
+def read_training_tokenizer(
     args: argparse.Namespace,
-) -> tuple[
-    APEPreTrainedTokenizer,
-    dict[str, Any],
-    Path,
-    Path,
-    int,
-    dict[str, int],
-    dict[str, float],
-]:
-    vocab_path = Path(args.tokenizer_vocab_path)
-    if not vocab_path.exists():
-        raise FileNotFoundError(
-            f"Tokenizer vocabulary not found: {vocab_path}\n"
-            "Train a tokenizer first with:\n"
-            "  python -m modernmolbert.train_ape_tokenizer"
-        )
+) -> tuple["PreTrainedTokenizerBase", dict[str, Any], Path, Path]:
+    """Load the tokenizer file, checked against its metadata hash.
 
-    metadata_path = (
-        Path(args.tokenizer_metadata_path)
-        if args.tokenizer_metadata_path is not None
-        else metadata_path_for_vocab(vocab_path)
+    Sets ``args.tokenizer_algorithm`` and ``args.representation`` from the metadata.
+    """
+    tokenizer, metadata, vocab_path, metadata_path = load_verified_tokenizer(
+        args.tokenizer_vocab_path, args.tokenizer_metadata_path, log=log
     )
-    if not metadata_path.exists():
-        raise FileNotFoundError(
-            f"Tokenizer metadata not found: {metadata_path}\n"
-            "Training requires tokenizer metadata with representation and hash details."
-        )
+    args.tokenizer_algorithm = tokenizer_algorithm(metadata)
+    args.representation = tokenizer_representation(metadata)
+    return tokenizer, metadata, vocab_path, metadata_path
 
-    metadata = load_tokenizer_metadata(metadata_path)
-    assert_metadata_representation(metadata, expected_representation=SELFIES_REPRESENTATION)
+
+def validate_tokenizer_for_training(
+    args: argparse.Namespace,
+    tokenizer: "PreTrainedTokenizerBase",
+    metadata: dict[str, Any],
+) -> tuple[int, dict[str, int], dict[str, float]]:
+    """Gate the tokenizer on a training sample; return vocabulary size, special IDs and stats."""
     if args.require_corpus_only_vocab:
         assert_corpus_only_vocab(metadata, corpus_only_training_parquet(args))
-
-    recorded_sha = str(metadata.get("tokenizer_sha256", ""))
-    actual_sha = file_sha256(vocab_path)
-    if not recorded_sha:
-        log("Warning: tokenizer metadata has no tokenizer_sha256; skipping integrity check.")
-    elif recorded_sha != actual_sha:
-        raise ValueError(
-            "Tokenizer hash mismatch between file and metadata. "
-            f"metadata={recorded_sha}, file={actual_sha}"
-        )
-
-    tokenizer = APEPreTrainedTokenizer(representation=SELFIES_REPRESENTATION)
-    tokenizer.load_vocabulary_file(vocab_path)
 
     vocab_size = tokenizer_vocab_size(tokenizer)
     if vocab_size < 100:
@@ -604,10 +593,10 @@ def load_and_validate_tokenizer(
     validation_sequences = _sample_train_partition_sequences(
         args, n=args.tokenizer_validation_samples
     )
-    validate_selfies_sample_shape(validation_sequences)
+    validate_sample_shape(validation_sequences, args.representation)
 
     assert_representation_compatible(
-        tokenizer, special_ids, SELFIES_REPRESENTATION, args.max_seq_length
+        tokenizer, special_ids, args.representation, args.max_seq_length
     )
 
     stats = compute_tokenization_stats(
@@ -622,6 +611,11 @@ def load_and_validate_tokenizer(
             f"Unknown-token rate too high: {stats['unk_rate']:.6f} "
             f"(threshold {args.unk_rate_threshold:.6f})"
         )
+    if stats["silent_loss_rate"] > 0:
+        raise ValueError(
+            "Tokenization silently changed training inputs: "
+            f"silent_loss_rate={stats['silent_loss_rate']:.6f}"
+        )
     if stats["empty_sequence_rate"] > 0:
         raise ValueError("Tokenizer produced empty tokenized outputs.")
     if stats["mostly_unknown_rate"] > 0.01:
@@ -629,31 +623,23 @@ def load_and_validate_tokenizer(
             f"Too many sequences are mostly unknown tokens: {stats['mostly_unknown_rate']:.4f}"
         )
 
-    return (
-        tokenizer,
-        metadata,
-        vocab_path,
-        metadata_path,
-        vocab_size,
-        special_ids,
-        stats,
-    )
+    return vocab_size, special_ids, stats
 
 
 def make_train_iterable_dataset(
-    args: argparse.Namespace, tokenizer: APEPreTrainedTokenizer
+    args: argparse.Namespace, tokenizer: "PreTrainedTokenizerBase"
 ) -> IterableDataset:
     if getattr(args, "global_train_shuffle", False):
         source = corpus_only_training_parquet(args)
         import pyarrow.parquet as pq
 
         available_columns = pq.ParquetFile(source).schema_arrow.names
-        if args.selfies_column in available_columns:
-            input_columns = [args.selfies_column]
+        if args.molecule_column in available_columns:
+            input_columns = [args.molecule_column]
         elif "input_ids" in available_columns:
             input_columns = ["input_ids"]
         else:
-            raise ValueError(f"Missing SELFIES and input_ids columns in {source}")
+            raise ValueError(f"Missing {args.molecule_column!r} and input_ids columns in {source}")
         cache_dir = Path(args.output_dir) / "dataset_cache"
         cache_dir.mkdir(parents=True, exist_ok=True)
         indexed = Dataset.from_parquet(str(source), columns=input_columns, cache_dir=str(cache_dir))
@@ -677,7 +663,9 @@ def make_train_iterable_dataset(
         )
 
     def keep_train(row: dict[str, Any]) -> bool:
-        has_content = normalize_sequence(row, args.selfies_column) is not None or "input_ids" in row
+        has_content = (
+            normalize_sequence(row, args.molecule_column) is not None or "input_ids" in row
+        )
         if not has_content:
             return False
         if args.use_validation_split:
@@ -689,15 +677,15 @@ def make_train_iterable_dataset(
     def preprocess(row: dict[str, Any]) -> dict[str, Any]:
         if "input_ids" in row:
             return _pretokenized_example(row, args.max_seq_length)
-        seq = normalize_sequence(row, args.selfies_column)
+        seq = normalize_sequence(row, args.molecule_column)
         if seq is None:
-            raise ValueError(f"Training row is missing {args.selfies_column!r} and input_ids.")
+            raise ValueError(f"Training row is missing {args.molecule_column!r} and input_ids.")
         return encode_sequence(tokenizer, seq, args.max_seq_length)
 
     return ds.map(preprocess)
 
 
-def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenizer) -> Dataset:
+def make_eval_dataset(args: argparse.Namespace, tokenizer: "PreTrainedTokenizerBase") -> Dataset:
     n_eval = args.eval_size
     if args.max_eval_batches > 0:
         n_eval = min(n_eval, args.max_eval_batches * args.per_device_eval_batch_size)
@@ -723,7 +711,7 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: APEPreTrainedTokenize
     pbar = tqdm(total=n_eval, desc="Building finite validation set")
 
     for row in ds:
-        seq = normalize_sequence(row, args.selfies_column)
+        seq = normalize_sequence(row, args.molecule_column)
         pretokenized = "input_ids" in row
         if seq is None and not pretokenized:
             continue
@@ -912,18 +900,25 @@ def write_run_metadata(
     final_model_dir.mkdir(parents=True, exist_ok=True)
     tokenizer_metadata = load_tokenizer_metadata(tokenizer_metadata_path)
     tokenizer_sha256 = str(tokenizer_metadata.get("tokenizer_sha256", "unknown"))
+    representation = args.representation
+    is_ape = args.tokenizer_algorithm == APE
+    if representation == SELFIES_REPRESENTATION:
+        expected_input = (
+            "SELFIES strings only. Convert SMILES before inference using a helper such "
+            "as smiles_to_selfies()."
+        )
+    else:
+        expected_input = "RDKit canonical isomeric SMILES, as in the pretraining corpus."
 
     metadata = {
         "dataset_name": args.dataset_name,
-        "selfies_column": args.selfies_column,
+        "molecule_column": args.molecule_column,
         "train_split": args.train_split,
         "validation_split": args.validation_split,
         "use_validation_split": args.use_validation_split,
-        "representation": SELFIES_REPRESENTATION,
-        "expected_input": (
-            "SELFIES strings only. Convert SMILES before inference using a helper such "
-            "as smiles_to_selfies()."
-        ),
+        "representation": representation,
+        "tokenizer_algorithm": args.tokenizer_algorithm,
+        "expected_input": expected_input,
         "tokenizer_vocab_path": str(tokenizer_vocab_path),
         "tokenizer_metadata_path": str(tokenizer_metadata_path),
         "backend": backend,
@@ -958,31 +953,16 @@ def write_run_metadata(
         json.dump(metadata, f, indent=2)
 
     final_eval_metrics_text = json.dumps(final_eval_metrics or {}, indent=2, sort_keys=True)
-    model_card = f"""---
-license: mit
-library_name: transformers
-pipeline_tag: fill-mask
-tags:
-- chemistry
-- molecules
-- selfies
-- modernbert
-- masked-language-modeling
----
-
-# ModernMolBERT SELFIES Masked Language Model
-
-This checkpoint was trained from scratch with ModernBERT for SELFIES masked language modeling.
-
-## Representation
-
-`{SELFIES_REPRESENTATION}`
-
-This checkpoint expects SELFIES strings only. Convert SMILES before tokenization.
-
-## Tokenizer
-
-This model uses `APEPreTrainedTokenizer`. The tokenizer files are present at the
+    if representation == SELFIES_REPRESENTATION:
+        input_text = (
+            "This checkpoint expects SELFIES strings only. Convert SMILES before tokenization."
+        )
+    else:
+        input_text = (
+            "This checkpoint expects RDKit canonical isomeric SMILES, as in the pretraining corpus."
+        )
+    if is_ape:
+        tokenizer_text = f"""This model uses `APEPreTrainedTokenizer`. The tokenizer files are present at the
 repository root and in `ape_tokenizer/`. With current Transformers versions,
 `AutoTokenizer` must load the custom tokenizer from `ape_tokenizer/` because
 remote tokenizer code is disabled for root ModernBERT configs.
@@ -990,17 +970,58 @@ remote tokenizer code is disabled for root ModernBERT configs.
 Keep these files with the checkpoint:
 
 - `vocab.json`
-- `selfies_vocab.json`
+- `{representation.lower()}_vocab.json`
 - `tokenizer_metadata.json`
 - `tokenizer_config.json`
 - `special_tokens_map.json`
-- `tokenization_ape.py`
+- `tokenization_ape.py`"""
+        tokenizer_loading = """tokenizer = AutoTokenizer.from_pretrained(
+    "HauserGroup/<repo-name>",
+    subfolder="ape_tokenizer",
+    trust_remote_code=True,
+)"""
+    else:
+        tokenizer_text = """This model uses a character-level BPE tokenizer, saved as a standard
+`tokenizer.json` at the repository root. It loads with `AutoTokenizer` and
+needs no remote code.
+
+Keep these files with the checkpoint:
+
+- `tokenizer.json`
+- `tokenizer_config.json`
+- `tokenizer_metadata.json`"""
+        tokenizer_loading = 'tokenizer = AutoTokenizer.from_pretrained("HauserGroup/<repo-name>")'
+    model_card = f"""---
+license: mit
+library_name: transformers
+pipeline_tag: fill-mask
+tags:
+- chemistry
+- molecules
+- {representation.lower()}
+- modernbert
+- masked-language-modeling
+---
+
+# ModernMolBERT {representation} Masked Language Model
+
+This checkpoint was trained from scratch with ModernBERT for {representation} masked language modeling.
+
+## Representation
+
+`{representation}`
+
+{input_text}
+
+## Tokenizer
+
+{tokenizer_text}
 
 ## Dataset
 
 `{args.dataset_name}`
 
-SELFIES column: `{args.selfies_column}`
+Molecule column: `{args.molecule_column}`
 
 ## Model
 
@@ -1028,11 +1049,7 @@ from transformers import AutoTokenizer
 
 model = AutoModelForMaskedLM.from_pretrained("HauserGroup/<repo-name>")
 
-tokenizer = AutoTokenizer.from_pretrained(
-    "HauserGroup/<repo-name>",
-    subfolder="ape_tokenizer",
-    trust_remote_code=True,
-)
+{tokenizer_loading}
 ```
 
 For local validation before upload, replace `"HauserGroup/<repo-name>"` with the
@@ -1054,6 +1071,9 @@ def main() -> None:
             raise ValueError("--hf_login was set but HF_TOKEN is not available.")
         login(token=hf_token)
 
+    tokenizer, tokenizer_metadata, tokenizer_vocab_path, tokenizer_metadata_path = (
+        read_training_tokenizer(args)
+    )
     args = resolve_dataset_args(args)
     backend = detect_backend(args)
     args = adjust_args_for_backend(args, backend)
@@ -1077,21 +1097,16 @@ def main() -> None:
     log(f"Backend: {backend}")
     log(f"bf16={args.bf16}, fp16={args.fp16}")
     log(f"Dataset: {args.dataset_name}")
-    log(f"SELFIES column: {args.selfies_column}")
+    log(f"Molecule column: {args.molecule_column}")
     log(f"Train split: {args.train_split}")
     log(f"Validation split: {args.validation_split}")
     log(f"Use validation split: {args.use_validation_split}")
+    log(f"Tokenizer: {args.tokenizer_algorithm} {args.representation} ({tokenizer_vocab_path})")
 
-    log("Loading and validating tokenizer...")
-    (
-        tokenizer,
-        _tokenizer_metadata,
-        tokenizer_vocab_path,
-        tokenizer_metadata_path,
-        vocab_size,
-        special_ids,
-        tokenizer_stats,
-    ) = load_and_validate_tokenizer(args)
+    log("Validating tokenizer...")
+    vocab_size, special_ids, tokenizer_stats = validate_tokenizer_for_training(
+        args, tokenizer, tokenizer_metadata
+    )
 
     log(f"Vocabulary size: {vocab_size}")
     log(f"Special token IDs: {special_ids}")
@@ -1144,7 +1159,7 @@ def main() -> None:
         span_p_geom=args.span_p_geom,
         span_max_length=args.span_max_length,
         heteroatom_start_weight=args.heteroatom_start_weight,
-        ids_to_tokens=dict(tokenizer.ids_to_tokens),
+        ids_to_tokens={index: token for token, index in tokenizer.get_vocab().items()},
     )
 
     report_to = [] if args.report_to == "none" else [args.report_to]
@@ -1170,7 +1185,7 @@ def main() -> None:
     if not one:
         raise RuntimeError(
             "No training examples available after filtering. "
-            "Check dataset, split, and SELFIES column."
+            "Check dataset, split, and molecule column."
         )
 
     batch = collator(one)
@@ -1245,6 +1260,7 @@ def main() -> None:
         metadata_path=tokenizer_metadata_path,
         output_dir=output_dir,
         final_model_dir=final_dir,
+        model_max_length=args.max_seq_length,
     )
 
     metrics = train_result.metrics
@@ -1296,8 +1312,11 @@ def main() -> None:
     print("Done.")
     print(f"Final model: {final_dir}")
     print(f"Hub-ready folder: {final_dir}")
-    print("Load tokenizer from final_model/ape_tokenizer with trust_remote_code=True")
-    print(f"Tokenizer vocabulary: {final_dir / 'vocab.json'}")
+    if args.tokenizer_algorithm == APE:
+        print("Load tokenizer from final_model/ape_tokenizer with trust_remote_code=True")
+        print(f"Tokenizer vocabulary: {final_dir / 'vocab.json'}")
+    else:
+        print(f"Load tokenizer from {final_dir} with AutoTokenizer")
 
 
 if __name__ == "__main__":

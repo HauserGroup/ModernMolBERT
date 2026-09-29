@@ -87,16 +87,19 @@ training at 200 steps, so its loss is not a scientific result.
 
 ```bash
 uv run python -m modernmolbert.train_selfies_ape_modernbert \
-  --debug --output_dir runs/revision_clean_small_v1_debug \
+  --debug --output_dir runs/revision_clean_small_v1_global_shuffle_debug \
   --dataset_name data/pretrain/chembl36_selfies --selfies_column selfies \
   --train_split train --use_validation_split --validation_split valid \
+  --global_train_shuffle \
   --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json \
   --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.metadata.json \
   --require_corpus_only_vocab --model_size small --max_seq_length 128 \
-  --masking_strategy standard --mlm_probability 0.15 --no-bf16
+  --masking_strategy standard --mlm_probability 0.15 \
+  --per_device_train_batch_size 128 --gradient_accumulation_steps 2 \
+  --learning_rate 4e-4 --seed 42 --no-bf16
 ```
 
-Reload `runs/revision_clean_small_v1_debug/final_model` with
+Reload `runs/revision_clean_small_v1_global_shuffle_debug/final_model` with
 `AutoModelForMaskedLM` and load its tokenizer from the `ape_tokenizer/`
 subdirectory, as in [tests.md](tests.md). Require finite logits and a
 successful validation pass before the full run.
@@ -111,13 +114,18 @@ batch of 256, using 128 × 2 gradient accumulation as a proposed hardware
 arrangement. Freeze that arrangement and precision before launch; record
 any difference from the archived run. Keep the evaluation schedule aligned
 with the save schedule. `--no-bf16` is the portable full-precision setting;
-supported CUDA hardware may use `--bf16`.
+supported CUDA hardware may use `--bf16`. The local training Parquet is ordered
+by ChEMBL identifier. `--global_train_shuffle` first shuffles all training
+rows as an Arrow index, then applies the streaming buffer shuffle. This
+changes the archived data order without changing the training file or the
+tokenizer's corpus hash; its cache is kept under the new run directory.
 
 ```bash
 uv run python -m modernmolbert.train_selfies_ape_modernbert \
   --output_dir runs/revision_clean_small_v1 \
   --dataset_name data/pretrain/chembl36_selfies --selfies_column selfies \
   --train_split train --use_validation_split --validation_split valid \
+  --global_train_shuffle \
   --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json \
   --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.metadata.json \
   --require_corpus_only_vocab --model_size small --max_seq_length 128 \

@@ -8,8 +8,8 @@ below identify them.
 | Step | Status |
 |---|---|
 | 1. Corpus-only tokenizer | Trained 2026-09-28 21:48 UTC; verified 2026-09-29 (below) |
-| 2. Validate and preflight | Passed 2026-09-29 (below) |
-| 3. Full encoder pretraining | Not started; decide the open points below first |
+| 2. Validate and preflight | Passed 2026-09-29, including globally shuffled debug run and reload (below) |
+| 3. Full encoder pretraining | Not started; use the documented full-run settings after freezing the code revision |
 | 4. Re-embed and re-score | Not started |
 | 5. CV selection and common rows | Not started |
 
@@ -157,10 +157,11 @@ By dataset: HIV 98, CYP2D6 12, CYP2C9 10, SIDER 8, CYP2C19 7, Tox21 7, ClinTox
 5, hERG-Karim 5, CYP1A2 4, CYP3A4 4, BACE 2, CYP3A4-substrate 2, and one each
 in CYP2C9-substrate, CYP2D6-substrate, 3CLPro and hERG.
 
-### Debug pretraining and reload
+### Initial debug pretraining and reload (before global shuffle)
 
-- **Command:** as in [revision_run.md](revision_run.md) §2 (`--debug`,
-  `--require_corpus_only_vocab`, `--no-bf16`).
+- **Command:** the earlier §2 command (`--debug`,
+  `--require_corpus_only_vocab`, `--no-bf16`), without the later
+  `--global_train_shuffle` option. Output: `runs/revision_clean_small_v1_debug`.
 - **Environment:** MPS backend, batch 128 × 2 accumulation, 200 steps. The
   command omits `--learning_rate` and `--seed`, so the defaults applied
   (1e-4, seed 13).
@@ -175,21 +176,42 @@ in CYP2C9-substrate, CYP2D6-substrate, 3CLPro and hERG.
   - `[C].[O]` and `[Na+1].[Cl-1]` tokenise losslessly without unknowns.
 - **Log:** `outputs/audit/revision_clean_small_v1/debug_train.log`.
 
+### Globally shuffled debug pretraining and reload
+
+- **Command:** [revision_run.md](revision_run.md) §2 with `--global_train_shuffle`,
+  seed 42, learning rate `4e-4`, standard masking, and `--no-bf16`. Output:
+  `runs/revision_clean_small_v1_global_shuffle_debug`.
+- **Data and hardware:** the exact 2,390,314-row training Parquet passed the
+  corpus-only hash gate, then an Arrow index over all rows was shuffled. The
+  200-step run used MPS with batch 128 × 2 accumulation and took 259 s.
+- **Result:** training loss 4.6749; final validation loss 3.3161, perplexity
+  27.552. These debug losses are readiness checks, not paper estimates.
+- **Reload check:** `AutoModelForMaskedLM` and the bundled tokenizer load;
+  logits are finite for `[C][C][O]`, `[C].[O]`, and `[Na+1].[Cl-1]`, and all
+  three strings round-trip. The saved model has vocabulary size 588 and valid
+  BOS/CLS 0, PAD 1, EOS/SEP 2. `run_args.json` records global shuffle,
+  seed 42, and learning rate `4e-4`.
+- **Log:** `outputs/audit/revision_clean_small_v1/global_shuffle_debug_train.log`.
+
 ## Open points before step 3
 
-1. **Pretraining data order.** Training streams the ChEMBL-ID-ordered
-   `train.parquet` through a 100,000-row shuffle buffer. Each pass therefore
-   runs roughly in registration order; the archived runs made about 3.2 passes
-   (30,000 × 256 / 2,390,314). The archived small run's training loss drops
-   at each pass boundary (±600 steps), more than the within-pass trend:
-   0.619 → 0.580, 0.452 → 0.439, 0.377 → 0.354.
-   - A global shuffle needs a pre-shuffled training file with a new tokenizer
-     scan hash, or a loader change.
-   - Decide before the full run and record the choice here.
-2. **Special-token IDs in the model config.** The config inherits ModernBERT's
-   `cls_token_id` 50281 and `sep_token_id` 50282, outside the 588-token
-   vocabulary. transformers warns on load. The archived released small config
-   has the same values. Set them to valid IDs or `None` before release.
+1. **Pretraining data order: implementation changed, full run pending.** The
+   archived loader streams the ChEMBL-ID-ordered `train.parquet` through a
+   100,000-row buffer, causing roughly registration-order passes. The revised
+   `--global_train_shuffle` loads only the SELFIES column into a local Arrow
+   cache under the new run directory, shuffles all 2,390,314 row indices, then
+   applies the usual streaming buffer shuffle. It retains the original Parquet
+   and corpus-only tokenizer hash. A ten-row smoke test on the full Parquet
+   succeeded; the 100-row synthetic test confirms complete coverage, a stable
+   seed, and a different order after `set_epoch(1)`. The 200-step trainer run
+   and model reload passed. The archived runs made about
+   3.2 passes (30,000 × 256 / 2,390,314), with loss drops at pass boundaries
+   (0.619 → 0.580, 0.452 → 0.439, 0.377 → 0.354).
+2. **Special-token IDs: fixed for future runs.** The archived config inherits
+   ModernBERT's `cls_token_id` 50281 and `sep_token_id` 50282, outside the
+   588-token vocabulary. The revised builder sets them to molecular BOS 0 and
+   EOS 2. The debug `final_model/config.json` confirms these IDs. The released
+   historical config remains unchanged; verify the full-run config as well.
 3. **Precision and hardware.** The guide uses `--no-bf16`; the archived runs
    used bf16. Record the actual choice.
 4. **Benchmark coverage.** 168 test rows will fail embedding. Report per-model

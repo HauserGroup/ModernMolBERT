@@ -18,6 +18,12 @@ Main-analysis exclusions:
 
 The hetero-span ablation (MMB-small-hetero) is excluded by default; pass
 --include-hetero-span (and build the matrix with the same flag) to add it back.
+
+For a newly trained model, pass the matrix written by
+``build_paper_results.py --task-matrix`` with ``--matrix`` and name the model
+with ``--reference``. Fig_2 is skipped unless the released small, base and
+span columns are present. The task-group distribution figure is then drawn
+from a source CSV written from the same matrix into ``--source-data-dir``.
 """
 
 import argparse
@@ -37,17 +43,33 @@ parser.add_argument(
     action="store_true",
     help="Add the MMB-small-hetero (hetero_span masking) panel to Fig_2.",
 )
+ROOT = Path(__file__).resolve().parents[2]
+parser.add_argument(
+    "--matrix", type=Path, default=ROOT / "outputs/eval/paper/results_matrix_25task.csv"
+)
+parser.add_argument("--figure-dir", type=Path, default=ROOT / "paper/figures")
+parser.add_argument(
+    "--reference", default="MMB-base", help="ModernMolBERT column compared with the baselines."
+)
+parser.add_argument(
+    "--source-data-dir",
+    type=Path,
+    default=None,
+    help="Write the task-group source CSV from the matrix here and plot from it "
+    "(default: plot the bundled paper/source_data CSV).",
+)
 ARGS = parser.parse_args()
 
-ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from modernmolbert.visualize.regen_groupfig import generate_group_distribution_figure
 
-MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
-FIGDIR = ROOT / "paper/figures"
+MATRIX = ARGS.matrix
+FIGDIR = ARGS.figure_dir
+FIGDIR.mkdir(parents=True, exist_ok=True)
+BASELINES = ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer"]
 EXCLUDED_DATASETS = {"ogbg-moltoxcast"}
 
 GROUP_COLORS = {
@@ -94,6 +116,9 @@ if ARGS.include_hetero_span and "MMB-small-hetero" not in df.columns:
         f"{MATRIX} has no MMB-small-hetero column; rerun "
         "build_paper_results.py with --include-hetero-span first."
     )
+if absent := [m for m in [*BASELINES, ARGS.reference] if m not in df.columns]:
+    raise ValueError(f"{MATRIX} lacks model columns {absent}")
+MMB_MODELS = [c for c in df.columns if c.startswith("MMB-") and c != "MMB-small-hetero"]
 
 
 def paired_panel(ax, xcol, ycol, gap=0.05, lim=(0.45, 1.0)):
@@ -164,17 +189,22 @@ panels = [
 ]
 if ARGS.include_hetero_span:
     panels.append(("MMB-small", "MMB-small-hetero", "(c) hetero-span masking"))
-fig, axes = plt.subplots(1, len(panels), figsize=(4 * len(panels), 4.3))
-for ax, (x, y, title) in zip(axes, panels, strict=False):
-    paired_panel(ax, x, y)
-    ax.set_title(title, fontsize=10)
-group_legend(fig)
-fig.tight_layout(rect=(0, 0.05, 1, 1))
-fig.savefig(FIGDIR / "Fig_2.pdf", bbox_inches="tight")
-plt.close(fig)
+written = []
+if all({x, y} <= set(df.columns) for x, y, _ in panels):
+    fig, axes = plt.subplots(1, len(panels), figsize=(4 * len(panels), 4.3))
+    for ax, (x, y, title) in zip(axes, panels, strict=False):
+        paired_panel(ax, x, y)
+        ax.set_title(title, fontsize=10)
+    group_legend(fig)
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
+    fig.savefig(FIGDIR / "Fig_2.pdf", bbox_inches="tight")
+    plt.close(fig)
+    written.append("Fig_2.pdf")
+else:
+    print("Skipping Fig_2: the internal comparison needs the released small, base and span columns")
 
-# ---------- Figure baselines: best (MMB-base) vs 4 baselines ----------
-BEST = "MMB-base"
+# ---------- Figure baselines: reference model vs 4 baselines ----------
+BEST = ARGS.reference
 fig, axes = plt.subplots(1, 4, figsize=(15.5, 4.3))
 for ax, base in zip(axes, ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer"], strict=False):
     paired_panel(ax, base, BEST)
@@ -183,17 +213,18 @@ group_legend(fig)
 fig.tight_layout(rect=(0, 0.05, 1, 1))
 fig.savefig(FIGDIR / "Fig_baselines.pdf", bbox_inches="tight")
 plt.close(fig)
+written.append("Fig_baselines.pdf")
 
 # ---------- Bar chart: per-group mean ROC-AUC ----------
-bar_models = ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer", "MMB-small", "MMB-base"]
-bar_colors = ["#7f7f7f", "#bcbd22", "#17becf", "#9467bd", "#1f77b4", "#d62728"]
+bar_models = [*BASELINES, *MMB_MODELS]
+bar_colors = ["#7f7f7f", "#bcbd22", "#17becf", "#9467bd", "#1f77b4", "#d62728", "#8c564b"]
 means = {m: [df.loc[df["group"] == g, m].mean() for g in GROUP_ORDER] for m in bar_models}
 x = np.arange(len(GROUP_ORDER))
 w = 0.13
 fig, ax = plt.subplots(figsize=(9, 4.5))
 for i, m in enumerate(bar_models):
     ax.bar(
-        x + (i - 2.5) * w,
+        x + (i - (len(bar_models) - 1) / 2) * w,
         means[m],
         w,
         label=m,
@@ -211,13 +242,29 @@ ax.set_axisbelow(True)
 fig.tight_layout()
 fig.savefig(FIGDIR / "Fig_groupbars.pdf", bbox_inches="tight")
 plt.close(fig)
+written.append("Fig_groupbars.pdf")
 
+group_csv = None
+if ARGS.source_data_dir is not None:
+    ARGS.source_data_dir.mkdir(parents=True, exist_ok=True)
+    group_csv = ARGS.source_data_dir / "Fig_task_group_distributions.csv"
+    long = df[["group", *bar_models]].melt(
+        id_vars="group", var_name="model", value_name="roc_auc", ignore_index=False
+    )
+    pd.DataFrame(
+        {
+            "task_group": long["group"],
+            "task": [SHORT.get(str(t), str(t)) for t in long.index],
+            "model": long["model"],
+            "roc_auc_x100": (long["roc_auc"] * 100).round(1),
+        }
+    ).to_csv(group_csv, index=False)
 generate_group_distribution_figure(
+    csv_path=group_csv,
     output_path=FIGDIR / "Fig_task_group_distributions.pdf",
     verbose=False,
+    models=bar_models if group_csv is not None else None,
 )
+written.append("Fig_task_group_distributions.pdf")
 
-print(
-    "Wrote Fig_2.pdf, Fig_baselines.pdf, Fig_groupbars.pdf, Fig_task_group_distributions.pdf to",
-    FIGDIR,
-)
+print("Wrote", ", ".join(written), "to", FIGDIR)

@@ -314,3 +314,50 @@ number of retained rows for each model and baseline, scoring-grid/version
 hashes, and the handling of conversion failures. Report any test-set overlap
 with pretraining separately. Cite the historical preprint results only as
 historical results until these checks pass.
+
+## 6. Build the paper tables and figures from the task matrix
+
+The paper reports the retrained small model (`MMB-small`) against the four
+baselines. The released small, base and span checkpoints are preprint history:
+their archived scores used test-selected heads and do not enter the rebuilt
+tables or figures, and the internal-comparison figure (`Fig_2`) is dropped.
+Every result below comes from the one `task_matrix.csv` written in §5. Write
+outputs to a new directory and copy them into the manuscript after review;
+the default output paths hold the archived analysis.
+
+```bash
+OUT=outputs/eval/revision_clean_small_v1/paper
+uv run python scripts/paper/build_paper_results.py \
+  --task-matrix outputs/eval/revision_clean_small_v1/common_rows/task_matrix.csv \
+  --reference MMB-small --out-dir $OUT
+uv run python scripts/paper/make_appendix_table.py \
+  --matrix $OUT/results_matrix_25task.csv --out $OUT/table_pertask.tex \
+  --models ECFP4 ChemBERTa-2 SELFormer MoLFormer MMB-small
+uv run python scripts/paper/compute_bootstrap_cis.py \
+  --matrix $OUT/results_matrix_25task.csv --out_dir $OUT --figure_dir $OUT/figures \
+  --reference MMB-small --baselines SELFormer ChemBERTa-2 ECFP4 MoLFormer
+uv run python scripts/paper/make_paper_figures.py \
+  --matrix $OUT/results_matrix_25task.csv --figure-dir $OUT/figures \
+  --reference MMB-small --source-data-dir $OUT/source_data
+uv run python scripts/paper/make_loss_curves.py \
+  --run-dir runs/revision_clean_small_v1 --figure-dir $OUT/figures
+```
+
+What each writes, and where it goes in the manuscript:
+
+| Output | Manuscript |
+|---|---|
+| `table2.tex`, `group_means.csv` | `tables/main_results_table.tex` (Table 2) |
+| `stats.txt` | win counts, Wilcoxon tests and means quoted in Results |
+| `table_pertask.tex` | `tables/pertask_table.tex` (all 25 datasets, including Tox21 and MUV) |
+| `table_bootstrap.tex`, `bootstrap_cis.csv` | `tables/table_bootstrap.tex`; `source_data/` |
+| `figures/bootstrap_ci_forest.pdf` | `figures/bootstrap_ci_forest.pdf` |
+| `figures/Fig_baselines.pdf` | `figures/Fig_baselines.pdf` |
+| `figures/Fig_task_group_distributions.pdf`, `source_data/Fig_task_group_distributions.csv` | `figures/Fig5_task_group_distributions.pdf`; `source_data/` |
+| `figures/Supplementary_2.pdf` | `figures/Supplementary_2.pdf` (loss panel only: the revised trainer does not log masked-token accuracy) |
+
+`Fig_2` is not written, because it needs the released small, base and span
+columns. Remove it and its text from the manuscript. Fill in by hand, from
+existing audits rather than a script: the tokenizer table (use
+`tokenizer_population_audit_corpus_v1.json` for the 588-token vocabulary) and
+the new model's parameter count in the embedders table.

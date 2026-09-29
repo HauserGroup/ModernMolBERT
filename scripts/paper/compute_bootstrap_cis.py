@@ -437,7 +437,8 @@ def emit_ci_forest_plot(df: pd.DataFrame, out_dir: Path) -> None:
 
     ax.set_yticks(y)
     ax.set_yticklabels(plot_df["model_b"].tolist())
-    ax.set_xlabel(r"Mean $\Delta$ ROC-AUC (MMB-base - baseline, x100)")
+    reference = " / ".join(dict.fromkeys(str(m) for m in df["model_a"]))
+    ax.set_xlabel(rf"Mean $\Delta$ ROC-AUC ({reference} - baseline, x100)")
     ax.set_ylabel("Baseline embedder")
     ax.set_title("Paired bootstrap confidence intervals")
     ax.grid(axis="x", color=GRID_COLOR, lw=0.7)
@@ -454,7 +455,9 @@ def emit_ci_forest_plot(df: pd.DataFrame, out_dir: Path) -> None:
         color="#525252",
     )
     handles = [
-        Line2D([0], [0], marker="o", color=BREWER_DARK2["mmb"], lw=2, label="MMB-base advantage"),
+        Line2D(
+            [0], [0], marker="o", color=BREWER_DARK2["mmb"], lw=2, label=f"{reference} advantage"
+        ),
         Line2D(
             [0],
             [0],

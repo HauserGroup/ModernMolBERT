@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Per-task full ROC-AUC table (Appendix C / S3) from the main-analysis matrix.
 
-Main-analysis exclusions:
-- ogbg-moltox21
-- ogbg-molmuv
-- ogbg-moltoxcast
+Covers the 25 benchmark datasets; only ogbg-moltoxcast is excluded.
 
-The exploratory hetero-span variant (MMB-small-hetero) is kept here as a
-supplementary column, flagged as exploratory and not used for any claim; pass
---exclude-hetero-span to drop it.
+By default the columns are the four baselines and the released checkpoints
+(small, base, span), plus the exploratory hetero-span variant unless
+--exclude-hetero-span is passed. For a newly trained model, pass the matrix
+written by build_paper_results.py --task-matrix and list its columns with
+--models, e.g. ``--models ECFP4 ChemBERTa-2 SELFormer MoLFormer MMB-small``.
 """
 
 import argparse
@@ -22,12 +21,19 @@ parser.add_argument(
     action="store_true",
     help="Drop the exploratory MMB-small-hetero (hetero_span masking) column.",
 )
+ROOT = Path(__file__).resolve().parents[2]
+parser.add_argument(
+    "--matrix", type=Path, default=ROOT / "outputs/eval/paper/results_matrix_25task.csv"
+)
+parser.add_argument("--out", type=Path, default=ROOT / "outputs/eval/paper/table_pertask.tex")
+parser.add_argument(
+    "--models", nargs="+", default=None, help="Matrix columns to show, in order (new-model runs)."
+)
 ARGS = parser.parse_args()
 
-ROOT = Path(__file__).resolve().parents[2]
-MATRIX = ROOT / "outputs/eval/paper/results_matrix_25task.csv"
-OUT = ROOT / "outputs/eval/paper/table_pertask.tex"
-EXCLUDED_DATASETS = {"ogbg-moltox21", "ogbg-molmuv", "ogbg-moltoxcast"}
+MATRIX = ARGS.matrix
+OUT = ARGS.out
+EXCLUDED_DATASETS = {"ogbg-moltoxcast"}
 
 PRETTY = {
     "Bioavailability_Ma": "Bioavailability",
@@ -52,7 +58,9 @@ PRETTY = {
     "ogbg-molbbbp": "BBBP",
     "ogbg-molclintox": "ClinTox",
     "ogbg-molhiv": "HIV",
+    "ogbg-molmuv": "MUV",
     "ogbg-molsider": "SIDER",
+    "ogbg-moltox21": "Tox21",
 }
 GROUP_LABEL = {
     "TDC-ADME": "TDC -- ADME",
@@ -74,7 +82,23 @@ LEGEND = (
     r"\emph{MMB-s} = \model{}-small (standard), "
     r"\emph{MMB-b} = \model{}-base, \emph{MMB-sp} = small span masking"
 )
-if not ARGS.exclude_hetero_span:
+SHORT = {
+    "ECFP4": "ECFP4",
+    "ChemBERTa-2": "ChBa-2",
+    "SELFormer": "SELF.",
+    "MoLFormer": "MoLF.",
+    "MMB-small": "MMB-s",
+    "MMB-base": "MMB-b",
+    "MMB-small-span": "MMB-sp",
+}
+if ARGS.models is not None:
+    COLS = [str(c) for c in ARGS.models]
+    HEAD = [SHORT.get(c, c) for c in COLS]
+    mmb = [c for c in COLS if c.startswith("MMB-")]
+    LEGEND = ", ".join(
+        rf"\emph{{{SHORT.get(c, c)}}} = \model{{}}-{c.removeprefix('MMB-')}" for c in mmb
+    )
+elif not ARGS.exclude_hetero_span:
     COLS.append("MMB-small-hetero")
     HEAD.append("MMB-h")
     LEGEND += (

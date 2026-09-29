@@ -1,9 +1,12 @@
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from build_common_row_benchmark import (
+    common_task_matrix,
     main,
     paired_task_differences,
     rank_roc_auc,
@@ -15,7 +18,8 @@ from modernmolbert.utils import file_sha256
 LABELS = np.array([0, 1, 0, 1, 0, 1, 0, 1], dtype=float)
 TEST_ROWS = [4, 5, 6, 7]
 SCORES = {
-    ("A", "rf"): {4: 0.2, 5: 0.9, 6: 0.6, 7: 0.7},
+    # The high-scoring negative is absent from B: A's native and common AUCs differ.
+    ("A", "rf"): {4: 0.95, 5: 0.9, 6: 0.6, 7: 0.7},
     ("B", "ridge"): {5: 0.8, 6: 0.3, 7: 0.4},
 }
 
@@ -109,13 +113,29 @@ def test_heads_selected_by_cv_and_scored_on_common_rows(tmp_path):
 
     candidates = pd.read_csv(out / "head_candidates.csv")
     assert candidates["selected"].sum() == 2
+    native = pd.read_csv(out / "task_matrix.csv", index_col=0)
+    matrix = pd.read_csv(out / "common_task_matrix.csv", index_col=0)
+    assert native.loc["toy", "A"] == 0.5
+    assert matrix.loc["toy", "A"] == 1.0
+    assert matrix.loc["toy", "B"] == common.loc["B", "roc_auc_common"]
+    status = pd.read_csv(out / "common_task_matrix_status.csv")
+    assert status["status"].item() == "ok"
+    manifest = json.loads((out / "manifest.json").read_text())
+    details = manifest["task_matrices"]["common_task_matrix.csv"]
+    assert details["embedders"] == ["A", "B"]
+    assert details["training_rows_and_cv_folds_verified"] is False
 
 
 def test_score_mismatch_excludes_model_from_common_rows(tmp_path):
-    selected, common, _ = _run(tmp_path, overrides={("B", "ridge"): 0.5})
+    selected, common, out = _run(tmp_path, overrides={("B", "ridge"): 0.5})
     assert selected.loc["B", "archive_status"] == "score_mismatch"
     assert list(common["embedder"]) == ["A"]
     assert common["n_common_test_rows"].item() == 4
+    matrix = pd.read_csv(out / "common_task_matrix.csv", index_col=0)
+    assert matrix.loc["toy"].isna().all()  # Do not report A on a different population.
+    status = pd.read_csv(out / "common_task_matrix_status.csv")
+    assert status["status"].item() == "incomplete_cohort"
+    assert status["missing_models"].item() == "B"
 
 
 def test_archive_from_different_prepared_file_is_excluded(tmp_path):
@@ -183,6 +203,12 @@ def test_split_overlap_sensitivity_excludes_same_rows_for_every_model(tmp_path):
     assert set(primary["n_common_test_rows"]) == {3}
     assert set(sensitivity["n_common_test_rows"]) == {2}
     assert set(sensitivity["n_scored_endpoints_common"]) == {1}
+    matrix = pd.read_csv(out / "common_task_matrix_no_split_overlap.csv", index_col=0)
+    for row in sensitivity.to_dict("records"):
+        assert matrix.loc[row["dataset"], row["embedder"]] == row["roc_auc_common"]
+    status = pd.read_csv(out / "common_task_matrix_no_split_overlap_status.csv")
+    assert status["status"].item() == "ok"
+    assert status["n_common_test_rows"].item() == 2
 
     bad_audit = pd.read_csv(audit)
     bad_audit.loc[0, "prepared_sha256"] = "0" * 64
@@ -292,6 +318,7 @@ def test_table_baselines_are_cv_selected_but_never_row_compared(tmp_path):
             "T",
             "--matrix-labels",
             "T=Table model",
+            "A=Reference",
             "--predictions-dir",
             str(predictions),
             "--prepared-dir",
@@ -315,4 +342,73 @@ def test_table_baselines_are_cv_selected_but_never_row_compared(tmp_path):
 
     matrix = pd.read_csv(out / "task_matrix.csv", index_col=0)
     assert matrix.loc["toy", "Table model"] == 0.70
-    assert matrix.loc["toy", "A"] == selected.loc["A", "test_metric"]
+    assert matrix.loc["toy", "Reference"] == selected.loc["A", "test_metric"]
+    common_matrix = pd.read_csv(out / "common_task_matrix.csv", index_col=0)
+    assert set(common_matrix.columns) == {"Reference", "B"}
+    assert common_matrix.loc["toy", "Reference"] == 1.0
+
+
+def test_no_verified_archives_still_writes_missing_common_matrix(tmp_path):
+    _, _, out = _run(tmp_path, drop_row_ids=("A", "B"))
+    matrix = pd.read_csv(out / "common_task_matrix.csv", index_col=0)
+    assert list(matrix.columns) == ["A", "B"]
+    assert matrix.loc["toy"].isna().all()
+    status = pd.read_csv(out / "common_task_matrix_status.csv")
+    assert status["missing_models"].item() == "A;B"
+
+
+@pytest.mark.parametrize(
+    ("n_rows", "auc", "expected_status"),
+    [(0, None, "no_common_rows"), (3, np.nan, "undefined_roc_auc")],
+)
+def test_common_matrix_keeps_unscorable_dataset_missing(n_rows, auc, expected_status):
+    scores = pd.DataFrame(
+        {
+            "dataset": ["toy"] * 2,
+            "embedder": ["A", "B"],
+            "n_common_test_rows": [n_rows] * 2,
+            "n_models_compared": [2] * 2,
+        }
+    )
+    if auc is not None:
+        scores["roc_auc_common"] = auc
+    matrix, status = common_task_matrix(scores, ["toy"], ["A", "B"], {})
+    assert matrix.loc["toy"].isna().all()
+    assert status["status"].item() == expected_status
+
+
+def test_common_matrix_does_not_change_cohort_for_missing_dataset():
+    scores = pd.DataFrame(
+        {
+            "dataset": ["toy"],
+            "embedder": ["A"],
+            "n_common_test_rows": [4],
+            "n_models_compared": [1],
+            "roc_auc_common": [0.9],
+        }
+    )
+    matrix, status = common_task_matrix(scores, ["toy", "absent"], ["A", "B"], {})
+    assert matrix.isna().all().all()
+    assert status.set_index("dataset").loc["toy", "missing_models"] == "B"
+    assert status.set_index("dataset").loc["absent", "missing_models"] == "A;B"
+
+
+def test_common_matrix_rejects_ambiguous_labels():
+    with pytest.raises(ValueError, match="column labels must be unique"):
+        common_task_matrix(pd.DataFrame(), ["toy"], ["A", "B"], {"A": "B"})
+
+
+def test_requested_missing_model_cannot_silently_shrink_cohort(tmp_path):
+    results, _, _ = _write_inputs(tmp_path)
+    with pytest.raises(ValueError, match="Requested embedders not found"):
+        main(
+            [
+                "--results",
+                str(results),
+                "--embedders",
+                "A",
+                "Missing",
+                "--output-dir",
+                str(tmp_path / "out"),
+            ]
+        )

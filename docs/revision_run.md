@@ -1,4 +1,10 @@
-# Clean small-model revision run
+# Historical clean small-model run guide
+
+> **Historical one-model recipe.** The subsequent five-model SSH/GPU proposal is in the
+> [canonical master plan](</Users/skn506/HauserGroup Dropbox/Jakob Madsen/PhD/Manuscripts/ModernMolBERT pre-print manuscript/MASTER_REVISION_PLAN.md#gpu-training-plan--five-model-experiment-draft-29-september-2026>), G1–G7.
+> It uses five fresh encoders and supersedes this document's one-model/partial-run
+> prescription for that campaign. Keep the details below as the earlier run record
+> and command reference; do not launch the expanded experiment from these old commands.
 
 This is a proposed, **single full run** for the submission revision: train one
 APE tokenizer using only the ChEMBL 36 training split, pretrain one small
@@ -269,7 +275,7 @@ the common-row and paired per-dataset outputs; the paper must say that their
 test molecules could not be matched to ours. This keeps the revision minimal:
 no baseline is re-embedded.
 
-It writes seven files when a split-overlap audit is supplied:
+It writes the following outputs (sensitivity files require a split-overlap audit):
 
 - `head_candidates.csv`: the selection record.
 - `selected_heads.csv`: archive checks, coverage, and file hashes.
@@ -285,7 +291,27 @@ It writes seven files when a split-overlap audit is supplied:
   the pairs to one model against each other, and `--n-boot` sets the resamples.
 - `task_matrix.csv`: test ROC-AUC of each CV-selected head, one column per
   model (verified archives and table baselines), labelled by `--matrix-labels`.
-- `manifest.json`: input hashes and code revision.
+- `common_task_matrix.csv`: ROC-AUC recomputed on the shared test rows for a
+  fixed cohort of archive-backed models; imported table baselines are excluded.
+  Pass all intended local model names through `--embedders` so a completely
+  missing model is an error. If any model fails verification or lacks a dataset,
+  every score for that dataset is left missing, rather than using a smaller cohort.
+- `common_task_matrix_status.csv`: dataset status (`ok`, `incomplete_cohort`,
+  `no_common_rows`, or `undefined_roc_auc`), expected/verified model counts,
+  missing models and the common test-row count where defined.
+- `common_task_matrix_no_split_overlap.csv` and
+  `common_task_matrix_no_split_overlap_status.csv`: the same export and eligibility
+  checks after excluding the flagged supervised-overlap rows.
+- `manifest.json`: input hashes, code revision, arguments and explicit definitions
+  of each task matrix, including the fixed cohort and status counts.
+
+Use `common_task_matrix.csv` for internal comparisons and bootstrap summaries on
+verified shared test molecules. The older `task_matrix.csv` retains its meaning:
+each model's own test score, including table-only baselines. The common-row export
+does **not** verify shared supervised training rows or CV folds; those require the
+additional G7 safeguards in the master plan. Missing dataset rows stay visible as
+NaNs and must be accounted for when reporting aggregate denominators.
+
 
 For the aggregate intervals, run `scripts/paper/compute_bootstrap_cis.py` on
 that task matrix:

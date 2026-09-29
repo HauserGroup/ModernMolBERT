@@ -172,11 +172,34 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
   --batch-size 32 --device auto --max-seq-length 128 --pooling mean
 
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
-  --datasets all --heads rf ridge knn \
+  --datasets all --skip_datasets ogbg-molhiv ogbg-molmuv \
+  --heads rf ridge knn --missing-labels as-negative \
+  --embedder modernmolbert_revision_clean_small_v1 \
+  --output-csv outputs/eval/revision_clean_small_v1/results.csv \
+  --checkpoint-dir outputs/eval/revision_clean_small_v1/checkpoints
+
+uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
+  --datasets ogbg-molhiv ogbg-molmuv \
+  --heads rf ridge --missing-labels as-negative \
   --embedder modernmolbert_revision_clean_small_v1 \
   --output-csv outputs/eval/revision_clean_small_v1/results.csv \
   --checkpoint-dir outputs/eval/revision_clean_small_v1/checkpoints
 ```
+
+Two settings keep the scoring comparable with the imported Praski et al.
+baselines (§5):
+
+- `--missing-labels as-negative` treats missing labels in the multi-endpoint
+  datasets (Tox21 and MUV) as negatives during head fitting and CV, as the
+  scorer behind that table did. The default, `observed`, fits each endpoint on
+  its observed labels only; do not mix the two settings in one results file.
+  Each result row records the setting in its `missing_labels` column. Test
+  ROC-AUC still ignores missing test labels in both settings.
+- kNN is not scored on HIV and MUV. The imported table has no kNN head there
+  (it did not finish on MUV in their runs), so the shared-candidate rule would
+  drop it anyway, and MUV kNN is the slowest head. The second command appends
+  the random-forest and logistic heads for those two datasets to the same
+  results file.
 
 `download.py` uses cached prepared datasets by default. Freeze and verify
 those splits rather than silently replacing them. The 25 entries in

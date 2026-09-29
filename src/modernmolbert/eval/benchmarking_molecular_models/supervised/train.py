@@ -35,6 +35,9 @@ from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
 )
 
 
+MISSING_LABEL_MODES = ("observed", "as-negative")
+
+
 def _grid_n_jobs(pipeline, outer_n_jobs: int) -> int:
     # If any pipeline step already parallelizes internally (RF, KNN with n_jobs=-1),
     # joblib serializes the inner parallelism when GridSearchCV also uses multiple
@@ -53,7 +56,13 @@ def fit_model(
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
+    missing_labels: str = "observed",
 ):
+    # missing_labels chooses how missing multi-endpoint labels (Tox21, MUV) are
+    # handled. "observed" fits each endpoint on its observed labels only.
+    # "as-negative" counts them as negatives, as the scorer behind the imported
+    # Praski et al. results table does; use it when comparing with that table.
+    #
     # n_jobs controls both the estimator's own parallelism (RF tree building,
     # KNN search) and the GridSearchCV fold-level parallelism.
     # Passing a small value (e.g. 4) is the simplest way to cut peak memory when
@@ -64,6 +73,11 @@ def fit_model(
     y_arr = np.asarray(y)
     is_multioutput = y_arr.ndim == 2 and y_arr.shape[1] > 1
     has_missing_labels = bool(np.isnan(y_arr).any()) if y_arr.dtype.kind in {"f", "c"} else False
+    if missing_labels not in MISSING_LABEL_MODES:
+        raise ValueError(f"Unknown missing_labels mode: {missing_labels!r}")
+    if missing_labels == "as-negative" and has_missing_labels:
+        y_arr = np.nan_to_num(y_arr, nan=0.0)
+        has_missing_labels = False
 
     if task == "classification" and is_multioutput and has_missing_labels:
         models = get_clf_models(1, X.dtype, n_jobs=effective_n_jobs)
@@ -240,6 +254,7 @@ def fit_and_eval_embedding(
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
+    missing_labels: str = "observed",
 ) -> HeadResult:
     X_train, y_train = get_train_data(dataset)
     best_model = fit_model(
@@ -249,6 +264,7 @@ def fit_and_eval_embedding(
         model_head=model_head,
         memory_weight=memory_weight,
         n_jobs=n_jobs,
+        missing_labels=missing_labels,
     )
     del X_train, y_train
     X_test, y_test = get_test_data(dataset)

@@ -64,6 +64,13 @@ The scoring heads are `rf`, `ridge`, and `knn`. Their grids are defined in
 `supervised/models.py`; changing them changes benchmark results and
 the `library_hash`.
 
+Multi-endpoint datasets with missing labels (Tox21, MUV) are fitted on observed
+labels only by default (`--missing-labels observed`). Pass
+`--missing-labels as-negative` to count missing labels as negatives during
+fitting and CV, as the original Praski et al. benchmark did; use it when
+comparing with their published results. The setting is recorded in each
+result row's `missing_labels` column.
+
 ## Skipping datasets
 
 Pass `--skip_datasets NAME [NAME ...]` to `score.py` to exclude specific datasets by name.
@@ -171,7 +178,9 @@ prediction files are ignored because they do not include ground-truth labels.
 CSV results use exactly this column order:
 
 ```text
-id,dataset,task,embedder,model,hyperparams,library_hash,cv_metric_name,cv_metric,test_metric_name,test_metric,key
+id,dataset,task,embedder,pooling,pooling_special_tokens_excluded,embedding_model_dir,
+embedding_tokenizer_path,embedding_max_seq_length,model,hyperparams,library_hash,
+missing_labels,cv_metric_name,cv_metric,test_metric_name,test_metric,key
 ```
 
 Column meanings:
@@ -183,6 +192,7 @@ Column meanings:
 - `model`: supervised head, one of `rf`, `ridge`, `knn`;
 - `hyperparams`: sorted JSON of selected `GridSearchCV` parameters;
 - `library_hash`: stable digest of the scoring grids;
+- `missing_labels`: `observed` or `as-negative` handling of missing multi-endpoint labels;
 - `cv_metric_name`, `cv_metric`: model-selection metric and score;
 - `test_metric_name`, `test_metric`: held-out test metric and score;
 - `key`: `{dataset}_{embedder}_{model}`.

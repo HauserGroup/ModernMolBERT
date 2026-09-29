@@ -15,6 +15,7 @@ PRASKI_COLUMNS = [
     "model",
     "hyperparams",
     "library_hash",
+    "missing_labels",
     "cv_metric_name",
     "cv_metric",
     "test_metric_name",

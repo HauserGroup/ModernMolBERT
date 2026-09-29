@@ -88,7 +88,9 @@ Keep the partial checkpoints and log as labelled diagnostics.
 4. Select downstream RF, L2-logistic (historically named `ridge`), and kNN
    heads using training-side CV from a common candidate set per dataset;
    evaluate the selected head on held-out test rows. Head fitting is downstream
-   evaluation, not encoder retraining.
+   evaluation, not encoder retraining. Score with `--missing-labels
+   as-negative` and without kNN on HIV and MUV, to match the imported baseline
+   table (commands in `docs/revision_run.md` §4).
 5. Take the baselines from the imported Praski table with CV-selected heads
    (`--table-results`; see `docs/revision_run.md` §5) and state that their test
    rows cannot be matched to ours. Compare ModernMolBERT models on shared

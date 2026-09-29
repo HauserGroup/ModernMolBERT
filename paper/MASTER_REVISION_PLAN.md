@@ -33,7 +33,31 @@
    ```
 
    Check `selected_heads.csv`: the new encoder's heads should be `ok` and the four baselines `table_only`. `task_matrix.csv` feeds step 4. Keep `task_families.yaml` unchanged.
-3. **[AFTER RETRAIN] Score the new encoder, select heads by CV only from the same shared candidate set as the table baselines, and build the task matrix.** See *Select downstream heads without test data* and *Use a verified shared evaluation*.
+3. **[AFTER RETRAIN] Score the new encoder with the table baselines' scoring rules, select heads by CV only, and build the task matrix. Code IMPLEMENTED (29 September 2026).** Baselines cannot be matched molecule by molecule, so the comparison uses the per-dataset score matrix, not shared test rows; paired per-dataset intervals apply only between ModernMolBERT models, and with the retrained small alone they have nothing to compare. Two scorer settings match the scorer behind the Praski table: `--missing-labels as-negative` (Tox21 and MUV missing labels count as negatives, as in their runs; the setting is recorded in each result row) and no kNN on HIV and MUV (dropped by the shared-head rule anyway; MUV kNN is the slowest job). Run the two `score.py` commands in `docs/revision_run.md` §4, then the Step 2 commands. State in one sentence that the new encoder rejects 168 of 33,562 test molecules (0.5%, 98 in HIV), so its scores use slightly fewer rows than the baselines'; take per-dataset coverage from `selected_heads.csv`. See *Select downstream heads without test data* and *Use a verified shared evaluation*.
+   After the retrain finishes (`runs/revision_clean_small_v1/final_model`), run from the code repository root, then the Step 2 commands:
+
+   ```bash
+   uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernmolbert.py \
+     --datasets all \
+     --model-dir runs/revision_clean_small_v1/final_model \
+     --tokenizer-path runs/revision_clean_small_v1/final_model \
+     --embedder modernmolbert_revision_clean_small_v1 \
+     --batch-size 32 --device auto --max-seq-length 128 --pooling mean
+   uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
+     --datasets all --skip_datasets ogbg-molhiv ogbg-molmuv \
+     --heads rf ridge knn --missing-labels as-negative \
+     --embedder modernmolbert_revision_clean_small_v1 \
+     --output-csv outputs/eval/revision_clean_small_v1/results.csv \
+     --checkpoint-dir outputs/eval/revision_clean_small_v1/checkpoints
+   uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
+     --datasets ogbg-molhiv ogbg-molmuv \
+     --heads rf ridge --missing-labels as-negative \
+     --embedder modernmolbert_revision_clean_small_v1 \
+     --output-csv outputs/eval/revision_clean_small_v1/results.csv \
+     --checkpoint-dir outputs/eval/revision_clean_small_v1/checkpoints
+   ```
+
+   Check that every row of `results.csv` has `missing_labels` = `as-negative` and one row per dataset and head (kNN absent only on HIV and MUV) before running Step 2.
 4. **[AFTER RETRAIN] Rebuild every result from one matrix:** headline and per-task tables, figures, bootstrap and task-family intervals, paired per-dataset wins, and sparse-task endpoint counts. See *Rebuild all derived results together* and the related-task re-run.
 5. **[AFTER RETRAIN] Make the claims match the corrected evidence** across abstract, Results, Discussion and Conclusion. See *Align the central claim throughout*.
 6. **Text fixes that need no new results (can be done now):** the masking-comparison text and Figure 7/10 captions; the factual errors in Figures 1 and 2 (see `FIGURE_1_2_REVISIONS.md`); baseline checkpoint identity and size; the data, tokenizer and settings part of the recipe; a one-sentence justification of the four baselines.

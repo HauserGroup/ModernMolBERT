@@ -847,13 +847,25 @@ def make_eval_dataset(args: argparse.Namespace, tokenizer: "PreTrainedTokenizerB
         return Dataset.from_list(rows)
 
     eval_split = args.validation_split if args.use_validation_split else args.train_split
+    eval_data_files = args.data_files
+    if args.use_validation_split and args.data_files is not None:
+        # --data_files identifies the training Parquet for the global shuffle.
+        # Passing it through to the validation loader would silently read the
+        # training population even when --validation_split is set.
+        validation_source = Path(args.dataset_name) / f"{eval_split}.parquet"
+        if not validation_source.is_file():
+            raise FileNotFoundError(
+                f"Explicit training Parquet requires a separate validation file: "
+                f"{validation_source}"
+            )
+        eval_data_files = str(validation_source)
     ds = get_streaming_dataset(
         args.dataset_name,
         split=eval_split,
         seed=args.seed + 200,
         buffer_size=args.shuffle_buffer_size,
         data_dir=args.data_dir,
-        data_files=args.data_files,
+        data_files=eval_data_files,
     )
 
     rows: list[dict[str, list[int]]] = []
@@ -1413,13 +1425,19 @@ def main() -> None:
 
     print("Saving final model...")
 
+    terminal_step = int(trainer.state.global_step)
+    if terminal_step != args.max_steps:
+        raise RuntimeError(
+            f"Training stopped at step {terminal_step}, expected terminal step {args.max_steps}"
+        )
     final_dir = output_dir / "final_model"
     trainer.save_model(str(final_dir))
-    selected_step = int(trainer.state.global_step)
-    if selected_step != args.max_steps:
-        raise RuntimeError(
-            f"Training stopped at step {selected_step}, expected terminal step {args.max_steps}"
-        )
+    # global_step stays terminal after load_best_model_at_end restores an earlier checkpoint.
+    selected_step = (
+        getattr(trainer.state, "best_global_step", None)
+        if args.load_best_model_at_end
+        else terminal_step
+    )
     (final_dir / "selection.json").write_text(
         json.dumps(
             {

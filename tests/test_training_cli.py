@@ -119,6 +119,34 @@ def test_pretokenized_rows_use_stable_hash_split(monkeypatch):
     assert eval_dataset["input_ids"] == [[0, 5, 2]]
 
 
+def test_explicit_train_parquet_keeps_validation_population(tmp_path: Path) -> None:
+    Dataset.from_dict({"SELFIES": ["row_1", "row_2"]}).to_parquet(str(tmp_path / "train.parquet"))
+    Dataset.from_dict({"SELFIES": ["row_9", "row_10"]}).to_parquet(str(tmp_path / "valid.parquet"))
+
+    class Tokenizer:
+        def __call__(self, sequence: str, **_kwargs):
+            return {"input_ids": [0, int(sequence.rsplit("_", 1)[1]) + 5, 2]}
+
+    args = argparse.Namespace(
+        dataset_name=str(tmp_path),
+        train_split="train",
+        validation_split="valid",
+        use_validation_split=True,
+        molecule_column="SELFIES",
+        data_dir=None,
+        data_files=str(tmp_path / "train.parquet"),
+        seed=42,
+        shuffle_buffer_size=10,
+        max_seq_length=16,
+        eval_size=2,
+        max_eval_batches=0,
+        per_device_eval_batch_size=2,
+    )
+
+    validation = make_eval_dataset(args, Tokenizer())  # type: ignore[arg-type]
+    assert sorted(ids[1] for ids in validation["input_ids"]) == [14, 15]
+
+
 def test_training_encoding_rejects_over_context_molecule():
     class Tokenizer:
         def __call__(self, *_args, **_kwargs):

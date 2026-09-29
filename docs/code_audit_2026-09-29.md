@@ -361,3 +361,12 @@ string comparison had flagged 164 older-RDKit canonical SMILES spellings;
 these represented the same isomeric molecules. See
 `docs/revision_factorial_v1_handoff.md` for the input hashes and the retained
 original benchmark cohort.
+
+**Additional integration finding (Helios smoke test):** Passing the explicit
+training `--data_files train.parquet` also overrode `--validation_split valid`
+in the fallback validation loader. The two-step smoke run on commit `e2dcaa6`
+therefore evaluated training molecules and is diagnostic only. The loader now
+selects `valid.parquet` explicitly in this case; the frozen 4,096-row
+validation-ID path was already independent of `--data_files`. A regression
+test covers the fallback path. Rerun pilots after this correction; no pilot or
+full-model result from `e2dcaa6` is accepted.

@@ -94,6 +94,11 @@ Keep the partial checkpoints and log as labelled diagnostics.
    excludes shared InChIKey/stereo-insensitive matches while retaining the
    configured splits for the primary analysis. Rebuild the manuscript's numeric
    tables, intervals, plots, and claims from the same versioned result matrix.
+6. Recompute the aggregate intervals with `compute_bootstrap_cis.py` on the
+   corrected matrix, including the task-family resampling from the unchanged
+   `task_families.yaml`, and count per-dataset wins only from
+   `paired_task_differences.csv` where the paired interval excludes zero. The
+   current family results are an archived diagnostic.
 
 Until these checks pass, the revised manuscript must label existing scores as
 archival and avoid treating the partial checkpoint as the final model.

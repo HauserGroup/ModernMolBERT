@@ -35,6 +35,29 @@ at least:
 Also align the downstream-head wording. The Table 2 caption generator now says
 "logistic regression", but Methods and the Fig 1 caption say "ridge".
 
+## TODO: re-run related-task and paired intervals on corrected results (2026-09-29)
+
+**Status: archived diagnostic only. Re-run after the retrained encoder and the
+re-scored baselines exist.**
+
+The task-family bootstrap (code commit `0455b61`) currently runs on the archived
+matrix, whose scores used test-selected heads and imported baseline rows. Its
+numbers in `tab:bootstrap-cis` and Results are provisional, like every other
+archived number. The per-dataset paired intervals cannot run at all yet: they
+need prediction archives with test-row identities for every compared model.
+
+After the retrain and baseline re-scoring, from the repo root:
+
+1. `uv run python scripts/paper/build_common_row_benchmark.py ...` (see
+   `docs/revision_run.md` §5); it writes `paired_task_differences.csv`.
+2. `uv run python scripts/paper/compute_bootstrap_cis.py --matrix <corrected matrix>`
+   with the archival caption note removed.
+
+Keep `task_families.yaml` unchanged; the families were fixed before corrected
+results existed. **Manuscript impact:** replace the archived family intervals
+and family win counts in Results and `tab:bootstrap-cis`, and replace raw
+per-dataset win counts with wins whose paired interval excludes zero.
+
 ## Hetero-span masking moved to the supplement (2026-09-28)
 
 Hetero-span leaves the main text and all claims. It stays as a labelled

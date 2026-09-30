@@ -159,7 +159,13 @@ stale-result protection and the complete G7 head-selection/common-fold run.
 - `scripts/run_revision_factorial_v1.py` pins every G3 argument, the five run
   IDs, tokenizer representation/size and the frozen input hashes. Its dry run
   validates inputs and prints the command. An actual launch also requires a
-  clean checkout and a commit-matched `production_gate.json` with pilot,
-  capacity and G7 coverage evidence hashes; the gate is deliberately absent
-  until the remaining checks pass. Keep each production run on the same clean
-  commit and archive complete recovery checkpoints.
+  clean checkout and a commit-matched `production_gate.json`. The launcher
+  recomputes the SHA-256 of each evidence file and compares it with the gate:
+  `pilot_evidence_sha256` and `capacity_evidence_sha256` (this file),
+  `coverage_evidence_sha256`
+  (`outputs/audit/revision_factorial_v1/pilot_benchmark_coverage.json`) and
+  `common_embeddings_sha256`
+  (`outputs/audit/revision_factorial_v1/pilot_common_embeddings.json`). It also
+  refuses to start while another process is using the GPU. The gate is
+  deliberately absent until the remaining checks pass. Keep each production run
+  on the same clean commit and archive complete recovery checkpoints.

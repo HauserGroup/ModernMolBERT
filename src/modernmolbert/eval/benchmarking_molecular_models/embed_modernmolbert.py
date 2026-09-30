@@ -112,10 +112,15 @@ def assert_reusable_embedding(output_path: Path, prepared_path: Path) -> None:
     if not source_path.exists():
         source_path = prepared_path
     try:
-        embedded = joblib.load(output_path)
+        embedded = joblib.load(output_path, mmap_mode="r")
     except (ModuleNotFoundError, AttributeError) as exc:
         raise ValueError(
             f"Existing embedding {output_path} uses an obsolete pickle class; "
+            "regenerate it with --overwrite"
+        ) from exc
+    except (EOFError, OSError) as exc:
+        raise ValueError(
+            f"Existing embedding {output_path} is truncated or unreadable; "
             "regenerate it with --overwrite"
         ) from exc
     recorded = getattr(embedded, "metadata", {}).get("prepared_data_sha256")
@@ -202,7 +207,9 @@ def main() -> None:
         gc.collect()
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        joblib.dump(embedded, output_path)
+        tmp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        joblib.dump(embedded, tmp_output_path)
+        os.replace(tmp_output_path, output_path)
 
         elapsed = time.perf_counter() - t0
         print(

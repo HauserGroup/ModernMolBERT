@@ -99,7 +99,7 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 from modernmolbert.collator import MolecularMLMCollator
 from modernmolbert.common.paths import find_project_root
-from modernmolbert.utils import encode_sequence, resolve_special_ids
+from modernmolbert.utils import encode_sequence, file_sha256 as sha256_file, resolve_special_ids
 
 
 log = logging.getLogger(__name__)
@@ -179,14 +179,6 @@ def parse_args() -> argparse.Namespace:
 
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def discover_best_per_group(sweep_root: Path) -> list[SelectedRun]:

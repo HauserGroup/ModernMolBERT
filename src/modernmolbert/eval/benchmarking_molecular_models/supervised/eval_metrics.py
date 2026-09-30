@@ -37,7 +37,10 @@ def log_predictions(data: HeadResult, pred_directory: str):
     if data.prepared_data_sha256 is not None:
         artifact["prepared_data_sha256"] = np.asarray(data.prepared_data_sha256)
 
-    np.savez(base_path + ".npz", **artifact)
+    target_path = base_path + ".npz"
+    tmp_path = base_path + ".tmp.npz"
+    np.savez(tmp_path, **artifact)
+    os.replace(tmp_path, target_path)
     print(f"Saving predictions to {base_path}.npz")
 
 

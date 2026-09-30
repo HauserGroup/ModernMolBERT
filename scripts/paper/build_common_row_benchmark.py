@@ -60,7 +60,6 @@ Usage:
 import argparse
 import hashlib
 import json
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -74,7 +73,7 @@ from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics im
     _normalize_auc_scores,
     get_skfp_roc_auc,
 )
-from modernmolbert.utils import file_sha256
+from modernmolbert.utils import file_sha256, get_git_revision as git_revision
 
 SCORE_ATOL = 1e-9
 HEAD_KEYS = ["dataset", "embedder", "test_metric_name", "model"]
@@ -292,19 +291,22 @@ def check_archive(
     if not path.exists():
         return record | {"archive_status": "missing_archive"}
     record["archive_sha256"] = file_sha256(path)
-    with np.load(path, allow_pickle=False) as archive:
-        y_true = archive["y_true"]
-        y_score = archive["y_score"]
-        rows = (
-            archive["test_source_row_indices"]
-            if "test_source_row_indices" in archive.files
-            else None
-        )
-        prepared_hash = (
-            str(archive["prepared_data_sha256"].item())
-            if "prepared_data_sha256" in archive.files
-            else None
-        )
+    try:
+        with np.load(path, allow_pickle=False) as archive:
+            y_true = archive["y_true"]
+            y_score = archive["y_score"]
+            rows = (
+                archive["test_source_row_indices"]
+                if "test_source_row_indices" in archive.files
+                else None
+            )
+            prepared_hash = (
+                str(archive["prepared_data_sha256"].item())
+                if "prepared_data_sha256" in archive.files
+                else None
+            )
+    except Exception:
+        return record | {"archive_status": "corrupt_archive"}
     recomputed = float(get_skfp_roc_auc(y_score, y_true))
     record["n_predicted_test"] = len(y_true)
     record["archive_test_metric"] = recomputed
@@ -541,15 +543,6 @@ def load_split_overlap_exclusions(
         flagged = flag_columns[0] | flag_columns[1]
         exclusions[dataset] = set(group.loc[flagged, "test_source_row_index"].astype(int))
     return exclusions
-
-
-def git_revision() -> dict[str, object]:
-    def run(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], capture_output=True, text=True, check=False
-        ).stdout.strip()
-
-    return {"commit": run("rev-parse", "HEAD"), "dirty": bool(run("status", "--porcelain"))}
 
 
 def main(argv: list[str] | None = None) -> None:

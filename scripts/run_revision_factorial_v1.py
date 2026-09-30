@@ -1,12 +1,12 @@
 """Launch one pinned G1–G7 production encoder on Helios after the preflight gate."""
 
 import argparse
-import hashlib
 import json
 import shutil
 import subprocess
 from pathlib import Path
 
+from modernmolbert.utils import file_sha256 as sha256_file
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = Path("data/pretrain/chembl36_selfies")
@@ -37,14 +37,6 @@ EXPECTED_SHA256 = {
     / "bpe_smiles.json": "b08c4285f505cb94ba522209e499c291dcd6e9c66fb4252bde0f89c43d169d5f",
     Path("uv.lock"): "52f1cdc215c65ba309f4c3ba6a33acf31add980e235f42c11b356ed51a80b588",
 }
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def check_frozen_inputs(tokenizer: str) -> None:
@@ -172,6 +164,7 @@ def command_for(run_id: str, resume: Path | None) -> list[str]:
         "4",
         "--device_backend",
         "cuda",
+        "--require_clean_git",
         "--bf16",
         "--no-load_best_model_at_end",
         "--report_to",

@@ -7,6 +7,9 @@ upload. It is narrower than [the general simplification inventory](simplificatio
 The benchmark fits heads to frozen task splits; it does not obtain model scores
 by comparing embeddings directly with the imported CSV.
 
+For file-level edits, validation, and acceptance checks, see the
+[implementation checklist](provenance_simplification_implementation_plan.md).
+
 ## Rule for deciding what stays
 
 Keep a check if removing it could silently change **which molecules, labels,

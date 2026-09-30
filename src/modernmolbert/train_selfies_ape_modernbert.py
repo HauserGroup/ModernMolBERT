@@ -261,6 +261,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--per_device_eval_batch_size", type=int, default=128)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=2)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--optim", type=str, default="adamw_torch")
+    parser.add_argument("--adam_beta1", type=float, default=0.9)
+    parser.add_argument("--adam_beta2", type=float, default=0.999)
+    parser.add_argument("--adam_epsilon", type=float, default=1e-8)
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--warmup_steps", type=int, default=1000)
     parser.add_argument("--max_grad_norm", type=float, default=1.0)
@@ -1428,6 +1432,10 @@ def main() -> None:
         per_device_eval_batch_size=args.per_device_eval_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
+        optim=args.optim,
+        adam_beta1=args.adam_beta1,
+        adam_beta2=args.adam_beta2,
+        adam_epsilon=args.adam_epsilon,
         weight_decay=args.weight_decay,
         warmup_steps=args.warmup_steps,
         max_grad_norm=args.max_grad_norm,

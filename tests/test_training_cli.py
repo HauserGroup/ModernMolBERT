@@ -18,6 +18,7 @@ from modernmolbert.train_selfies_ape_modernbert import (
     make_train_iterable_dataset,
     prepare_run_directory,
     _run_input_hashes,
+    parse_args,
     preprocess_logits_for_metrics,
     sequence_bucket,
     validate_args,
@@ -87,6 +88,40 @@ def test_validate_args_rejects_unsupported_cuda_bf16(monkeypatch):
 def test_frozen_train_order_requires_global_shuffle():
     args = argparse.Namespace(train_order_path=Path("order.npy"), global_train_shuffle=False)
     with pytest.raises(ValueError, match="requires --global_train_shuffle"):
+        validate_args(args, backend="cpu")
+
+
+def test_explicit_adamw_recipe_is_available_to_launcher():
+    with _Argv(
+        "--output_dir",
+        "run",
+        "--tokenizer_vocab_path",
+        "vocab.json",
+        "--optim",
+        "adamw_torch",
+        "--adam_beta1",
+        "0.9",
+        "--adam_beta2",
+        "0.999",
+        "--adam_epsilon",
+        "1e-8",
+    ):
+        args = parse_args()
+    assert (args.optim, args.adam_beta1, args.adam_beta2, args.adam_epsilon) == (
+        "adamw_torch",
+        0.9,
+        0.999,
+        1e-8,
+    )
+
+
+def test_frozen_validation_row_ids_requires_validation_split():
+    args = argparse.Namespace(
+        train_order_path=None,
+        validation_row_ids_path=Path("ids.npy"),
+        use_validation_split=False,
+    )
+    with pytest.raises(ValueError, match="requires --use_validation_split"):
         validate_args(args, backend="cpu")
 
 

@@ -4,12 +4,17 @@ This document collects testing commands, readiness gates, and optional smoke tes
 
 ## Fast checks
 
-Run linting and the full test suite:
+These are the CI commands (`.github/workflows/ci.yml`):
 
 ```bash
 uv run ruff check .
-uv run pytest
+uv run ruff format --check .
+uv run pytest -q -m "not smoke and not model and not mps and not cuda and not network"
 ```
+
+Markers are strict. `model` tests need a trained checkpoint: point
+`MODERNMOLBERT_TEST_MODEL_DIR` at a `final_model` directory (or leave a debug run under
+`runs/debug_selfies/`), then run `uv run pytest -m model`. `network` tests need the Hub.
 
 Run fast evaluation tests:
 
@@ -106,18 +111,8 @@ The evaluation tests should cover:
 
 ## When to run what
 
-For ordinary development:
-
-```bash
-uv run pytest tests/test_eval_*.py -q
-```
-
-Before a training run:
-
-```bash
-uv run ruff check .
-uv run pytest
-```
+For ordinary development, run the touched test file. Before a training run, run the CI
+commands above and the readiness gate.
 
 Before treating benchmark numbers as meaningful, run the benchmark pipeline on a single dataset as a smoke test:
 

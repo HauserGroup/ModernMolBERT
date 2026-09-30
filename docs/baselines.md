@@ -22,11 +22,11 @@ that code, with the same splits, heads, CV folds and hyperparameter grids.
 reads the table heads and picks each dataset × baseline head by CV ROC-AUC from
 the same shared candidate set as ModernMolBERT. kNN has no table rows on HIV
 and MUV, so it drops out of the candidate set there for every model. The full
-command is in [revision_run.md](revision_run.md) §5.
+command is in [revision_run.md](revision_run.md) §2.
 
 The table's scorer treats missing labels in multi-endpoint datasets (Tox21,
 MUV) as negatives. Score ModernMolBERT with `--missing-labels as-negative` so
-both sides follow the same rule ([revision_run.md](revision_run.md) §4).
+both sides follow the same rule ([revision_run.md](revision_run.md) §1).
 
 The table has no test-row identities, so baseline test rows cannot be matched
 to ours, and per-dataset paired intervals cannot include the baselines.

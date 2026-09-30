@@ -1,7 +1,13 @@
 # Simplification candidates (2026-09-30)
 
-List only; no code was edited. Measured at `5058425` plus the working tree.
-Companion to `docs/code_audit_2026-09-29.md` (R-numbers refer to it).
+Measured at `5058425` plus the working tree; sizes below are from that date. Companion to
+`docs/code_audit_2026-09-29.md` (R-numbers refer to it).
+
+**Done (30 September):** T4 (unreferenced files) and the dead-code list, in `a589bff`; B10 in
+part (`config/default.yaml`, the stale tooling entries); and the documentation part of B11
+(the audit reduced to open items, the one-model guides folded into
+[revision_run.md](revision_run.md) and [revision_run_record.md](revision_run_record.md), the
+harness `readme.md` reduced to a pointer). Everything else is still open.
 
 ## Where the size is
 
@@ -13,8 +19,8 @@ Companion to `docs/code_audit_2026-09-29.md` (R-numbers refer to it).
 | `tests` | 55 | 7,193 |
 
 Other counts: 51 files define an `argparse` CLI; the trainer has 60 flags, of
-which the production launcher sets 41; `docs/` plus the READMEs hold about
-4,400 lines, 1,744 of them the audit.
+which the production launcher sets 41; `docs/` plus the READMEs held about
+4,400 lines, 1,744 of them the audit (`docs/` is now 1,837 lines).
 
 Three causes account for most of the sprawl:
 
@@ -67,7 +73,7 @@ Python. None of it is imported by the revision path except one function.
 | B8 | Paper constants | Task groups in 4 files, model labels in 5, the ToxCast exclusion in 5, baseline lists in 7. `datasets.yaml` already has `source.group`. | One small module for labels, order and exclusions; groups read from the registry. Do it as the first step of C3, which otherwise edits five files for the five new names. |
 | B9 | Paper generators as import-time scripts | `build_paper_results.py` (335 lines, no functions to test), `make_paper_figures.py`, `make_appendix_table.py`, `make_loss_curves.py` parse arguments at import. | `main()` and a single `--task-matrix` input, together with S3. |
 | B10 | Inert configuration | `config/default.yaml` is read by nothing; the `defaults:` keys are Hydra leftovers; `score.yaml` defaults to HIV only (R35); `EmbeddingConfig` has three unused directories; `as_list` exists twice. | Keep `datasets.yaml` and `task_families.yaml`; paths become CLI defaults. |
-| B11 | Evaluation described in four documents | `README.md`, `docs/evaluation.md`, the harness `readme.md`, `docs/revision_run.md` §4–6. Three documents (742 lines) are already marked historical. | After C6: one `docs/reproduce.md` with the command sequence C3 requires; the rest becomes pointers or leaves with the tag. Reduce the audit to its open items. |
+| B11 | Evaluation described in four documents | `README.md`, `docs/evaluation.md`, the harness `readme.md`, `docs/revision_run.md`. | Partly done (see above). After C6, fold `revision_run.md` into one reproduction guide with the command sequence C3 requires. |
 | B12 | Paper outputs in two repositories | `paper/tables`, `paper/figures`, `paper/source_data`, `results/` and `tokenizer/alternative` also exist in the manuscript repository. | Generators write to `outputs/`; the manuscript repository holds the canonical copies. |
 
 Small helpers, only when touching the file: five SHA-256 functions (the
@@ -96,10 +102,6 @@ ways to find the repository root, three JSON readers.
   declared there. Stale configuration: Ruff and Pyright entries for a
   `notebooks/` directory that does not exist, a Pyright comment about Hydra, a
   `pyupgrade` hook that duplicates Ruff `UP`.
-- **T4. Tracked files nothing references.** `tokenizer/alternative/` (9 files),
-  `tokenizer/chembl36_smiles_2m_ape_max6_mf3000.*` (4 files), `papers/ape.pdf`,
-  and `analysis/benchmark/visualizations.ipynb` (reads `classificationreport.csv`,
-  which does not exist; outputs are committed).
 - **T5. Generated files in two roots.** Predictions, plots, checkpoints and a
   results CSV sit under `data/`; evaluation and audit outputs under `outputs/`.
   For G7, write everything generated under `outputs/revision_factorial_v1/` and
@@ -108,18 +110,6 @@ ways to find the repository root, three JSON readers.
   `audit_factorial_tokenizers.py`, `build_revision_coverage_manifest.py` and the
   launcher are needed for C6 reproduction. Group them in one campaign folder so
   `scripts/` shows only the pipeline.
-
-## Dead code (behaviour-neutral, any time on a branch)
-
-- `eval/benchmarking_molecular_models/common/utils.py`: no importer (55 lines).
-- `datasplit.load_embedding` and `get_data`: unused; duplicate of
-  `procedure.load_embedded_dataset`.
-- `common/types.py`: `SystemConfig`, `Embedder`, `SmilesEmbedder`,
-  `GraphEmbedder`, `Dataset.filter_out_problematic_molecules`.
-- `score.checkpoint_exists`, `compare_praski_tables.best_head_per_dataset`.
-- `utils.filter_zinc20_chembl36_by_source`: used only by its two tests.
-- `upload_model.validate_direct_ape_tokenizer` and `validate_tokenizer_config`:
-  never called (R75). Call them or delete them.
 
 ## Considered, not recommended
 
@@ -138,7 +128,7 @@ ways to find the repository root, three JSON readers.
 
 ## Suggested order
 
-1. Now, on a branch: dead code, T4.
+1. Done: dead code, T4.
 2. With G7: B3, B5, T5.
 3. First step of C3: B8, B9.
 4. After G6: T1, B2, B6, T3.

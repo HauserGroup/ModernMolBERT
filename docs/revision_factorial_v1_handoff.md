@@ -64,8 +64,9 @@ joblib files from those JSONs without resplitting. The corrected RDKit guard
 is used for future preparation, but that rebuilt cohort changed some TDC
 scaffold assignments and would break the planned comparison. The frozen
 `data/prepared/` files and imported Praski CSV were checksum-matched after
-transfer to Helios. See `docs/code_audit_2026-09-29.md` finding 1 for the
-split-drift finding.
+transfer to Helios. The rebuilt cohort moved about 2,015 CYP1A2 molecules
+between train and test although the molecules were identical, because the TDC
+scaffold split depends on raw row order.
 
 ## Remaining launch gates
 

@@ -7,8 +7,8 @@ lines, including every fixed finding and each verification step) is in git histo
 finding numbers (`R…`, plain numbers, `N…`) match commit messages and older notes.
 
 Closed and not listed here: 1, 3, 5, 6, 8–13, 15–17, 20, 22–23, 32, 36–37 and N1–N8;
-R1, R5, R7, R8, R18, R19, R23, R25, R26, R30, R34, R39, R40, R44–R46, R49, R58–R60,
-R62, R63, R73, R75–R77, R83, R89, R90, R93, R95–R97, R99, R101–R105, R109–R113.
+R1, R5, R7, R8, R18, R19, R23, R25, R26, R30, R34, R39, R40, R44–R46, R49, R50, R58–R60,
+R62, R63, R72, R73, R75–R77, R83, R89, R90, R93, R95–R97, R99, R101–R105, R109–R113.
 Notes on how these were verified are in the commit messages of `c35f1fa`, `97a13de`,
 `30adf4f`, `1fc70b3`, `dfebfd2` and `a589bff`.
 
@@ -191,10 +191,6 @@ Ordered by likely effect on the revised results.
   `tornado` and `urllib3` are dependabot floors that belong in
   `[tool.uv] constraint-dependencies`. Changing this alters `uv.lock`, so only before the
   commit is pinned or after the campaign.
-- **R50.** The PaCMAP notebooks keep their outputs despite the `nbstripout` hook and use
-  relative paths that only work from their own directory.
-- **R72.** CI runs only on pull requests to `main`, does not use `--locked` and has no
-  `pyright` step. Add a `push` trigger for working branches, `--locked` and Pyright.
 - **R74.** `figures/FigX_sweep_metrics.*` has no generator in the repository.
 - **R86.** Untracked copies of six paper generators (one lacking the LaTeX escape fix) and a
   `tokenizer/alternative/` sit in the manuscript folder; delete them or use symlinks.
@@ -205,12 +201,12 @@ Ordered by likely effect on the revised results.
 
 ## Tests
 
-- **R94.** Still untested: the scoring resume skip and version hash (R6), a mixed
-  `missing_labels` input to the common-row builder (R51), and the sweep-launcher and
-  selector fixes.
+- **R94.** Still untested: a mixed `missing_labels` input to the common-row builder (R51)
+  and the sweep-launcher and selector fixes. The scoring resume skip, `validate_args` and the
+  trainer's tokenizer gate now have tests.
 - **R115.** Line coverage of `src/modernmolbert` under the CI subset is 58 %, lowest exactly
-  where it matters: `validate_tokenizer.py` 0 %, the trainer 37 % (`validate_args`,
-  `validate_tokenizer_for_training`, `write_run_metadata`, `main`), `procedure.py` 25 %,
+  where it matters: `validate_tokenizer.py` 0 %, the trainer 37 % (`write_run_metadata`, `main`;
+  `validate_args` and the tokenizer gate are now covered), `procedure.py` 25 %,
   `score.py` 43 %, `upload_model.py` 26 %, `model_cards.py` 0 %. Small `tmp_path` tests for
   the pure functions, plus a two-step `--debug --max_steps 2` smoke run, cover most of it.
 

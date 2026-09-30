@@ -345,3 +345,33 @@ def test_hf_login_checks_both_tokens(monkeypatch):
 
     monkeypatch.delenv("HF_TOKEN_ORG", raising=False)
     assert resolve_hf_token(hf_login=False) == "user_tok"
+
+
+def _default_args(**overrides):
+    with _Argv("--output_dir", "run", "--tokenizer_vocab_path", "vocab.json"):
+        args = parse_args()
+    for key, value in overrides.items():
+        setattr(args, key, value)
+    return args
+
+
+def test_validate_args_accepts_defaults():
+    validate_args(_default_args(), backend="cpu")
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"mlm_probability": 1.5}, "mlm_probability"),
+        ({"bf16": True, "fp16": True}, "mutually exclusive"),
+        ({"eval_size": 0}, "eval_size"),
+        ({"per_device_train_batch_size": 0}, "batch sizes"),
+        ({"val_split_bucket": 100}, "val_split_bucket"),
+        ({"load_best_model_at_end": True, "save_steps": 100, "eval_steps": 50}, "save_steps"),
+        ({"masking_strategy": "unknown"}, "Unknown masking_strategy"),
+        ({"masking_strategy": "span", "span_p_geom": 1.0}, "span_p_geom"),
+    ],
+)
+def test_validate_args_rejects_invalid_settings(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        validate_args(_default_args(**overrides), backend="cpu")

@@ -95,7 +95,7 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
 cache: true
 model_name: null
 datasets:
-  - clf_ogbg-molhiv
+  - all
 ```
 
 `config/embedding/default.yaml` — directory layout:

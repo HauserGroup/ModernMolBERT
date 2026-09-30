@@ -84,7 +84,7 @@ class TinyModel(torch.nn.Module):
 
     def __init__(self, hidden_size: int = 8):
         super().__init__()
-        self.config = SimpleNamespace(hidden_size=hidden_size)
+        self.config = SimpleNamespace(hidden_size=hidden_size, max_position_embeddings=32)
 
     def forward(self, input_ids, attention_mask=None):
         batch_size, seq_len = input_ids.shape
@@ -106,8 +106,8 @@ def tiny_modernmolbert_dir(tmp_path: Path, monkeypatch) -> Path:
 
     monkeypatch.setattr(
         mm_selfies,
-        "_load_ape_tokenizer",
-        lambda path: TinyTokenizer(),
+        "load_checkpoint_tokenizer",
+        lambda path: (TinyTokenizer(), "SELFIES"),
     )
     monkeypatch.setattr(
         "modernmolbert.eval.featurizers.modernmolbert_selfies.AutoModel.from_pretrained",
@@ -281,12 +281,21 @@ def test_modernmolbert_selfies_featurizer_records_metadata(tiny_modernmolbert_di
     batch = featurizer.featurize_smiles(["CCO", "not_a_smiles"])
 
     assert batch.metadata["featurizer"] == "modernmolbert_pilot_test"
-    assert batch.metadata["backend"] == "modernmolbert_selfies"
+    assert batch.metadata["backend"] == "modernmolbert"
     assert batch.metadata["pooling"] == "mean"
     assert batch.metadata["max_seq_length"] == 32
     assert batch.metadata["n_inputs"] == 2
     assert batch.metadata["n_valid"] == 1
     assert batch.metadata["invalid_fraction"] == pytest.approx(0.5)
+
+
+def test_embedding_context_defaults_to_trained_context(tiny_modernmolbert_dir):
+    featurizer = ModernMolBERTSelfiesFeaturizer(model_dir=tiny_modernmolbert_dir, device="cpu")
+    assert featurizer.max_seq_length == 32
+    with pytest.raises(ValueError, match="exceeds trained context"):
+        ModernMolBERTSelfiesFeaturizer(
+            model_dir=tiny_modernmolbert_dir, max_seq_length=64, device="cpu"
+        )
 
 
 def test_unknown_tail_is_rejected_before_truncation(tiny_modernmolbert_dir, monkeypatch):
@@ -298,6 +307,18 @@ def test_unknown_tail_is_rejected_before_truncation(tiny_modernmolbert_dir, monk
     assert result.valid_mask.tolist() == [False]
     assert result.X.shape == (0, 8)
     assert result.metadata["n_tokenization_failures"] == 1
+
+
+def test_over_context_input_is_rejected_without_shortening(tiny_modernmolbert_dir, monkeypatch):
+    featurizer = ModernMolBERTSelfiesFeaturizer(
+        model_dir=tiny_modernmolbert_dir, max_seq_length=4, device="cpu"
+    )
+    monkeypatch.setattr(featurizer.tokenizer, "encode", lambda *a, **k: [5, 6, 7])
+    result = featurizer.featurize_smiles(["CCO"])
+    assert result.valid_mask.tolist() == [False]
+    assert result.X.shape == (0, 8)
+    assert result.metadata["n_truncated"] == 1
+    assert result.metadata["n_tokenization_failures"] == 0
 
 
 def test_released_vocab_rejects_disconnected_input_without_losing_row_alignment(

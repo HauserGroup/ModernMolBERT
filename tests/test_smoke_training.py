@@ -37,6 +37,9 @@ def _mps_enabled() -> bool:
 def _find_existing_tokenizer_vocab() -> Path | None:
     """Find an existing tokenizer vocab for local encode checks."""
     candidates = [
+        _repo_root() / "tokenizer" / "revision_factorial_v1" / "ape_selfies.json",
+        _repo_root() / "tokenizer" / "chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json",
+        _repo_root() / "tokenizer" / "chembl36_selfies_2m_ape_max2_min3000.json",
         _repo_root() / "tokenizer" / "selfies_symbol_tokenizer.json",
         _repo_root() / "tokenizer" / "selfies_ape_tokenizer.json",
         _repo_root() / "tokenizer" / "selfies_ape_tokenizer_1m.json",
@@ -104,7 +107,7 @@ def test_local_tokenizer_encode_selfies_examples() -> None:
 
         # __call__ should preserve the same encoded ids.
         batch = tok(text, add_special_tokens=True, return_tensors="pt")
-        ids = batch["input_ids"].tolist()
+        ids = batch["input_ids"].squeeze(0).tolist()
         assert ids == encoded, (text, ids, encoded, token_strings)
 
     if verbose:
@@ -113,6 +116,7 @@ def test_local_tokenizer_encode_selfies_examples() -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.model
 def test_existing_minimal_model_selfies_encoding() -> None:
     """Verify that a minimal trained model can encode SELFIES and produce finite logits.
 

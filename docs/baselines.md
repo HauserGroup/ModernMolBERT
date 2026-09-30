@@ -1,164 +1,32 @@
-# Baselines and external models
+# Baselines
 
-This document covers non-ModernMolBERT featurizers and external frozen encoder baselines.
+The revised paper does not re-embed the baselines. Their scores come from the
+table published with Praski et al.,
+`data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv`, which records
+training-side CV and test ROC-AUC for every downstream head. The file is
+byte-identical to the authors' public CSV at commit `17d2aa1` of their
+`benchmarking_molecular_models` repository. The harness in
+`src/modernmolbert/eval/benchmarking_molecular_models/` is a stripped copy of
+that code, with the same splits, heads, CV folds and hyperparameter grids.
 
-All baselines should use the same frozen benchmark machinery as ModernMolBERT:
+| Paper label | Table embedder | Representation used by the original wrapper |
+|---|---|---|
+| ECFP4 | `ECFP` | scikit-fingerprints ECFP defaults |
+| ChemBERTa-2 | `ChemBERTa-77M-MLM` | CLS token |
+| MoLFormer | `MoLFormer-XL-both-10pct` | `pooler_output` |
+| SELFormer | `SELFormer` | mean over tokens |
 
-```text
-SMILES dataset
--> RepresentationFeaturizer
--> FeatureBatch(X, valid_mask, metadata)
--> cached features
--> downstream model
--> shared metrics
--> results.csv / manifest.json
-```
+## How they enter the comparison
 
-Do not compare benchmark results from separate embedding/sklearn scripts.
+`scripts/paper/build_common_row_benchmark.py --table-results ... --table-embedders ...`
+reads the table heads and picks each dataset × baseline head by CV ROC-AUC from
+the same shared candidate set as ModernMolBERT. kNN has no table rows on HIV
+and MUV, so it drops out of the candidate set there for every model. The full
+command is in [revision_run.md](revision_run.md) §2.
 
-## ECFP4
+The table's scorer treats missing labels in multi-endpoint datasets (Tox21,
+MUV) as negatives. Score ModernMolBERT with `--missing-labels as-negative` so
+both sides follow the same rule ([revision_run.md](revision_run.md) §1).
 
-ECFP4 is the primary classical fingerprint baseline.
-
-```json
-{
-  "type": "ecfp4",
-  "name": "ecfp4_2048",
-  "n_bits": 2048,
-  "radius": 2
-}
-```
-
-Use this baseline in early pilot and core MoleculeNet suites.
-
-## Hugging Face SMILES encoders
-
-Generic Hugging Face SMILES encoders use the `hf_smiles` featurizer.
-
-Example ChemBERTa config:
-
-```json
-{
-  "type": "hf_smiles",
-  "name": "chemberta_77m_mlm",
-  "model_name_or_path": "DeepChem/ChemBERTa-77M-MLM",
-  "max_seq_length": 256,
-  "pooling": "mean",
-  "device": "auto",
-  "trust_remote_code": false
-}
-```
-
-## MoLFormer baseline
-
-MoLFormer is included as a frozen SMILES-encoder baseline and should be evaluated with the same downstream learners as every other representation. Do not fine-tune MoLFormer for the primary frozen benchmark.
-
-Pinned checkpoint:
-
-```text
-ibm-research/MoLFormer-XL-both-10pct
-revision: 7b12d946c181a37f6012b9dc3b002275de070314
-```
-
-MoLFormer requires `trust_remote_code=True`, so the revision is pinned for reproducibility.
-
-### Separate MoLFormer-only environment
-
-MoLFormer currently needs a Transformers 4.x environment because its remote code depends on older Transformers APIs. Keep this environment separate from the main ModernMolBERT training environment.
-
-Create `environment-molformer-only.yml`:
-
-```yaml
-name: molformer-only
-channels:
-  - conda-forge
-  - defaults
-
-dependencies:
-  - python=3.11
-  - pip
-  - numpy
-  - pandas
-  - scikit-learn
-  - pytorch
-  - pytest
-  - pip:
-      - "transformers>=4.38,<5"
-      - "huggingface-hub<1.0"
-      - "safetensors"
-      - "tokenizers"
-      - "tqdm"
-```
-
-Create and activate:
-
-```bash
-conda env create -f environment-molformer-only.yml
-conda activate molformer-only
-```
-
-Do not install the package with `pip install -e .` in this environment. Instead, run from the repo root with:
-
-```bash
-export PYTHONPATH="$PWD/src"
-```
-
-### MoLFormer featurizer config
-
-```json
-{
-  "type": "hf_smiles",
-  "name": "molformer_xl_both_10pct",
-  "model_name_or_path": "ibm-research/MoLFormer-XL-both-10pct",
-  "revision": "7b12d946c181a37f6012b9dc3b002275de070314",
-  "max_seq_length": 128,
-  "pooling": "mean",
-  "device": "cpu",
-  "trust_remote_code": true
-}
-```
-
-### MoLFormer smoke test
-
-```bash
-PYTHONPATH="$PWD/src" python - <<'PY'
-from modernmolbert.eval.featurizers.hf_smiles import HuggingFaceSmilesFeaturizer
-
-f = HuggingFaceSmilesFeaturizer(
-    name="molformer_xl_both_10pct",
-    model_name_or_path="ibm-research/MoLFormer-XL-both-10pct",
-    revision="7b12d946c181a37f6012b9dc3b002275de070314",
-    max_seq_length=128,
-    pooling="mean",
-    device="cpu",
-    trust_remote_code=True,
-)
-
-out = f.featurize_smiles(["CCO", "c1ccccc1", "CC(=O)O"], batch_size=2)
-
-print("valid_mask", out.valid_mask)
-print("X", out.X.shape, out.X.dtype)
-print("metadata", out.metadata)
-PY
-```
-
-Expected shape:
-
-```text
-valid_mask [ True  True  True]
-X (3, 768) float32
-```
-
-Run optional tests inside the MoLFormer environment:
-
-```bash
-PYTHONPATH="$PWD/src" MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 \
-  python -m pytest tests/test_eval_molformer.py -q -s
-```
-
-## Baseline policy
-
-- Use one shared benchmark pipeline for all frozen representations.
-- Keep baselines frozen unless explicitly running a fine-tuning experiment.
-- Keep external-model environment quirks out of the main training path.
-- Pin revisions when `trust_remote_code=True` is required.
+The table has no test-row identities, so baseline test rows cannot be matched
+to ours, and per-dataset paired intervals cannot include the baselines.

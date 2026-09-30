@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -16,6 +17,7 @@ PRASKI_COLUMNS = [
     "hyperparams",
     "library_hash",
     "missing_labels",
+    "prepared_data_sha256",
     "cv_metric_name",
     "cv_metric",
     "test_metric_name",
@@ -107,7 +109,7 @@ def read_results_csv(output_csv: str | Path) -> pd.DataFrame:
         return empty_results_frame()
     try:
         return to_praski_schema(pd.read_csv(output_csv))
-    except Exception:
+    except pd.errors.EmptyDataError:
         return empty_results_frame()
 
 
@@ -168,7 +170,9 @@ def delete_result_rows(
     )
     out = frame.loc[~mask].copy()
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    out.to_csv(output_csv, index=False)
+    tmp_csv = output_csv.with_suffix(output_csv.suffix + ".tmp")
+    out.to_csv(tmp_csv, index=False)
+    os.replace(tmp_csv, output_csv)
     return out
 
 
@@ -181,7 +185,9 @@ def append_result_row(output_csv: str | Path, row: dict) -> pd.DataFrame:
     out = pd.concat([existing, row_frame], ignore_index=True)
     out = to_praski_schema(out)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    out.to_csv(output_csv, index=False)
+    tmp_csv = output_csv.with_suffix(output_csv.suffix + ".tmp")
+    out.to_csv(tmp_csv, index=False)
+    os.replace(tmp_csv, output_csv)
     return out
 
 
@@ -205,5 +211,7 @@ def write_dataset_checkpoint(
         embedder.replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
     )
     output_path = checkpoint_dir / f"{safe_dataset}__{safe_embedder}.csv"
-    out.to_csv(output_path, index=False)
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    out.to_csv(tmp_path, index=False)
+    os.replace(tmp_path, output_path)
     return out

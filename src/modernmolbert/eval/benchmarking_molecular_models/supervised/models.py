@@ -37,7 +37,7 @@ RIDGE_CLF = {
 RIDGE_REG = {
     "clf__alpha": np.logspace(-2, 3, 10),
     "clf__max_iter": [5000],
-    "clf__solver": ["lbfgs"],
+    "clf__solver": ["auto"],
 }
 
 KNN_CLF = {
@@ -154,7 +154,7 @@ def get_clf_models(no_output: int, embeddings_dtype, n_jobs: int = -1):
 
     return {
         "rf": {
-            "model": Pipeline([("clf", RandomForestClassifier(n_jobs=n_jobs))]),
+            "model": Pipeline([("clf", RandomForestClassifier(n_jobs=n_jobs, random_state=0))]),
             "params": RF_CLF.copy(),
         },
         "ridge": {
@@ -186,7 +186,7 @@ def get_clf_models(no_output: int, embeddings_dtype, n_jobs: int = -1):
 def get_reg_models(embeddings_dtype, n_jobs: int = -1):
     return {
         "rf": {
-            "model": Pipeline([("clf", RandomForestRegressor(n_jobs=n_jobs))]),
+            "model": Pipeline([("clf", RandomForestRegressor(n_jobs=n_jobs, random_state=0))]),
             "params": RF_REG.copy(),
         },
         "ridge": {

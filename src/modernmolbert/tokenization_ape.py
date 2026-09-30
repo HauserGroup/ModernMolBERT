@@ -2,13 +2,13 @@
 
 This file is intentionally self-contained so it can be copied into a model repo
 and loaded by ``AutoTokenizer.from_pretrained(..., trust_remote_code=True)``.
+Vocabularies are learned by ``modernmolbert.tokenization.ape``.
 """
 
 import json
 import os
 import re
 from collections.abc import Mapping
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Literal
 
@@ -23,8 +23,8 @@ VOCAB_FILES_NAMES = {
     "smiles_vocab_file": "smiles_vocab.json",
 }
 SELFIES_RE = re.compile(r"\[[^\]]+\]|\.")
-# Only the organic subset (B C N O P S F Cl Br I) may appear unbracketed in
-# canonical SMILES; two-letter metals (Si, Se, Na, Mg, Al, Ca, Fe, Zn, ...) are
+# The pattern accepts the usual organic subset plus legacy bare K and H. In
+# canonical molecular input, two-letter metals (Si, Se, Na, Mg, Al, Ca, Fe, Zn, ...) are
 # always bracketed and matched by the leading \[[^\]]+\] branch. The previous
 # pattern listed those metals as optional-second-letter alternatives (Si?, Na?,
 # ...), which could match bare invalid single letters (L, M, A, Z) and was dead
@@ -81,10 +81,22 @@ def _select_vocab_file(
     selfies_vocab_file: str | os.PathLike[str] | None,
     smiles_vocab_file: str | os.PathLike[str] | None,
 ) -> str | os.PathLike[str] | None:
-    if representation == "SELFIES" and selfies_vocab_file is not None:
-        return selfies_vocab_file
-    if representation == "SMILES" and smiles_vocab_file is not None:
-        return smiles_vocab_file
+    alias = selfies_vocab_file if representation == "SELFIES" else smiles_vocab_file
+    if alias is not None and vocab_file is not None:
+        alias_p = Path(alias)
+        vocab_p = Path(vocab_file)
+        if (
+            alias_p.resolve() != vocab_p.resolve()
+            and alias_p.is_file()
+            and vocab_p.is_file()
+            and alias_p.read_bytes() != vocab_p.read_bytes()
+        ):
+            raise ValueError(
+                f"Conflicting vocabulary files found: '{vocab_file}' and '{alias}'. "
+                "Representation-specific alias file differs from vocab.json."
+            )
+    if alias is not None:
+        return alias
     return vocab_file
 
 
@@ -240,8 +252,8 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
             mask_token=mask_token,
         )
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
+        # Token frequencies after merge learning, written next to a trained vocabulary.
         self.vocabulary_frequency: dict[str, int] = {}
-        self.pair_counts: dict[tuple[str, str], int] = {}
         self._max_piece_span = _max_vocab_piece_span(self.vocab, self.representation)
 
         super().__init__(
@@ -563,221 +575,6 @@ class APEPreTrainedTokenizer(PreTrainedTokenizer):
         )
         self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
         self._refresh_tokenization_cache()
-
-    def train(
-        self,
-        corpus,
-        type: str = "selfies",
-        representation: str | None = None,
-        max_vocab_size: int = 5000,
-        min_freq_for_merge: int = 2000,
-        max_merge_pieces: int | None = 8,
-        save_checkpoint: bool = False,
-        checkpoint_path: str = "checkpoint",
-        checkpoint_interval: int = 500,
-    ) -> None:
-        import warnings
-
-        new_rep = _normalize_representation(representation or type)
-        if new_rep != self.representation:
-            warnings.warn(
-                f"train() representation={new_rep!r} differs from tokenizer "
-                f"representation={self.representation!r}. Overwriting.",
-                UserWarning,
-                stacklevel=2,
-            )
-        self.representation = new_rep
-
-        if not corpus:
-            raise ValueError("Cannot train APE tokenizer on an empty corpus.")
-
-        print(f"Pretokenizing {self.representation}...", flush=True)
-        tokenized_corpus = []
-        vocabulary_frequency: defaultdict[str, int] = defaultdict(int)
-        saw_tokens = False
-        skipped_malformed = 0
-
-        for sentence in corpus:
-            # One malformed row must not abort a multi-hour training run. Skip and
-            # count it; surface the total so a corrupt corpus is still visible.
-            try:
-                tokens = self.pre_tokenize(str(sentence))
-            except ValueError:
-                skipped_malformed += 1
-                continue
-            if not tokens:
-                continue
-            saw_tokens = True
-            for token in tokens:
-                vocabulary_frequency[token] += 1
-            if len(tokens) > 1:
-                tokenized_corpus.append(tokens)
-        if skipped_malformed:
-            print(f"Skipped {skipped_malformed} malformed sequences", flush=True)
-        print(
-            f"Pretokenization complete, found {len(vocabulary_frequency)} tokens",
-            flush=True,
-        )
-
-        if not saw_tokens:
-            raise ValueError("Cannot train APE tokenizer on an empty corpus.")
-
-        pre_tokens_counts = len(vocabulary_frequency)
-        merged_counter = len(vocabulary_frequency) + 1
-        if save_checkpoint and checkpoint_interval <= 0:
-            raise ValueError(
-                "checkpoint_interval must be positive when save_checkpoint is enabled."
-            )
-        checkpoint_increment = checkpoint_interval
-        batch = checkpoint_interval + pre_tokens_counts
-        piece_count_cache: dict[str, int] = {}
-
-        def merged_piece_count(token: str) -> int:
-            count = piece_count_cache.get(token)
-            if count is None:
-                count = _base_piece_count(token, self.representation)
-                piece_count_cache[token] = count
-            return count
-
-        def get_most_common_pair(tokenized):
-            pair_counts: defaultdict[tuple[str, str], int] = defaultdict(int)
-            for tokens in tokenized:
-                for i in range(len(tokens) - 1):
-                    pair = (tokens[i], tokens[i + 1])
-
-                    if max_merge_pieces is not None:
-                        merged_candidate = pair[0] + pair[1]
-                        if merged_piece_count(merged_candidate) > max_merge_pieces:
-                            continue
-
-                    pair_counts[pair] += 1
-
-            if not pair_counts:
-                return ("", ""), 0
-
-            most_common_pair = ("", "")
-            most_common_frequency = 0
-            for pair, count in pair_counts.items():
-                if count > most_common_frequency:
-                    most_common_pair = pair
-                    most_common_frequency = count
-            return most_common_pair, most_common_frequency
-
-        while True:
-            if save_checkpoint and len(vocabulary_frequency) >= batch:
-                self.vocabulary_frequency = dict(vocabulary_frequency)
-                self.vocab = {
-                    **{
-                        str(self.bos_token): 0,
-                        str(self.pad_token): 1,
-                        str(self.eos_token): 2,
-                        str(self.unk_token): 3,
-                        str(self.mask_token): 4,
-                    },
-                    **{
-                        word: idx
-                        for idx, word in enumerate(
-                            vocabulary_frequency.keys(),
-                            start=5,
-                        )
-                    },
-                }
-                self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
-                self._refresh_tokenization_cache()
-                checkpoint_dir = Path(checkpoint_path)
-                checkpoint_dir.mkdir(parents=True, exist_ok=True)
-                self.save_vocabulary_file(checkpoint_dir / f"checkpoint_{batch}.json")
-                self.save_pretrained(str(checkpoint_dir / f"checkpoint_{batch}"))
-                print(f"Checkpoint saved at {checkpoint_dir}/checkpoint_{batch}.json")
-                batch += checkpoint_increment
-
-            if len(vocabulary_frequency) >= max_vocab_size:
-                print("Max vocabulary achieved", flush=True)
-                break
-
-            if not tokenized_corpus:
-                print("No more mergeable pairs", flush=True)
-                break
-
-            most_common_pair, freq = get_most_common_pair(tokenized_corpus)
-            if freq < min_freq_for_merge:
-                print("Not enough frequency found", flush=True)
-                break
-
-            if not most_common_pair[0] or not most_common_pair[1]:
-                print("No valid merge pair found", flush=True)
-                break
-
-            left_token, right_token = most_common_pair
-            merged_word = left_token + right_token
-            if merged_word not in vocabulary_frequency:
-                print(
-                    f"New merge found: {merged_word} {merged_counter}/{max_vocab_size} "
-                    f"{round(merged_counter / max_vocab_size * 100, 2)}%",
-                    flush=True,
-                )
-                merged_counter += 1
-            # Each merged occurrence consumes one left + one right piece, so debit
-            # both constituents to keep vocabulary_frequency (the *_freq.json
-            # diagnostic) an accurate post-merge count. Keys are never removed —
-            # a primitive merged to zero must stay in vocab for coverage.
-            vocabulary_frequency[merged_word] += freq
-            vocabulary_frequency[left_token] = max(0, vocabulary_frequency[left_token] - freq)
-            vocabulary_frequency[right_token] = max(0, vocabulary_frequency[right_token] - freq)
-
-            new_tokenized_corpus = []
-            append_seq = new_tokenized_corpus.append
-            for tokens in tokenized_corpus:
-                token_count = len(tokens)
-
-                # Fast path: a sequence with no adjacent (left, right) is
-                # unchanged by this merge. Keep the existing list by reference
-                # instead of reallocating + re-appending every token. Most
-                # sequences are untouched per merge, so this avoids the bulk of
-                # the per-iteration allocation without altering the output.
-                has_pair = any(
-                    tokens[i] == left_token and tokens[i + 1] == right_token
-                    for i in range(token_count - 1)
-                )
-                if not has_pair:
-                    append_seq(tokens)
-                    continue
-
-                new_tokens = []
-                append_token = new_tokens.append
-                i = 0
-                while i < token_count:
-                    if (
-                        i < token_count - 1
-                        and tokens[i] == left_token
-                        and tokens[i + 1] == right_token
-                    ):
-                        append_token(merged_word)
-                        i += 2
-                    else:
-                        append_token(tokens[i])
-                        i += 1
-
-                if len(new_tokens) > 1:
-                    append_seq(new_tokens)
-
-            tokenized_corpus = new_tokenized_corpus
-
-        self.vocabulary_frequency = dict(vocabulary_frequency)
-        self.vocab = {
-            str(self.bos_token): 0,
-            str(self.pad_token): 1,
-            str(self.eos_token): 2,
-            str(self.unk_token): 3,
-            str(self.mask_token): 4,
-            **{word: idx for idx, word in enumerate(vocabulary_frequency.keys(), start=5)},
-        }
-
-        self.ids_to_tokens = {idx: token for token, idx in self.vocab.items()}
-        self._refresh_tokenization_cache()
-
-    def train_from_iterator(self, iterator, *args, **kwargs) -> None:
-        raise NotImplementedError("train_from_iterator is not implemented for APE")
 
 
 APEPreTrainedTokenizer.register_for_auto_class("AutoTokenizer")

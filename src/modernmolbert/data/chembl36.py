@@ -1,15 +1,18 @@
 import hashlib
 import json
+import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal, overload
+from typing import Any, Literal, cast, overload
 
 import pandas as pd
+from pandas.util import hash_pandas_object
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
 
 from modernmolbert.common.rdkit_safety import looks_like_smiles
+from modernmolbert.utils import get_git_revision
 
 load_dotenv()
 
@@ -30,7 +33,7 @@ class ChemBL36SelfiesPrepConfig:
     max_heavy_atoms: int = 100
     max_mw: float = 1000.0
     chunk_size: int = 100_000
-    train_shards: int = 8
+    train_shards: int = 1
 
 
 def _write_split(frame: pd.DataFrame, output_dir: Path, split: str, *, n_shards: int) -> None:
@@ -129,6 +132,8 @@ def prepare_chembl36_selfies(config: ChemBL36SelfiesPrepConfig) -> None:
         },
         "versions": collect_preparation_versions(),
         "created_at_utc": datetime.now(UTC).isoformat(),
+        "argv": list(sys.argv),
+        "git": get_git_revision(),
         "creation_command": "python -m modernmolbert.data.prepare_chembl36_selfies",
     }
 
@@ -194,7 +199,13 @@ def prepare_chembl36_frame(
 
     stats["rows_after_dedupe"] = int(len(frame))
 
-    checkpoint_dir = config.output_dir / "_checkpoints"
+    checkpoint_config = json.dumps(_jsonable_config(config), sort_keys=True).encode("utf-8")
+    source_columns = [config.smiles_column]
+    if config.dedupe_column in frame.columns:
+        source_columns.append(config.dedupe_column)
+    source_hashes = cast(Any, hash_pandas_object)(frame[source_columns], index=False)
+    checkpoint_key = hashlib.sha256(checkpoint_config + source_hashes.to_numpy().tobytes())
+    checkpoint_dir = config.output_dir / "_checkpoints" / checkpoint_key.hexdigest()[:16]
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     n = len(frame)
@@ -209,8 +220,12 @@ def prepare_chembl36_frame(
             chunk_paths.append(checkpoint_path)
 
             if checkpoint_path.exists():
-                summary = pd.read_parquet(checkpoint_path, columns=["is_valid"])
-                conversion_valid_rows += int(summary["is_valid"].to_numpy().sum())
+                summary = pd.read_parquet(checkpoint_path, columns=["is_valid", "sanitize_error"])
+                conversion_valid_rows += int(
+                    (
+                        summary["is_valid"] | summary["sanitize_error"].eq("failed_basic_filters")
+                    ).sum()
+                )
                 pbar.update(len(chunk))
                 continue
 

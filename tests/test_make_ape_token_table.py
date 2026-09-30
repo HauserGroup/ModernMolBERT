@@ -74,8 +74,8 @@ def test_count_frequencies_correct_counts(tmp_path: Path):
     cc_count = int(df.loc[df["token"] == "[C][C]", "count"].iloc[0])
     # Space-joined corpus:
     #   "[C][C][O][C][C] [C][O][C][N][C] [O][=C][N][C][C] [C][C][C][C]"
-    # Hits: [C][C] at mol0 pos 0, mol0 pos 9, mol2 end, mol3 pos 0,1,2 → 5 total
-    # (Python str.count does NOT skip overlapping matches, so [C][C][C][C] → 3 hits)
+    # Hits: mol0 twice, mol2 once, mol3 twice → 5 total
+    # (str.count skips overlapping matches, so [C][C][C][C] → 2 hits, not 3)
     assert cc_count == 5
 
 
@@ -121,6 +121,17 @@ def test_emit_latex_creates_file(tmp_path: Path):
     emit_latex(df, out, top=4)
     assert out.exists()
     assert out.stat().st_size > 0
+
+
+def test_emit_latex_does_not_interpret_token_metacharacters(tmp_path: Path):
+    df = pd.DataFrame(
+        [{"token": r"[Ring1][#Branch1]", "count": 7}, {"token": r"[C][\C]", "count": 3}]
+    )
+    out = tmp_path / "tokens.tex"
+    emit_latex(df, out, top=2)
+    source = out.read_text()
+    assert r"\texttt{[Ring1][\#Branch1]}" in source
+    assert r"\texttt{[C][\textbackslash{}C]}" in source
 
 
 # ── emit_ape_token_frequency_plot ────────────────────────────────────────────

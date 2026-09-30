@@ -9,16 +9,16 @@ The vocab JSON is a flat {"token": id} mapping. This script:
   2. Appends any symbols not already present, assigning successive IDs.
   3. Writes the result to --output_file.
   4. Recomputes SHA256 and updates the companion metadata JSON (same stem,
-     _metadata.json suffix) if one exists alongside the output file.
+     .metadata.json suffix) if one exists alongside the input file.
 
 Usage (run from the project root):
-    uv run python patch_tokenizer_vocab.py \\
+    uv run python -m modernmolbert.tokenization.patch_tokenizer_vocab \\
         --input_file  tokenizer/chembl36_selfies_2m_ape_max8.json \\
         --extra_file  tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \\
         --output_file tokenizer/chembl36_selfies_2m_ape_max8.json
 
     # preview without writing:
-    uv run python patch_tokenizer_vocab.py ... --dry_run
+    uv run python -m modernmolbert.tokenization.patch_tokenizer_vocab ... --dry_run
 """
 
 import argparse
@@ -63,10 +63,12 @@ def parse_args() -> argparse.Namespace:
 
 def load_symbols(path: Path) -> list[str]:
     symbols = []
+    seen: set[str] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         token = line.strip()
-        if token and not token.startswith("#"):
+        if token and not token.startswith("#") and token not in seen:
             symbols.append(token)
+            seen.add(token)
     return symbols
 
 
@@ -131,10 +133,15 @@ def main() -> None:
     new_sha256 = sha256_of_file(args.output_file)
     print(f"SHA256            : {new_sha256}")
 
-    # Update companion metadata JSON if it exists next to the output file.
-    metadata_path = args.output_file.with_name(args.output_file.stem + "_metadata.json")
-    if metadata_path.exists():
-        metadata: dict = json.loads(metadata_path.read_text(encoding="utf-8"))
+    # The input metadata is authoritative even when output_file has a new stem.
+    metadata_sources = [
+        args.input_file.with_suffix(".metadata.json"),
+        args.input_file.with_name(args.input_file.stem + "_metadata.json"),
+    ]
+    metadata_source = next((path for path in metadata_sources if path.exists()), None)
+    metadata_path = args.output_file.with_suffix(".metadata.json")
+    if metadata_source is not None:
+        metadata: dict = json.loads(metadata_source.read_text(encoding="utf-8"))
 
         patch_record = {
             "patched_at_utc": datetime.now(UTC).isoformat(),
@@ -160,7 +167,7 @@ def main() -> None:
         )
         print(f"Metadata updated  : {metadata_path}")
     else:
-        print(f"No metadata file at {metadata_path} — skipping.")
+        print(f"No metadata file found alongside {args.input_file} — skipping.")
 
     print("\nPatch complete.")
     if to_add:

@@ -43,8 +43,12 @@ Outputs in ``--output-dir``:
     common_row_scores_no_split_overlap.csv  optional paired sensitivity output
     paired_task_differences.csv  per dataset x model pair ROC-AUC difference and interval
     task_matrix.csv        dataset x embedder test ROC-AUC of the CV-selected head, for
-                           verified archives and table-only baselines; the input to
-                           compute_bootstrap_cis.py
+                           verified archives and table-only baselines on their own rows
+    common_task_matrix.csv dataset x archive-backed embedder ROC-AUC on common test rows;
+                           incomplete model cohorts are left missing for the whole dataset
+    common_task_matrix_status.csv  dataset eligibility and excluded/missing models
+    common_task_matrix_no_split_overlap.csv  optional common-row sensitivity matrix
+    common_task_matrix_no_split_overlap_status.csv  optional sensitivity eligibility
     manifest.json          input hashes, code revision and arguments
 
 Usage:
@@ -54,8 +58,8 @@ Usage:
 """
 
 import argparse
+import hashlib
 import json
-import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -69,10 +73,27 @@ from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics im
     _normalize_auc_scores,
     get_skfp_roc_auc,
 )
-from modernmolbert.utils import file_sha256
+from modernmolbert.utils import file_sha256, get_git_revision as git_revision
 
 SCORE_ATOL = 1e-9
 HEAD_KEYS = ["dataset", "embedder", "test_metric_name", "model"]
+COMMON_SCORE_COLUMNS = [
+    "dataset",
+    "embedder",
+    "model",
+    "n_models_compared",
+    "models_compared",
+    "n_common_test_rows",
+    "n_predicted_test",
+    "test_metric_archived",
+    "roc_auc_common",
+    "average_precision_common",
+    "n_scored_endpoints_common",
+    "min_positive_per_scored_endpoint_common",
+    "n_labelled_common",
+    "n_positive_common",
+    "prevalence_common",
+]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -98,7 +119,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         nargs="*",
         default=[],
         metavar="EMBEDDER=LABEL",
-        help="Column labels for task_matrix.csv.",
+        help="Column labels for native and common-row task matrices.",
     )
     parser.add_argument("--predictions-dir", type=Path, default=Path("data/predictions"))
     parser.add_argument("--prepared-dir", type=Path, default=Path("data/prepared"))
@@ -170,6 +191,63 @@ def task_matrix(selected: pd.DataFrame, labels: dict[str, str]) -> pd.DataFrame:
     return matrix.rename(columns=labels).rename_axis(index=None, columns=None)
 
 
+def common_task_matrix(
+    scores: pd.DataFrame,
+    datasets: list[str],
+    embedders: list[str],
+    labels: dict[str, str],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Export common-row scores for one fixed cohort, never a smaller surviving subset.
+
+    ``common_row_scores`` also reports diagnostic scores when only some archives
+    verify. Those scores must not enter the primary matrix: a missing/invalid
+    model changes the intersection for every model. Keep the dataset as an all-NaN
+    row with an explicit status instead of silently changing the comparison.
+    This checks test-row comparability only, not training rows or CV folds.
+    """
+    names = [labels.get(embedder, embedder) for embedder in embedders]
+    if len(set(names)) != len(names):
+        raise ValueError("Common task matrix column labels must be unique")
+    matrix = pd.DataFrame(np.nan, index=datasets, columns=embedders)
+    expected = set(embedders)
+    records = []
+    for dataset in datasets:
+        group = scores.loc[scores["dataset"].eq(dataset)] if not scores.empty else scores
+        found = set(group["embedder"]) if not group.empty else set()
+        record = {
+            "dataset": dataset,
+            "n_models_expected": len(expected),
+            "n_models_verified": len(found),
+            "missing_models": ";".join(sorted(expected - found)),
+            "n_common_test_rows": np.nan,
+            "status": "incomplete_cohort",
+        }
+        if found == expected and expected:
+            if group["embedder"].duplicated().any():
+                raise ValueError(f"Repeated common-row scores for {dataset}")
+            counts = group["n_common_test_rows"].unique()
+            if len(counts) != 1 or not np.all(
+                group["n_models_compared"].to_numpy(dtype=int) == len(expected)
+            ):
+                raise ValueError(f"Inconsistent common-row cohort for {dataset}")
+            record["n_common_test_rows"] = int(counts[0])
+            values = group.set_index("embedder").reindex(embedders)
+            if counts[0] == 0:
+                record["status"] = "no_common_rows"
+            elif (
+                "roc_auc_common" not in values
+                or not np.isfinite(values["roc_auc_common"].to_numpy(dtype=float)).all()
+            ):
+                record["status"] = "undefined_roc_auc"
+            else:
+                matrix.loc[dataset, embedders] = values["roc_auc_common"].to_numpy(dtype=float)
+                record["status"] = "ok"
+        records.append(record)
+    return matrix.rename(columns=labels).rename_axis(index=None, columns=None), pd.DataFrame(
+        records
+    )
+
+
 def common_candidate_heads(heads: pd.DataFrame) -> dict[str, set[str]]:
     """Allow only heads offered for every included embedder in each dataset."""
     shared = {}
@@ -213,19 +291,22 @@ def check_archive(
     if not path.exists():
         return record | {"archive_status": "missing_archive"}
     record["archive_sha256"] = file_sha256(path)
-    with np.load(path, allow_pickle=False) as archive:
-        y_true = archive["y_true"]
-        y_score = archive["y_score"]
-        rows = (
-            archive["test_source_row_indices"]
-            if "test_source_row_indices" in archive.files
-            else None
-        )
-        prepared_hash = (
-            str(archive["prepared_data_sha256"].item())
-            if "prepared_data_sha256" in archive.files
-            else None
-        )
+    try:
+        with np.load(path, allow_pickle=False) as archive:
+            y_true = archive["y_true"]
+            y_score = archive["y_score"]
+            rows = (
+                archive["test_source_row_indices"]
+                if "test_source_row_indices" in archive.files
+                else None
+            )
+            prepared_hash = (
+                str(archive["prepared_data_sha256"].item())
+                if "prepared_data_sha256" in archive.files
+                else None
+            )
+    except Exception:
+        return record | {"archive_status": "corrupt_archive"}
     recomputed = float(get_skfp_roc_auc(y_score, y_true))
     record["n_predicted_test"] = len(y_true)
     record["archive_test_metric"] = recomputed
@@ -336,7 +417,7 @@ def common_row_scores(
             if common:
                 record |= score_rows(y_true, y_score)
             records.append(record)
-    return pd.DataFrame(records)
+    return pd.DataFrame(records, columns=COMMON_SCORE_COLUMNS)
 
 
 def rank_roc_auc(labels: np.ndarray, scores: np.ndarray) -> float:
@@ -382,7 +463,6 @@ def paired_task_differences(
     alpha: float = 0.05,
 ) -> pd.DataFrame:
     """Bootstrap each dataset's paired ROC-AUC difference over its common test rows."""
-    rng = np.random.default_rng(seed)
     records = []
     verified = selected.loc[selected["archive_status"].eq("ok")]
     for dataset, group in verified.groupby("dataset", sort=True):
@@ -395,6 +475,8 @@ def paired_task_differences(
         else:
             pairs = []
         for model_a, model_b in pairs:
+            digest = hashlib.sha256("\0".join((dataset, model_a, model_b)).encode("utf-8")).digest()
+            rng = np.random.default_rng([seed, *np.frombuffer(digest[:16], dtype="<u4").tolist()])
             labels, scores_a = endpoint_scores(*aligned[model_a][:2])
             _, scores_b = endpoint_scores(*aligned[model_b][:2])
             n = len(common)
@@ -463,20 +545,13 @@ def load_split_overlap_exclusions(
     return exclusions
 
 
-def git_revision() -> dict[str, object]:
-    def run(*args: str) -> str:
-        return subprocess.run(
-            ["git", *args], capture_output=True, text=True, check=False
-        ).stdout.strip()
-
-    return {"commit": run("rev-parse", "HEAD"), "dirty": bool(run("status", "--porcelain"))}
-
-
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     labels = parse_labels(args.matrix_labels)
     heads = load_head_results(args.results).assign(score_source="archive")
     if args.embedders:
+        if missing := sorted(set(args.embedders) - set(heads["embedder"])):
+            raise ValueError(f"Requested embedders not found in --results: {missing}")
         heads = heads.loc[heads["embedder"].isin(args.embedders)]
     if args.table_results:
         table = load_table_heads(args.table_results, args.table_embedders)
@@ -541,6 +616,17 @@ def main(argv: list[str] | None = None) -> None:
         else None
     )
     sensitivity = common_row_scores(selected, excluded) if excluded is not None else None
+    local = heads.loc[heads["score_source"].eq("archive")]
+    if local.empty:
+        raise ValueError("No archive-backed head results left after filtering")
+    cohort = sorted(set(args.embedders or local["embedder"].unique().tolist()))
+    datasets = sorted(local["dataset"].unique().tolist())
+    common_matrix, common_status = common_task_matrix(common, datasets, cohort, labels)
+    sensitivity_matrix = (
+        common_task_matrix(sensitivity, datasets, cohort, labels)
+        if sensitivity is not None
+        else None
+    )
     paired = paired_task_differences(
         selected, reference=args.paired_reference, n_boot=args.n_boot, seed=args.seed
     )
@@ -553,6 +639,13 @@ def main(argv: list[str] | None = None) -> None:
         sensitivity.to_csv(args.output_dir / "common_row_scores_no_split_overlap.csv", index=False)
     paired.to_csv(args.output_dir / "paired_task_differences.csv", index=False)
     task_matrix(selected, labels).to_csv(args.output_dir / "task_matrix.csv")
+    common_matrix.to_csv(args.output_dir / "common_task_matrix.csv")
+    common_status.to_csv(args.output_dir / "common_task_matrix_status.csv", index=False)
+    if sensitivity_matrix is not None:
+        sensitivity_matrix[0].to_csv(args.output_dir / "common_task_matrix_no_split_overlap.csv")
+        sensitivity_matrix[1].to_csv(
+            args.output_dir / "common_task_matrix_no_split_overlap_status.csv", index=False
+        )
     manifest = {
         "script": "scripts/paper/build_common_row_benchmark.py",
         "code": git_revision(),
@@ -561,6 +654,21 @@ def main(argv: list[str] | None = None) -> None:
         "table_results_sha256": {str(path): file_sha256(path) for path in args.table_results},
         "table_embedders": args.table_embedders,
         "matrix_labels": labels,
+        "task_matrices": {
+            "task_matrix.csv": {
+                "population": "each model's own test rows; includes table-only baselines",
+                "metric": "test_metric",
+            },
+            "common_task_matrix.csv": {
+                "population": "intersection of verified test rows for the fixed archive cohort",
+                "metric": "roc_auc_common",
+                "embedders": cohort,
+                "incomplete_cohort_policy": "all scores missing for that dataset",
+                "status_file": "common_task_matrix_status.csv",
+                "status_counts": common_status["status"].value_counts().to_dict(),
+                "training_rows_and_cv_folds_verified": False,
+            },
+        },
         "selection_rule": (
             "common candidate heads per dataset, then max training-side "
             "CV ROC-AUC per dataset x embedder"
@@ -577,6 +685,16 @@ def main(argv: list[str] | None = None) -> None:
         },
     }
     if excluded is not None:
+        assert sensitivity_matrix is not None
+        manifest["task_matrices"]["common_task_matrix_no_split_overlap.csv"] = {
+            "population": "common test rows after the split-overlap exclusion",
+            "metric": "roc_auc_common",
+            "embedders": cohort,
+            "incomplete_cohort_policy": "all scores missing for that dataset",
+            "status_file": "common_task_matrix_no_split_overlap_status.csv",
+            "status_counts": sensitivity_matrix[1]["status"].value_counts().to_dict(),
+            "training_rows_and_cv_folds_verified": False,
+        }
         manifest["split_overlap_sensitivity"] = {
             "audit_path": str(args.split_overlap_rows),
             "audit_sha256": file_sha256(args.split_overlap_rows),

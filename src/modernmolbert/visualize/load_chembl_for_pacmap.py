@@ -1,5 +1,3 @@
-# scripts/visualize_embeddings/load_chembl_for_umap.py
-
 import argparse
 from pathlib import Path
 
@@ -84,7 +82,7 @@ def load_chembl_selfies(
 
     if sample_size is not None:
         if sample_size <= 0:
-            raise ValueError("--sample-size must be positive, or use 0 to disable sampling.")
+            raise ValueError("sample_size must be positive, or use None to disable sampling.")
         if len(df) > sample_size:
             df = df.sample(n=sample_size, random_state=seed)
 
@@ -158,7 +156,7 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("data/pretrain/chembl36_selfies/valid.parquet"),
         help=(
-            "Input parquet file. Prefer valid.parquet/tvalid.parquet for visualization; "
+            "Input parquet file. Prefer valid.parquet for visualization; "
             "use train.parquet only with --sample-size."
         ),
     )

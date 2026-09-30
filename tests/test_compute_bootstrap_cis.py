@@ -16,6 +16,7 @@ from compute_bootstrap_cis import (
     comparison_row,
     emit_latex,
     paired_bootstrap,
+    run_comparisons,
 )
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
@@ -83,6 +84,16 @@ def test_comparison_row_win_tie_loss():
 
 
 # ── run_comparisons ───────────────────────────────────────────────────────────
+
+
+def test_comparison_intervals_do_not_depend_on_list_order():
+    comparisons = [("MMB-base", "SELFormer"), ("MMB-base", "ECFP4")]
+    forward = run_comparisons(_matrix_3task(), comparisons, n_boot=200, seed=42)
+    backward = run_comparisons(_matrix_3task(), comparisons[::-1], n_boot=200, seed=42)
+    pd.testing.assert_frame_equal(
+        forward.sort_values("model_b").reset_index(drop=True),
+        backward.sort_values("model_b").reset_index(drop=True),
+    )
 
 
 # ── emit_latex ────────────────────────────────────────────────────────────────

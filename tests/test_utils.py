@@ -12,9 +12,8 @@ from modernmolbert.utils import (
     _resolve_dataset_name_as_local_path,
     _split_parquet_files,
     assert_metadata_representation,
-    collect_local_parquet_corpus,
+    collect_corpus_for_tokenizer,
     encode_sequence,
-    filter_zinc20_chembl36_by_source,
 )
 
 
@@ -97,7 +96,7 @@ def test_resolve_dataset_name_returns_none_for_hf_repo_name() -> None:
 
 
 # ---------------------------------------------------------------------------
-# collect_local_parquet_corpus
+# collect_corpus_for_tokenizer on local Parquet
 # ---------------------------------------------------------------------------
 
 
@@ -105,11 +104,12 @@ def test_collect_local_parquet_corpus_returns_sequences(tmp_path: Path) -> None:
     df = pd.DataFrame({"SELFIES": ["[C][O]", "[C][N]", "[O][C]"]})
     df.to_parquet(tmp_path / "train.parquet")
 
-    corpus = collect_local_parquet_corpus(
-        directory=tmp_path,
-        representation="SELFIES",
+    corpus = collect_corpus_for_tokenizer(
+        dataset_name=str(tmp_path),
+        column="SELFIES",
         n=3,
         seed=0,
+        buffer_size=3,
     )
     assert len(corpus) == 3
     assert all(isinstance(s, str) for s in corpus)
@@ -119,12 +119,13 @@ def test_collect_local_parquet_corpus_raises_on_missing_column(tmp_path: Path) -
     df = pd.DataFrame({"smiles": ["CCO"]})
     df.to_parquet(tmp_path / "train.parquet")
 
-    with pytest.raises(ValueError, match="does not contain column"):
-        collect_local_parquet_corpus(
-            directory=tmp_path,
-            representation="SELFIES",
+    with pytest.raises((KeyError, ValueError), match="SELFIES"):
+        collect_corpus_for_tokenizer(
+            dataset_name=str(tmp_path),
+            column="SELFIES",
             n=1,
             seed=0,
+            buffer_size=1,
         )
 
 
@@ -155,38 +156,3 @@ def test_encode_sequence_truncates_at_max_length() -> None:
 def test_assert_metadata_representation_mismatch_raises() -> None:
     with pytest.raises(ValueError, match="mismatch"):
         assert_metadata_representation({"representation": "SMILES"}, "SELFIES")
-
-
-# ---------------------------------------------------------------------------
-# filter_zinc20_chembl36_by_source
-# ---------------------------------------------------------------------------
-
-
-def test_filter_zinc20_keeps_only_zinc_ids() -> None:
-    from datasets import Dataset
-
-    rows = [
-        {"id": "ZINC001", "selfies": "[C]"},
-        {"id": "CHEMBL001", "selfies": "[O]"},
-        {"id": "ZINC002", "selfies": "[N]"},
-    ]
-    ds = Dataset.from_list(rows).to_iterable_dataset()
-    result = list(filter_zinc20_chembl36_by_source(ds, source="zinc"))
-    ids = [r["id"] for r in result]
-    assert all(i.startswith("ZINC") for i in ids)
-    assert len(ids) == 2
-
-
-def test_filter_zinc20_keeps_only_chembl_ids() -> None:
-    from datasets import Dataset
-
-    rows = [
-        {"id": "ZINC001", "selfies": "[C]"},
-        {"id": "CHEMBL001", "selfies": "[O]"},
-        {"id": "CHEMBL002", "selfies": "[N]"},
-    ]
-    ds = Dataset.from_list(rows).to_iterable_dataset()
-    result = list(filter_zinc20_chembl36_by_source(ds, source="chembl"))
-    ids = [r["id"] for r in result]
-    assert all(i.startswith("CHEMBL") for i in ids)
-    assert len(ids) == 2

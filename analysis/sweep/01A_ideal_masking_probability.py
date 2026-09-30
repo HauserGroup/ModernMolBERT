@@ -28,10 +28,10 @@ from modernmolbert.eval.benchmarking_molecular_models.common.config import (
 from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
     DEFAULT_MEMORY_WEIGHT,
 )
+from modernmolbert.common.paths import find_project_root
 from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     get_skfp_roc_auc,
     log_predictions,
-    multioutput_auroc_score,
 )
 from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
     fit_and_eval_embedding,
@@ -39,12 +39,7 @@ from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
 from sklearn.metrics import auc, roc_curve
 
 
-def repo_root() -> Path:
-    """Repository root — parent of the notebooks/ directory."""
-    return Path(__file__).resolve().parent.parent
-
-
-ROOT = repo_root()
+ROOT = find_project_root(Path(__file__))
 BENCH_ROOT = ROOT / "src/modernmolbert/eval/benchmarking_molecular_models"
 CONFIG_DIR = BENCH_ROOT / "config"
 
@@ -53,8 +48,9 @@ DATA_DIR = ROOT / "data"
 PREPARED_DIR = DATA_DIR / "prepared"
 EMBEDDED_DIR = DATA_DIR / "embedded"
 PREDICTIONS_DIR = DATA_DIR / "predictions"
+FIGURE_DIR = ROOT / "outputs/analysis/sweep"
 
-for _d in [EMBEDDED_DIR, PREDICTIONS_DIR]:
+for _d in [EMBEDDED_DIR, PREDICTIONS_DIR, FIGURE_DIR]:
     _d.mkdir(parents=True, exist_ok=True)
 
 # %% [markdown]
@@ -121,7 +117,7 @@ ax.set_title("LR sweep — standard masking")
 ax.legend()
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
-plt.savefig(ROOT / "notebooks/01A_lr_sweep.png", dpi=150)
+plt.savefig(FIGURE_DIR / "01A_lr_sweep.png", dpi=150)
 plt.show()
 
 # %% [markdown]
@@ -154,7 +150,7 @@ for _, opt_row in df_optimal.iterrows():
         model_dir=run_dir / "final_model",
         tokenizer_path=run_dir / "ape_tokenizer",
         embedder=embedder_name,
-        max_seq_length=256,
+        max_seq_length=None,  # the checkpoint's trained context
         pooling="mean",
         device="auto",
         batch_size=128,
@@ -188,7 +184,8 @@ for _, opt_row in df_optimal.iterrows():
         pred_npz = PREDICTIONS_DIR / ds_name / embedder_name / f"{HEAD}.npz"
         pred_npz.parent.mkdir(parents=True, exist_ok=True)
 
-        if not pred_npz.exists():
+        cached = pred_npz.exists()
+        if not cached:
             print(f"  {ds_name}: fitting {HEAD} ...", end=" ", flush=True)
             head_result = fit_and_eval_embedding(
                 dataset=embedded,
@@ -196,12 +193,10 @@ for _, opt_row in df_optimal.iterrows():
                 memory_weight=cfg.get("memory_weight", DEFAULT_MEMORY_WEIGHT),
             )
             log_predictions(head_result, str(PREDICTIONS_DIR))
-            roc_auc = get_skfp_roc_auc(head_result.y_test_pred, head_result.y_test_true)
-            print(f"ROC-AUC={roc_auc:.4f}")
-        else:
-            with np.load(pred_npz) as npz:
-                roc_auc = float(multioutput_auroc_score(npz["y_true"], npz["y_score"]))
-            print(f"  {ds_name}: cached ROC-AUC={roc_auc:.4f}")
+        # Score fresh and cached runs from the same archive with the same metric.
+        with np.load(pred_npz) as npz:
+            roc_auc = float(get_skfp_roc_auc(npz["y_score"], npz["y_true"]))
+        print(f"  {ds_name}: {'cached ' if cached else ''}ROC-AUC={roc_auc:.4f}")
 
         all_results.append(
             {"dataset": ds_name, "mask_prob": mask_prob, "lr": opt_row["lr"], "roc_auc": roc_auc}
@@ -294,6 +289,6 @@ fig.suptitle(
     y=1.01,
 )
 plt.tight_layout()
-plt.savefig(ROOT / "notebooks/01A_roc_curves.png", dpi=150, bbox_inches="tight")
+plt.savefig(FIGURE_DIR / "01A_roc_curves.png", dpi=150, bbox_inches="tight")
 plt.show()
-print(f"Saved: {ROOT / 'notebooks/01A_roc_curves.png'}")
+print(f"Saved: {FIGURE_DIR / '01A_roc_curves.png'}")

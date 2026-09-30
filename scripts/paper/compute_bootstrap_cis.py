@@ -47,11 +47,12 @@ Outputs
 
 Usage
 -----
-    python scripts/compute_bootstrap_cis.py
-    python scripts/compute_bootstrap_cis.py --n_boot 5000 --seed 99
+    uv run python scripts/paper/compute_bootstrap_cis.py
+    uv run python scripts/paper/compute_bootstrap_cis.py --n_boot 5000 --seed 99
 """
 
 import argparse
+import hashlib
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -249,6 +250,12 @@ def comparison_row(
     }
 
 
+def _comparison_rng(seed: int, *parts: str) -> np.random.Generator:
+    digest = hashlib.sha256("\0".join(parts).encode("utf-8")).digest()
+    words = np.frombuffer(digest[:16], dtype="<u4").tolist()
+    return np.random.default_rng([seed, *words])
+
+
 def run_comparisons(
     matrix: pd.DataFrame,
     comparisons: list[tuple[str, str]],
@@ -257,10 +264,16 @@ def run_comparisons(
     families: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Run all comparisons and return a summary DataFrame."""
-    rng = np.random.default_rng(seed)
-    family_rng = np.random.default_rng([seed, 1])
     rows = [
-        comparison_row(matrix, a, b, n_boot, rng, families=families, family_rng=family_rng)
+        comparison_row(
+            matrix,
+            a,
+            b,
+            n_boot,
+            _comparison_rng(seed, a, b, "task"),
+            families=families,
+            family_rng=_comparison_rng(seed, a, b, "family"),
+        )
         for a, b in comparisons
     ]
     return pd.DataFrame(rows)

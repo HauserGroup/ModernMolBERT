@@ -1,6 +1,9 @@
+import argparse
 from pathlib import Path
 
+import pytest
 
+from modernmolbert import train_selfies_ape_modernbert as trainer
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import assert_representation_compatible
 from modernmolbert.utils import (
@@ -94,6 +97,15 @@ def test_tokenization_stats_and_metadata_helpers(tmp_path: Path):
     assert stats["unk_rate"] <= 0.001
     assert stats["mean_len"] > 0
     assert stats["truncation_rate"] == 0.0
+
+    long_stats = compute_tokenization_stats(
+        tokenizer=tokenizer,
+        sequences=["[C]" * 20],
+        max_seq_length=8,
+        special_ids=special_ids,
+    )
+    assert long_stats["max_len"] == 22
+    assert long_stats["truncation_rate"] == 1.0
 
     vocab_path = tmp_path / "selfies_ape_tokenizer.json"
     tokenizer.save_vocabulary_file(vocab_path)
@@ -217,7 +229,7 @@ def test_collect_corpus_passes_data_files(monkeypatch):
 
     corpus = collect_corpus_for_tokenizer(
         dataset_name=PUBCHEM10M_DATASET,
-        representation="SELFIES",
+        column="SELFIES",
         n=2,
         seed=13,
         buffer_size=100,
@@ -226,3 +238,54 @@ def test_collect_corpus_passes_data_files(monkeypatch):
 
     assert corpus == ["[C][C][O]", "[C][O][C]"]
     assert captured.get("data_files") == "/tmp/data/*.parquet"
+
+
+SAMPLE = ["[C][O]", "[C][C][O]", "[O][C]"] * 3
+
+
+def _large_vocab_tokenizer() -> APEPreTrainedTokenizer:
+    # The training gate rejects vocabularies under 100 tokens.
+    tok = APEPreTrainedTokenizer()
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<mask>": 4, "[C]": 5, "[O]": 6}
+    vocab.update({f"[Fill{i}]": 7 + i for i in range(100)})
+    tok.vocabulary = vocab
+    tok.special_tokens = {"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<mask>": 4}
+    tok.update_reverse_vocabulary()
+    return tok
+
+
+def _gate_args(**overrides):
+    args = argparse.Namespace(
+        require_corpus_only_vocab=False,
+        tokenizer_validation_samples=10,
+        representation="SELFIES",
+        max_seq_length=64,
+        unk_rate_threshold=0.0,
+    )
+    for key, value in overrides.items():
+        setattr(args, key, value)
+    return args
+
+
+def test_training_gate_accepts_covered_sample(monkeypatch):
+    monkeypatch.setattr(trainer, "_sample_train_partition_sequences", lambda *_a, **_k: SAMPLE)
+    vocab_size, special_ids, stats = trainer.validate_tokenizer_for_training(
+        _gate_args(), _large_vocab_tokenizer(), {}
+    )
+    assert vocab_size == 107
+    assert special_ids["pad_token"] == 1
+    assert stats["unk_rate"] == 0
+
+
+def test_training_gate_rejects_unknown_primitives(monkeypatch):
+    monkeypatch.setattr(
+        trainer, "_sample_train_partition_sequences", lambda *_a, **_k: ["[C][N][O]"] * 5
+    )
+    with pytest.raises(ValueError, match="Unknown-token rate too high"):
+        trainer.validate_tokenizer_for_training(_gate_args(), _large_vocab_tokenizer(), {})
+
+
+def test_training_gate_rejects_tiny_vocabulary(monkeypatch):
+    monkeypatch.setattr(trainer, "_sample_train_partition_sequences", lambda *_a, **_k: SAMPLE)
+    with pytest.raises(ValueError, match="small tokenizer vocabulary"):
+        trainer.validate_tokenizer_for_training(_gate_args(), _tiny_tokenizer(), {})

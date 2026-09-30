@@ -180,3 +180,46 @@ def test_run_eval_returns_false_on_failure_in_safe_mode(monkeypatch, tmp_path) -
     )
 
     assert ok is False
+
+
+def test_get_disabled_reason_disables_knn_for_hiv_and_muv() -> None:
+    muv_info = make_dataset_info("clf_ogbg-molmuv")
+    hiv_info = make_dataset_info("clf_ogbg-molhiv")
+    ames_info = make_dataset_info("clf_AMES")
+
+    assert score.get_disabled_reason(muv_info, "knn") == "KNN disabled for MUV"
+    assert score.get_disabled_reason(hiv_info, "knn") == "KNN disabled for HIV"
+    assert score.get_disabled_reason(ames_info, "knn") is None
+    assert score.get_disabled_reason(hiv_info, "rf") is None
+
+
+def test_head_checkpoint_success_requires_matching_version(tmp_path) -> None:
+    score.write_head_checkpoint(tmp_path, "AMES", "emb", "rf", status="success", version_hash="v1")
+
+    assert score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v1")
+    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v2")
+    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "ridge", "v1")
+
+
+def test_head_checkpoint_failed_or_corrupt_is_not_success(tmp_path) -> None:
+    score.write_head_checkpoint(tmp_path, "AMES", "emb", "rf", status="failed", version_hash="v1")
+    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v1")
+
+    path = score.head_checkpoint_path(tmp_path, "AMES", "emb", "rf")
+    path.write_text("{not json", encoding="utf-8")
+    assert score.read_head_checkpoint(tmp_path, "AMES", "emb", "rf") is None
+    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v1")
+
+
+def test_dataset_is_complete_needs_every_head_success_or_disabled(tmp_path) -> None:
+    heads = ["rf", "ridge", "knn"]
+    score.write_head_checkpoint(tmp_path, "HIV", "emb", "rf", status="success", version_hash="v1")
+    score.write_head_checkpoint(
+        tmp_path, "HIV", "emb", "ridge", status="success", version_hash="v1"
+    )
+    assert not score.dataset_is_complete(tmp_path, "HIV", "emb", heads, "v1")
+
+    score.write_head_checkpoint(tmp_path, "HIV", "emb", "knn", status="disabled", version_hash="v1")
+    assert score.dataset_is_complete(tmp_path, "HIV", "emb", heads, "v1")
+    assert not score.dataset_is_complete(tmp_path, "HIV", "emb", heads, "v2")
+    assert not score.dataset_is_complete(None, "HIV", "emb", heads, "v1")

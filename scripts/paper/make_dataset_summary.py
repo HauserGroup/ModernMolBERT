@@ -90,17 +90,17 @@ def summarise(dataset: Dataset) -> dict[str, object]:
         record[f"{split}_positive_cells"] = int((block[finite] == 1).sum())
         record[f"{split}_missing_cells"] = int((~finite).sum())
     record["n_unassigned"] = labels.shape[0] - assigned
-    test_labelled = int(str(record["test_labelled_cells"]))
-    test_positive = int(str(record["test_positive_cells"]))
+    test_labelled = int(record["test_labelled_cells"])
+    test_positive = int(record["test_positive_cells"])
     record["test_prevalence"] = test_positive / test_labelled if test_labelled else np.nan
     endpoints = summarise_test_endpoints(dataset)
     evaluable = [row for row in endpoints if row["prepared_test_roc_auc_evaluable"]]
     record["prepared_test_evaluable_endpoints"] = len(evaluable)
     record["prepared_test_min_positive_per_evaluable_endpoint"] = (
-        min(int(str(row["n_test_positive"])) for row in evaluable) if evaluable else np.nan
+        min(int(row["n_test_positive"]) for row in evaluable) if evaluable else np.nan
     )
     record["prepared_test_min_negative_per_evaluable_endpoint"] = (
-        min(int(str(row["n_test_negative"])) for row in evaluable) if evaluable else np.nan
+        min(int(row["n_test_negative"]) for row in evaluable) if evaluable else np.nan
     )
     return record
 

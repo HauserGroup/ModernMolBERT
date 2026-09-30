@@ -51,8 +51,12 @@ def main():
 
         dataset = load(dataset_config, embed_config.raw_directory)
 
-        joblib.dump(dataset, filename)
-        dataset.serialize_legacy(legacy_filename)
+        tmp_filename = f"{filename}.tmp"
+        joblib.dump(dataset, tmp_filename)
+        os.replace(tmp_filename, filename)
+        tmp_legacy_filename = f"{legacy_filename}.tmp"
+        dataset.serialize_legacy(tmp_legacy_filename)
+        os.replace(tmp_legacy_filename, legacy_filename)
         print(f"Dataset {dataset_name} saved to {filename}")
 
 

@@ -48,6 +48,14 @@ def test_prepare_chembl36_frame_filters_and_adds_selfies(tmp_path: Path) -> None
     assert stats["rows_after_filters"] == 2
     assert stats["sanitize_error_counts"]["failed_basic_filters"] == 1
 
+    resumed, resumed_stats = prepare_chembl36_frame(frame, config=config, return_stats=True)
+    pd.testing.assert_frame_equal(out, resumed)
+    assert resumed_stats == stats
+
+    changed_config = ChemBL36SelfiesPrepConfig(output_dir=config.output_dir, min_heavy_atoms=1)
+    changed, _ = prepare_chembl36_frame(frame, config=changed_config, return_stats=True)
+    assert len(changed) == 3
+
 
 def test_prepare_chembl36_frame_dedupes_clean_split_keys(tmp_path: Path) -> None:
     frame = pd.DataFrame(

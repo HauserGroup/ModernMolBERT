@@ -40,7 +40,10 @@ def compare_prediction(
         )
     if y_true.shape != y_score.shape:
         raise ValueError(f"Prediction/label shape mismatch in {prediction_path}")
-    score = float(get_skfp_roc_auc(y_score, y_true))
+    try:
+        score: float | None = float(get_skfp_roc_auc(y_score, y_true))
+    except (ValueError, TypeError):
+        score = None
     labels_match = None
     rows_belong_to_test = None
     if prepared_test_labels is not None:
@@ -66,7 +69,10 @@ def compare_prediction(
             and np.array_equal(expected, observed, equal_nan=True)
         )
     scores = pd.to_numeric(result_rows["test_metric"], errors="raise").to_numpy(dtype=float)
-    matches = np.flatnonzero(np.isclose(scores, score, rtol=0, atol=1e-10))
+    if score is not None and np.isfinite(score):
+        matches = np.flatnonzero(np.isclose(scores, score, rtol=0, atol=1e-10))
+    else:
+        matches = np.array([], dtype=int)
     return {
         "dataset": prediction_path.parent.parent.name,
         "embedder": prediction_path.parent.name,
@@ -87,7 +93,11 @@ def compare_prediction(
         "matching_csv_sources": json.dumps(
             [str(result_rows.iloc[i]["result_source"]) for i in matches]
         ),
-        "min_abs_score_difference": float(np.min(np.abs(scores - score))) if len(scores) else None,
+        "min_abs_score_difference": (
+            float(np.min(np.abs(scores - score)))
+            if (len(scores) and score is not None and np.isfinite(score))
+            else None
+        ),
     }
 
 
@@ -112,7 +122,9 @@ def main() -> None:
             raise ValueError(f"Missing {col} from results CSVs")
     prepared_test_labels = {}
     prepared_test_indices = {}
-    for path in args.prepared_dir.glob("*.json"):
+    for path in sorted(args.prepared_dir.glob("*.json")):
+        if path.name.endswith(".manifest.json") or path.name == "migration_manifest.json":
+            continue
         dataset = Dataset.deserialize_legacy(path)
         indices = list(dataset.splits.get("test", []))
         prepared_test_labels[path.stem] = dataset.labels.iloc[indices].to_numpy(dtype=float)
@@ -144,11 +156,13 @@ def main() -> None:
     print(f"Exact scalar score matches: {sum(bool(r['n_matching_csv_rows']) for r in rows)}")
     print(f"No matching CSV row: {sum(not r['n_csv_rows'] for r in rows)}")
     print(
-        f"Prepared test size mismatches: {sum(r['n_prediction_rows'] != r['n_prepared_test_rows'] for r in rows)}"
+        "Prepared test size mismatches: "
+        f"{sum(r['n_prepared_test_rows'] is not None and r['n_prediction_rows'] != r['n_prepared_test_rows'] for r in rows)}"
     )
     print(
         f"Prepared test label matches: {sum(r['labels_match_prepared_test'] is True for r in rows)}"
     )
+    print(f"Missing prepared test datasets: {sum(r['n_prepared_test_rows'] is None for r in rows)}")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ from modernmolbert.eval.benchmarking_molecular_models.common.types import Datase
 
 def load_symbols(path: Path) -> list[str]:
     symbols = [line.strip() for line in path.read_text().splitlines()]
-    symbols = [symbol for symbol in symbols if symbol and not symbol.startswith("# ")]
+    symbols = [symbol for symbol in symbols if symbol and not symbol.startswith("#")]
     if not symbols or len(symbols) != len(set(symbols)):
         raise ValueError("Injected symbol list is empty or contains duplicates")
     return symbols
@@ -44,7 +44,11 @@ def count_benchmark(
 
     rows = []
     global_molecule_counts: Counter[str] = Counter()
-    paths = sorted(prepared_dir.glob("*.json"))
+    paths = [
+        p
+        for p in sorted(prepared_dir.glob("*.json"))
+        if not p.name.endswith(".manifest.json") and p.name != "migration_manifest.json"
+    ]
     if not paths:
         raise FileNotFoundError(f"No prepared datasets in {prepared_dir}")
     for path in paths:

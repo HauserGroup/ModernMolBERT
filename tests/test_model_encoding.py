@@ -8,6 +8,7 @@ No environment variable is required — just train a model first.
 import os
 from pathlib import Path
 
+import pytest
 import torch
 from transformers import AutoModel, AutoTokenizer
 
@@ -21,6 +22,7 @@ _TEXTS = [
 ]
 
 
+@pytest.mark.model
 def test_existing_minimal_model_encoder_output(existing_minimal_model: Path) -> None:
     """Verify that a trained checkpoint produces finite encoder embeddings.
 

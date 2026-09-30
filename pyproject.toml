@@ -25,6 +25,7 @@ dependencies = [
     "scikit-learn>=1.8.0",
     "selfies>=2.2.0",
     "tensorboard>=2.19.0",
+    "tokenizers>=0.23.2",
     "torch==2.12.1",
     "tornado>=6.5.6",
     "tqdm>=4.67.3",
@@ -42,7 +43,6 @@ dev = [
     "ruff>=0.15.12",
 ]
 eval = [
-    "dabest>=0.2.5",
     "deepchem>=2.8.0",
     "rdkit>=2026.3.1",
     "selfies>=2.2.0",
@@ -107,12 +107,12 @@ modernmolbert = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 markers = [
     "smoke: optional end-to-end smoke tests",
     "mps: tests intended for Apple MPS",
     "cuda: tests intended for CUDA",
     "model: tests that load trained model checkpoints or external pretrained models",
-    "molformer: tests requiring the separate molformer-only environment",
     "network: tests that require network access (e.g. HuggingFace Hub)",
 ]
 
@@ -138,7 +138,7 @@ ignore = [
 "tests/**" = [
     "S101", # assert statements are fine in tests
 ]
-"notebooks/**" = [
+"analysis/**/*.ipynb" = [
     "E402", # module-level imports not at top (% cells)
     "F401", # unused imports (exploratory notebooks)
     "B018", # useless expression (cell output idioms)
@@ -152,11 +152,8 @@ venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
 ignore = [
-    "notebooks",
     "scratch",
-    # Vendored benchmark harness: depends on uninstalled optional deps
-    # (hydra, omegaconf, tdc, skfp, playhouse) and is not part of the
-    # type-checked package surface.
+    # Vendored benchmark harness: not part of the type-checked package surface.
     "src/modernmolbert/eval/benchmarking_molecular_models",
 ]
 extraPaths = ["src", "scripts", "scripts/paper"]

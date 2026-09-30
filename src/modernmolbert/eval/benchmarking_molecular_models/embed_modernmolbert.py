@@ -28,27 +28,24 @@ from modernmolbert.eval.benchmarking_molecular_models.common.types import (
 )
 from modernmolbert.utils import file_sha256
 
-DEFAULT_MODEL_DIR = Path("runs/pubchem10m_mps_base_pilot_256/final_model")
-DEFAULT_EMBEDDER = "modernmolbert_pubchem10m_mps_base_pilot_256"
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Embed prepared Praski benchmark datasets with a ModernMolBERT checkpoint.",
     )
-    parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
+    parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument(
         "--tokenizer-path",
         type=Path,
         default=None,
         help="Tokenizer bundle path; defaults to --model-dir.",
     )
-    parser.add_argument("--embedder", default=DEFAULT_EMBEDDER)
+    parser.add_argument("--embedder", required=True)
     parser.add_argument("--datasets", nargs="+", default=["all"])
     parser.add_argument("--config-dir", default="config")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--max-seq-length", type=int, default=256)
+    parser.add_argument("--max-seq-length", type=int, default=None)
     parser.add_argument("--pooling", choices=["mean", "cls"], default="mean")
     parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     return parser.parse_args()
@@ -109,6 +106,31 @@ def load_prepared_dataset(path: Path) -> Dataset:
     return joblib.load(path)
 
 
+def assert_reusable_embedding(output_path: Path, prepared_path: Path) -> None:
+    """Never skip a stale or unreadable pickle as if it matched the prepared cohort."""
+    source_path = prepared_path.with_suffix(".json")
+    if not source_path.exists():
+        source_path = prepared_path
+    try:
+        embedded = joblib.load(output_path, mmap_mode="r")
+    except (ModuleNotFoundError, AttributeError) as exc:
+        raise ValueError(
+            f"Existing embedding {output_path} uses an obsolete pickle class; "
+            "regenerate it with --overwrite"
+        ) from exc
+    except (EOFError, OSError) as exc:
+        raise ValueError(
+            f"Existing embedding {output_path} is truncated or unreadable; "
+            "regenerate it with --overwrite"
+        ) from exc
+    recorded = getattr(embedded, "metadata", {}).get("prepared_data_sha256")
+    if recorded != file_sha256(source_path):
+        raise ValueError(
+            f"Existing embedding {output_path} has a different prepared-data hash; "
+            "regenerate it with --overwrite"
+        )
+
+
 def make_featurizer(args: argparse.Namespace):
     from modernmolbert.eval.featurizers.modernmolbert_selfies import (
         ModernMolBERTSelfiesFeaturizer,
@@ -125,22 +147,8 @@ def make_featurizer(args: argparse.Namespace):
     )
 
 
-def _warn_if_not_best_model(model_dir: Path) -> None:
-    resolved = str(model_dir.resolve())
-    if "best" not in resolved.lower():
-        import warnings
-
-        warnings.warn(
-            f"model-dir does not contain 'best' in its path: {model_dir}\n"
-            "Pass runs/best_<name> to use the designated best checkpoint.",
-            UserWarning,
-            stacklevel=3,
-        )
-
-
 def main() -> None:
     args = parse_args()
-    _warn_if_not_best_model(args.model_dir)
     root = Path(__file__).resolve().parent
     config_dir = root / args.config_dir
     embed_config = EmbeddingConfig(**load_embedding_config(config_dir))
@@ -165,6 +173,7 @@ def main() -> None:
         output_path = output_dir / f"{args.embedder}.joblib"
 
         if output_path.exists() and not args.overwrite:
+            assert_reusable_embedding(output_path, prepared_path)
             print(
                 f"[{idx:>2}/{n_total}] SKIP  {dataset_name} — embedding exists",
                 flush=True,
@@ -198,7 +207,9 @@ def main() -> None:
         gc.collect()
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        joblib.dump(embedded, output_path)
+        tmp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        joblib.dump(embedded, tmp_output_path)
+        os.replace(tmp_output_path, output_path)
 
         elapsed = time.perf_counter() - t0
         print(

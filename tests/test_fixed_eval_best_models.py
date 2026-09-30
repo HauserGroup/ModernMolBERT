@@ -6,7 +6,9 @@ from modernmolbert.collator import MolecularMLMCollator
 
 
 def _load_module():
-    module_path = Path(__file__).resolve().parents[1] / "analysis" / "sweep" / "fixed_eval_best_models.py"
+    module_path = (
+        Path(__file__).resolve().parents[1] / "analysis" / "sweep" / "fixed_eval_best_models.py"
+    )
     spec = importlib.util.spec_from_file_location("fixed_eval_best_models", module_path)
     assert spec is not None
     assert spec.loader is not None
@@ -81,3 +83,10 @@ def test_script_uses_repo_collator_class() -> None:
     m = _load_module()
 
     assert m.MolecularMLMCollator is MolecularMLMCollator
+
+
+def test_select_device() -> None:
+    m = _load_module()
+    assert m.select_device("cpu").type == "cpu"
+    dev = m.select_device("auto")
+    assert dev.type in ("cuda", "mps", "cpu")

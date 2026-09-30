@@ -15,7 +15,6 @@ import argparse
 import csv
 from collections import defaultdict
 from functools import lru_cache
-import hashlib
 from pathlib import Path
 
 import pyarrow.parquet as pq
@@ -24,19 +23,12 @@ import selfies as sf
 import yaml
 
 from modernmolbert.eval.benchmarking_molecular_models.common.types import Dataset
+from modernmolbert.utils import file_sha256 as sha256_file
 
 CONFIG = Path("src/modernmolbert/eval/benchmarking_molecular_models/config/datasets.yaml")
 PRETRAIN = Path("data/pretrain/chembl36_selfies/train.parquet")
 PREPARED = Path("data/prepared")
 EXCLUDED = {"ogbg-moltoxcast"}  # The 26th configured dataset is not in the paper.
-
-
-def sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 @lru_cache(maxsize=250_000)

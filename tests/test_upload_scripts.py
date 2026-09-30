@@ -4,7 +4,42 @@ from pathlib import Path
 
 import pytest
 
-from modernmolbert import upload_dataset, upload_tokenizer
+from modernmolbert import upload_dataset, upload_model, upload_tokenizer
+from modernmolbert.hf_upload import make_staging_dir
+
+
+def test_staging_dir_never_deletes_existing_content(tmp_path: Path) -> None:
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    sentinel = staging / "keep.txt"
+    sentinel.write_text("important")
+    with pytest.raises(ValueError, match="must be empty"):
+        make_staging_dir(staging)
+    assert sentinel.read_text() == "important"
+
+
+def test_model_upload_uses_saved_context_vocab_and_masking(tmp_path: Path) -> None:
+    source = tmp_path / "final_model"
+    source.mkdir()
+    _write_json(
+        source / "config.json",
+        {"model_type": "modernbert", "vocab_size": 12, "max_position_embeddings": 192},
+    )
+    _write_json(
+        tmp_path / "run_args.json",
+        {"max_seq_length": 192, "masking_strategy": "standard", "mlm_probability": 0.15},
+    )
+    config = upload_model.load_and_patch_config(source, tmp_path, vocab_size=12)
+    assert config["max_position_embeddings"] == 192
+    with pytest.raises(ValueError, match="vocab mismatch"):
+        upload_model.load_and_patch_config(source, tmp_path, vocab_size=11)
+
+    upload_model.write_collator_config(tmp_path, tmp_path, masking_strategy=None)
+    collator = json.loads((tmp_path / "collator_config.json").read_text())
+    assert collator["masking_strategy"] == "standard"
+    assert collator["mlm_probability"] == 0.15
+    with pytest.raises(ValueError, match="differs"):
+        upload_model.write_collator_config(tmp_path, tmp_path, masking_strategy="span")
 
 
 class _RecordingApi:

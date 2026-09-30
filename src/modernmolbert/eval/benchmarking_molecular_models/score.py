@@ -269,9 +269,12 @@ def dataset_is_complete(
 
 def get_disabled_reason(dataset_info: Any, head: str) -> str | None:
     """Return explicit disable reason for dataset/head, otherwise None."""
-    dataset_name = str(getattr(dataset_info, "name", ""))
-    if head == "knn" and "muv" in dataset_name.lower():
-        return "KNN disabled for MUV"
+    dataset_name = str(getattr(dataset_info, "name", "")).lower()
+    if head == "knn":
+        if "muv" in dataset_name:
+            return "KNN disabled for MUV"
+        if "hiv" in dataset_name:
+            return "KNN disabled for HIV"
 
     return None
 
@@ -291,24 +294,6 @@ def dataset_checkpoint_path(
     safe_dataset = safe_file_component(dataset)
     safe_embedder = safe_file_component(embedder)
     return Path(checkpoint_dir) / f"{safe_dataset}__{safe_embedder}.csv"
-
-
-def checkpoint_exists(
-    *,
-    checkpoint_dir: Path | None,
-    dataset: str,
-    embedder: str,
-) -> bool:
-    """Check whether a dataset/embedder checkpoint already exists."""
-    if checkpoint_dir is None:
-        return False
-
-    path = dataset_checkpoint_path(
-        checkpoint_dir=checkpoint_dir,
-        dataset=dataset,
-        embedder=embedder,
-    )
-    return path.exists() and path.stat().st_size > 0
 
 
 def make_short_model_name(model_name: str) -> str:
@@ -672,7 +657,7 @@ def run_eval(
     override: bool,
     preloaded: Any = None,
     n_jobs: int | None = None,
-    missing_labels: str = "observed",
+    missing_labels: str = "as-negative",
 ) -> bool:
     """Run one dataset/head evaluation.
 
@@ -885,7 +870,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--missing-labels",
         choices=["observed", "as-negative"],
-        default="observed",
+        default="as-negative",
         help=(
             "Handling of missing labels in multi-endpoint datasets (Tox21, MUV). "
             "'observed' fits each endpoint on its observed labels; 'as-negative' "

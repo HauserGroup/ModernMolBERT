@@ -4,6 +4,7 @@ import sys
 import joblib
 import numpy as np
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models.embed_modernmolbert import (
     embed_dataset,
@@ -103,11 +104,8 @@ def test_download_prepares_missing_dataset_without_network(monkeypatch, tmp_path
             [
                 "raw_directory: data/raw",
                 "embedded_directory: data/embedded",
-                "data_directory: data/downloaded",
                 "prepared_directory: data/prepared",
                 "predictions_directory: data/predictions",
-                "clock_directory: data/clock",
-                "svd_directory: data/svd",
                 "max_invalid_embeddings: 50",
             ]
         )
@@ -204,11 +202,8 @@ def write_embedding_test_config(config_dir: Path) -> None:
             [
                 "raw_directory: data/raw",
                 "embedded_directory: data/embedded",
-                "data_directory: data/downloaded",
                 "prepared_directory: data/prepared",
                 "predictions_directory: data/predictions",
-                "clock_directory: data/clock",
-                "svd_directory: data/svd",
                 "max_invalid_embeddings: 50",
             ]
         )
@@ -256,6 +251,8 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
             "tiny_clf",
             "--embedder",
             "fake_embedder",
+            "--model-dir",
+            str(tmp_path / "model"),
         ],
     )
     embed_modernmolbert.main()
@@ -270,6 +267,11 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
     skipped = joblib.load(output_path)
     assert skipped.X[:, 1].tolist() == [1.0, 1.0]
 
+    (prepared_dir / "tiny.joblib").write_bytes(b"changed prepared cohort")
+    with pytest.raises(ValueError, match="different prepared-data hash"):
+        embed_modernmolbert.main()
+    joblib.dump(dataset, prepared_dir / "tiny.joblib")
+
     monkeypatch.setattr(
         sys,
         "argv",
@@ -281,6 +283,8 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
             "tiny_clf",
             "--embedder",
             "fake_embedder",
+            "--model-dir",
+            str(tmp_path / "model"),
             "--overwrite",
         ],
     )
@@ -423,3 +427,49 @@ def test_regression_path_returns_1d_predictions() -> None:
     assert result.model == "ridge"
     assert result.y_test_pred.ndim == 1
     assert result.y_test_pred.shape == (5,)
+
+
+def test_dataset_labels_preserves_substring_id_columns() -> None:
+    data = pd.DataFrame(
+        {
+            "Drug_ID": ["d1", "d2"],
+            "mol_id": ["m1", "m2"],
+            "id": [1, 2],
+            "split": ["train", "test"],
+            "smiles": ["C", "CC"],
+            "graph": [None, None],
+            "APR_HepG2_OxidativeStress_24h_up": [0, 1],
+            "activity": [1, 0],
+        }
+    )
+    ds = Dataset(
+        name="toxcast_sample",
+        task="classification",
+        data=data,
+        splits={"train": [0], "valid": [], "test": [1]},
+    )
+    labels = ds.labels
+    assert list(labels.columns) == ["APR_HepG2_OxidativeStress_24h_up", "activity"]
+
+
+def test_embedding_config_ignores_retired_directory_keys(tmp_path) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.common.config import (
+        load_embedding_config,
+    )
+    from modernmolbert.eval.benchmarking_molecular_models.common.types import EmbeddingConfig
+
+    (tmp_path / "embedding").mkdir()
+    (tmp_path / "embedding" / "default.yaml").write_text(
+        "raw_directory: data/raw\n"
+        "embedded_directory: data/embedded\n"
+        "prepared_directory: data/prepared\n"
+        "predictions_directory: data/predictions\n"
+        "data_directory: data/downloaded\n"
+        "clock_directory: data/clock\n"
+        "svd_directory: data/svd\n"
+        "max_invalid_embeddings: 50\n"
+    )
+
+    config = EmbeddingConfig(**load_embedding_config(tmp_path))
+
+    assert config.prepared_directory == "data/prepared"

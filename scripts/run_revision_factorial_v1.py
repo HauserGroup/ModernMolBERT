@@ -13,6 +13,9 @@ CORPUS = Path("data/pretrain/chembl36_selfies")
 TOKENIZERS = Path("tokenizer/revision_factorial_v1")
 RUN_ROOT = Path("runs/revision_factorial_v1")
 GATE = Path("outputs/audit/revision_factorial_v1/production_gate.json")
+PREFLIGHT_EVIDENCE = Path("docs/revision_factorial_v1_preflight.md")
+COVERAGE_EVIDENCE = Path("outputs/audit/revision_factorial_v1/pilot_benchmark_coverage.json")
+COMMON_EVIDENCE = Path("outputs/audit/revision_factorial_v1/pilot_common_embeddings.json")
 RUNS = {
     "small_ape_selfies": ("ape_selfies", "selfies", "small"),
     "small_ape_smiles": ("ape_smiles", "smiles_canonical_clean", "small"),
@@ -71,14 +74,25 @@ def check_launch_gate(gate_path: Path) -> None:
         raise RuntimeError("Production gate is incomplete or pinned to another commit")
     if set(gate.get("run_ids", [])) != set(RUNS):
         raise RuntimeError("Production gate must approve exactly the five frozen run IDs")
-    for evidence in (
-        "pilot_evidence_sha256",
-        "capacity_evidence_sha256",
-        "coverage_evidence_sha256",
+    for key, relative in (
+        ("pilot_evidence_sha256", PREFLIGHT_EVIDENCE),
+        ("capacity_evidence_sha256", PREFLIGHT_EVIDENCE),
+        ("coverage_evidence_sha256", COVERAGE_EVIDENCE),
+        ("common_embeddings_sha256", COMMON_EVIDENCE),
     ):
-        value = gate.get(evidence)
-        if not isinstance(value, str) or len(value) != 64:
-            raise RuntimeError(f"Production gate lacks {evidence}")
+        path = ROOT / relative
+        if not path.is_file() or gate.get(key) != sha256_file(path):
+            raise RuntimeError(f"Production gate evidence is missing or changed: {relative}")
+
+
+def check_gpu_available() -> None:
+    """Leave the shared Helios GPU alone while another compute process is active."""
+    processes = subprocess.check_output(
+        ["nvidia-smi", "--query-compute-apps=pid,process_name", "--format=csv,noheader"],
+        text=True,
+    )
+    if processes.strip():
+        raise RuntimeError(f"Helios GPU is already in use:\n{processes.strip()}")
 
 
 def command_for(run_id: str, resume: Path | None) -> list[str]:
@@ -194,6 +208,7 @@ def main() -> None:
         raise RuntimeError(f"Fresh production destination is not empty: {destination}")
     if shutil.which("/opt/lab/bin/uv") is None:
         raise RuntimeError("Helios uv runtime is missing: /opt/lab/bin/uv")
+    check_gpu_available()
     subprocess.run(command, cwd=ROOT, check=True)
 
 

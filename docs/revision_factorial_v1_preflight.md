@@ -96,6 +96,19 @@ reports only the resumed segment for that field; the terminal weights and
 state are identical. Diagnostic paths are `resume_continuous_200/` and
 `resume_interrupted_200/` under the same preflight root.
 
+## Frozen benchmark embedding smoke
+
+The real `embed_modernmolbert` CLI loaded each pilot final bundle and embedded
+the frozen 640-row Bioavailability_Ma prepared dataset with mean pooling at
+context 384. Each representation retained the same 639 source rows and rejected
+only original source row 84 for tokenizer coverage, with zero over-context
+rows. Row 84 is an Au-containing training molecule; no validation or test
+row was removed. All five outputs record the same prepared-data SHA-256,
+`c524d9881200b88e76b5fe3e2d2409c14433a95f04e0aced6437a1c68b8240f8`.
+They are stored as `PREFLIGHT_*` embeddings on Helios and must not enter paper
+scores. This confirms one endpoint's common-row path; G7 still requires
+coverage and shared supervised rows/folds across all 25 endpoints.
+
 ## Remaining launch gates
 
 - Measure CPU evaluation runtime after G7 scoring is ready, then revise the

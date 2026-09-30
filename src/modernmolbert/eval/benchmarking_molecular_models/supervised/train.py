@@ -19,7 +19,6 @@ from modernmolbert.eval.benchmarking_molecular_models.datasplit import (
 )
 from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
     CV_SPLITS,
-    N_JOBS,
     VERBOSITY,
 )
 from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
@@ -112,7 +111,7 @@ def fit_model(
     log.info(f"Shapes: X={X.shape}, y={y_model.shape}")
 
     model = models[model_head]
-    outer_n_jobs = max(1, int(N_JOBS / memory_weight))
+    outer_n_jobs = max(1, int(effective_n_jobs / memory_weight))
     grid_n_jobs = _grid_n_jobs(model["model"], outer_n_jobs)
     log.info(f"GridSearchCV n_jobs={grid_n_jobs} (outer={outer_n_jobs}, head={model_head})")
 

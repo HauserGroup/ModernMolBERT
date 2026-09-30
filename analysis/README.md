@@ -57,15 +57,6 @@ datasets, and plots ROC curves by masking probability.
 
 ---
 
-## benchmark/
-
-### `visualizations.ipynb`
-Comprehensive benchmark visualisation notebook. Loads and ranks embedded
-models, applies best-variant selection logic, generates AUROC tables,
-per-dataset performance tables, and cross-model win-rate plots. Exploratory
-only; the paper's benchmark tables and figures come from `scripts/paper/`.
-
----
 
 ## validation/
 

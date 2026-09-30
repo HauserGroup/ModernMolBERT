@@ -14,7 +14,6 @@ from modernmolbert.utils import (
     assert_metadata_representation,
     collect_corpus_for_tokenizer,
     encode_sequence,
-    filter_zinc20_chembl36_by_source,
 )
 
 
@@ -157,38 +156,3 @@ def test_encode_sequence_truncates_at_max_length() -> None:
 def test_assert_metadata_representation_mismatch_raises() -> None:
     with pytest.raises(ValueError, match="mismatch"):
         assert_metadata_representation({"representation": "SMILES"}, "SELFIES")
-
-
-# ---------------------------------------------------------------------------
-# filter_zinc20_chembl36_by_source
-# ---------------------------------------------------------------------------
-
-
-def test_filter_zinc20_keeps_only_zinc_ids() -> None:
-    from datasets import Dataset
-
-    rows = [
-        {"id": "ZINC001", "selfies": "[C]"},
-        {"id": "CHEMBL001", "selfies": "[O]"},
-        {"id": "ZINC002", "selfies": "[N]"},
-    ]
-    ds = Dataset.from_list(rows).to_iterable_dataset()
-    result = list(filter_zinc20_chembl36_by_source(ds, source="zinc"))
-    ids = [r["id"] for r in result]
-    assert all(i.startswith("ZINC") for i in ids)
-    assert len(ids) == 2
-
-
-def test_filter_zinc20_keeps_only_chembl_ids() -> None:
-    from datasets import Dataset
-
-    rows = [
-        {"id": "ZINC001", "selfies": "[C]"},
-        {"id": "CHEMBL001", "selfies": "[O]"},
-        {"id": "CHEMBL002", "selfies": "[N]"},
-    ]
-    ds = Dataset.from_list(rows).to_iterable_dataset()
-    result = list(filter_zinc20_chembl36_by_source(ds, source="chembl"))
-    ids = [r["id"] for r in result]
-    assert all(i.startswith("CHEMBL") for i in ids)
-    assert len(ids) == 2

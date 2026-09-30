@@ -138,7 +138,7 @@ ignore = [
 "tests/**" = [
     "S101", # assert statements are fine in tests
 ]
-"notebooks/**" = [
+"analysis/**/*.ipynb" = [
     "E402", # module-level imports not at top (% cells)
     "F401", # unused imports (exploratory notebooks)
     "B018", # useless expression (cell output idioms)
@@ -152,11 +152,8 @@ venvPath = "."
 venv = ".venv"
 include = ["src", "tests"]
 ignore = [
-    "notebooks",
     "scratch",
-    # Vendored benchmark harness: depends on uninstalled optional deps
-    # (hydra, omegaconf, tdc, skfp, playhouse) and is not part of the
-    # type-checked package surface.
+    # Vendored benchmark harness: not part of the type-checked package surface.
     "src/modernmolbert/eval/benchmarking_molecular_models",
 ]
 extraPaths = ["src", "scripts", "scripts/paper"]

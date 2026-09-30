@@ -954,12 +954,13 @@ G1–G7 campaign.
 
 ### Notebooks
 
-- **R49. `analysis/benchmark/visualizations.ipynb` selects heads by test score.**
+- **R49. (Fixed) `analysis/benchmark/visualizations.ipynb` selects heads by test score.**
   Every summary in it takes `groupby(["embedder", "dataset"])["test_metric"].max()`,
   the test-maximum rule the plan's §5 audit showed to be optimistic, and it writes
   PNGs into the current directory. It is exploratory and does not feed the paper
   scripts; mark it as historical (or move it to an archive folder) so its win-rate
   and ranking outputs are not reused for revised claims.
+  Fixed: Deleted unreferenced exploratory notebook per simplification candidates (T4).
 - **R50. Committed notebooks keep their outputs despite the nbstripout hook.** All
   three `.ipynb` files contain outputs (47 in the benchmark notebook), so the
   pre-commit `nbstripout` hook was bypassed or predates them. If the PaCMAP outputs
@@ -1230,19 +1231,21 @@ G1–G7 campaign.
 
 ### Dead code scan (`vulture --min-confidence 60`, reviewed by hand)
 
-- **R75. Two upload validators are never called.** `upload_model.validate_tokenizer_config`
+- **R75. (Fixed) Two upload validators are never called.** `upload_model.validate_tokenizer_config`
   (checks `auto_map`, `use_fast=False`, `model_max_length`, absence of
   `tokenizer_class`) and `validate_direct_ape_tokenizer` are defined but unused;
   `upload_model_to_hub` runs only `validate_staged_files` and
   `validate_staged_model`. The tokenizer-config checks therefore never run before a
   public upload. Call them from `upload_model_to_hub` (cheap) or delete them; do not
   leave validators that look active.
-- **R76. (Fixed - part) Other unused code confirmed by hand.** `score.checkpoint_exists`,
+  Fixed: Removed unused `validate_tokenizer_config` and `validate_direct_ape_tokenizer`.
+- **R76. (Fixed) Other unused code confirmed by hand.** `score.checkpoint_exists`,
   `compare_praski_tables.best_head_per_dataset` (alias),
   `ModernMolBERTSelfiesFeaturizer.featurize` (alias), `model_cards.TOKENIZER_MAX_LENGTH`,
-  `SystemConfig`, plus the items in R44/R59. Removing them is behaviour-neutral.
-  Fixed: Removed unused `score.checkpoint_exists`, `ModernMolBERTSelfiesFeaturizer.featurize`,
-  and `model_cards.TOKENIZER_MAX_LENGTH`.
+  `SystemConfig`, `utils.filter_zinc20_chembl36_by_source`, plus the items in R44/R59. Removing them is behaviour-neutral.
+  Fixed: Removed unused `score.checkpoint_exists`, `compare_praski_tables.best_head_per_dataset`,
+  `ModernMolBERTSelfiesFeaturizer.featurize`, `model_cards.TOKENIZER_MAX_LENGTH`, `SystemConfig`,
+  and `utils.filter_zinc20_chembl36_by_source`.
 - **R77. (Fixed) Importing the trainer changes global torch state.**
   `train_selfies_ape_modernbert` sets `torch.set_float32_matmul_precision("high")`
   and `torch._dynamo.config.assume_static_by_default = False` at import time, so

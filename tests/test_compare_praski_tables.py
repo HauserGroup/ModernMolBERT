@@ -4,10 +4,10 @@ import pandas as pd
 import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models.compare_praski_tables import (
-    best_head_per_dataset,
     make_pairwise_vs_ours,
     make_table1_like,
     normalize_head_name,
+    select_best_head_per_dataset_embedder,
 )
 
 
@@ -106,7 +106,7 @@ def test_best_head_per_dataset_selects_highest_roc_auc() -> None:
     df["head"] = df["model"].map(normalize_head_name)
     df["metric"] = df["test_metric_name"]
 
-    best = best_head_per_dataset(df)
+    best = select_best_head_per_dataset_embedder(df)
 
     row = best[(best["dataset"] == "AMES") & (best["embedder"] == "ECFP")].iloc[0]
 
@@ -119,7 +119,7 @@ def test_best_head_per_dataset_selects_lowest_rmse() -> None:
     df["head"] = df["model"].map(normalize_head_name)
     df["metric"] = df["test_metric_name"]
 
-    best = best_head_per_dataset(df)
+    best = select_best_head_per_dataset_embedder(df)
 
     row = best[
         (best["dataset"] == "MoleculeNet_ESOL")
@@ -176,7 +176,7 @@ def test_best_head_selected_by_cv_metric_not_test_metric() -> None:
     df["head"] = df["model"].map(normalize_head_name)
     df["metric"] = df["test_metric_name"]
 
-    best = best_head_per_dataset(df)
+    best = select_best_head_per_dataset_embedder(df)
 
     row = best[(best["dataset"] == "AMES") & (best["embedder"] == "ECFP")].iloc[0]
     assert row["model"] == "ridge", "cv_metric should drive head selection, not test_metric"

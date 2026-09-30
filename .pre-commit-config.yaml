@@ -12,7 +12,7 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=2000"]
         # Published reference PDFs are source material, not generated data or weights.
-        exclude: ^(paper/published_manuscript|papers/ape)\.pdf$
+        exclude: ^paper/published_manuscript\.pdf$
       - id: pretty-format-json
         args: [--autofix]
         exclude: ^(tokenizer/.*|configs/.*)\.json$
@@ -48,11 +48,6 @@ repos:
         args: [--skip, "*.bib,*.tex,*.ipynb", --ignore-words-list, "nd,ser,ba,fpr"]
         exclude: '\.(tsv|csv|json|txt|lock)$'
 
-  -   repo: https://github.com/asottile/pyupgrade
-      rev: v3.21.2
-      hooks:
-      -   id: pyupgrade
-          args: [--py313-plus]
 
   - repo: https://github.com/kynan/nbstripout
     rev: 0.9.1

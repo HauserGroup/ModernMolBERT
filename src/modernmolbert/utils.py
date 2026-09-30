@@ -7,7 +7,7 @@ import shutil
 import statistics
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 # Re-exported so existing callers can keep importing it from modernmolbert.utils.
 from modernmolbert.hf_upload import file_sha256 as file_sha256
@@ -120,32 +120,6 @@ def infer_molecule_column(
         metadata = _local_dataset_metadata(dataset_name)
         return str(metadata.get("canonical_smiles_column", "smiles"))
     return infer_selfies_column(dataset_name)
-
-
-def filter_zinc20_chembl36_by_source(
-    ds: "IterableDataset",
-    source: Literal["zinc", "chembl", "all"] = "all",
-) -> "IterableDataset":
-    """Filter a ZINC20_CHEMBL36 streaming dataset by molecule source.
-
-    Parameters
-    ----------
-    ds:
-        Streaming dataset loaded from ZINC20_CHEMBL36_DATASET.
-    source:
-        ``"zinc"``   — keep only rows whose ``id`` starts with ``"ZINC"``.
-        ``"chembl"`` — keep only rows whose ``id`` starts with ``"CHEMBL"``.
-        ``"all"``    — no filtering; return the dataset unchanged.
-    """
-    if source == "all":
-        return ds
-    prefix = "ZINC" if source == "zinc" else "CHEMBL"
-    # batched=True: filter is called once per batch (default 1000 rows) rather
-    # than once per row.
-    return ds.filter(
-        lambda batch: [s.startswith(prefix) for s in batch["id"]],
-        batched=True,
-    )
 
 
 def _normalized_name(value: str) -> str:

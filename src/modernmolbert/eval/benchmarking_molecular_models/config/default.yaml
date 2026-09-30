@@ -1,5 +1,0 @@
-defaults:
-  - embedding: default
-  - _self_
-
-cache: true

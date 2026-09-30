@@ -224,40 +224,6 @@ def load_direct_ape_tokenizer(tmp: Path):
     return module.APEPreTrainedTokenizer.from_pretrained(str(tmp))
 
 
-def validate_direct_ape_tokenizer(
-    tmp: Path, expected_vocab_size: int, expected_max_length: int
-) -> None:
-    import importlib.util
-
-    tokenizer_py = tmp / "tokenization_ape.py"
-    spec = importlib.util.spec_from_file_location("tokenization_ape", tokenizer_py)
-
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not import tokenizer code from {tokenizer_py}")
-
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    tokenizer = module.APEPreTrainedTokenizer.from_pretrained(str(tmp))
-
-    if tokenizer.vocab_size != expected_vocab_size:
-        raise ValueError(
-            f"Direct tokenizer vocab mismatch: {tokenizer.vocab_size} != {expected_vocab_size}"
-        )
-
-    if tokenizer.model_max_length != expected_max_length:
-        raise ValueError(
-            f"Direct tokenizer max length mismatch: "
-            f"{tokenizer.model_max_length} != {expected_max_length}"
-        )
-
-    print(
-        f"[validate] direct APE tokenizer OK: vocab_size={tokenizer.vocab_size}, "
-        f"max_length={tokenizer.model_max_length}",
-        flush=True,
-    )
-
-
 def build_quickstart_output(source_dir: Path, example_selfies: str, hidden_size: Any) -> str:
     def fallback_output() -> str:
         return (
@@ -682,35 +648,6 @@ def write_collator_config(tmp: Path, run_dir: Path, masking_strategy: str | None
 def remove_pycache_dirs(path: Path) -> None:
     for pycache in path.rglob("__pycache__"):
         shutil.rmtree(pycache, ignore_errors=True)
-
-
-def validate_tokenizer_config(tmp: Path, expected_max_length: int) -> None:
-    tokenizer_config_path = tmp / "tokenizer_config.json"
-    tokenizer_config = json.loads(tokenizer_config_path.read_text(encoding="utf-8"))
-
-    if "tokenizer_class" in tokenizer_config:
-        raise ValueError(
-            "tokenizer_config.json still contains tokenizer_class; "
-            "this can force Transformers down the wrong tokenizer path."
-        )
-
-    expected_auto_map = {
-        "AutoTokenizer": [
-            "tokenization_ape.APEPreTrainedTokenizer",
-            None,
-        ],
-    }
-
-    if tokenizer_config.get("auto_map") != expected_auto_map:
-        raise ValueError(f"Unexpected tokenizer auto_map: {tokenizer_config.get('auto_map')!r}")
-
-    if tokenizer_config.get("model_max_length") != expected_max_length:
-        raise ValueError(
-            f"Unexpected model_max_length={tokenizer_config.get('model_max_length')!r}"
-        )
-
-    if tokenizer_config.get("use_fast") is not False:
-        raise ValueError("tokenizer_config.json should contain use_fast=false")
 
 
 def validate_staged_model(tmp: Path) -> None:

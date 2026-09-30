@@ -44,6 +44,7 @@ from modernmolbert.tokenization.load import (
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
+    _resolve_dataset_name_as_local_path,
     assert_representation_compatible,
     assert_special_ids,
     compute_tokenization_stats,
@@ -66,8 +67,6 @@ if TYPE_CHECKING:
     from transformers import PreTrainedTokenizerBase
 
 DATASET_NAME = PUBCHEM10M_DATASET
-torch.set_float32_matmul_precision("high")
-torch._dynamo.config.assume_static_by_default = False
 
 
 def parse_args() -> argparse.Namespace:
@@ -301,6 +300,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fp16", action="store_true", default=False)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument(
+        "--trace_source_rows",
+        action="store_true",
+        help="Record consumed source-row IDs by microbatch for a short resume proof.",
+    )
+    parser.add_argument(
         "--max_eval_batches",
         type=int,
         default=0,
@@ -432,6 +436,14 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
         args, "global_train_shuffle", False
     ):
         raise ValueError("--train_order_path requires --global_train_shuffle")
+    if getattr(args, "validation_row_ids_path", None) is not None and not getattr(
+        args, "use_validation_split", False
+    ):
+        raise ValueError("--validation_row_ids_path requires --use_validation_split")
+    if getattr(args, "trace_source_rows", False) and not getattr(
+        args, "global_train_shuffle", False
+    ):
+        raise ValueError("--trace_source_rows requires --global_train_shuffle")
     if args.max_seq_length is not None and args.max_seq_length <= 0:
         raise ValueError("max_seq_length must be positive")
     if not 0.0 <= args.mlm_probability <= 1.0:
@@ -538,7 +550,9 @@ def preview_dataset_and_tokenizer(
         if len(examples) >= n_examples:
             break
 
-    local = find_local_dataset(args.data_dir, dataset_name=args.dataset_name)
+    local = _resolve_dataset_name_as_local_path(args.dataset_name)
+    if local is None:
+        local = find_local_dataset(args.data_dir, dataset_name=args.dataset_name)
     log(f"Dataset: {args.dataset_name}")
     log(f"Molecule column: {args.molecule_column}")
     log(f"Train split: {args.train_split}")
@@ -682,6 +696,10 @@ def read_training_tokenizer(
     tokenizer, metadata, vocab_path, metadata_path = load_verified_tokenizer(
         args.tokenizer_vocab_path, args.tokenizer_metadata_path, log=log
     )
+    if "tokenizer_sha256" not in metadata:
+        raise ValueError(
+            f"Training tokenizer metadata {metadata_path} must record 'tokenizer_sha256'"
+        )
     args.tokenizer_algorithm = tokenizer_algorithm(metadata)
     args.representation = tokenizer_representation(metadata)
     return tokenizer, metadata, vocab_path, metadata_path
@@ -744,6 +762,7 @@ def make_train_iterable_dataset(
 ) -> IterableDataset:
     if getattr(args, "global_train_shuffle", False):
         source = corpus_only_training_parquet(args)
+        import pyarrow as pa
         import pyarrow.parquet as pq
 
         available_columns = pq.ParquetFile(source).schema_arrow.names
@@ -758,6 +777,10 @@ def make_train_iterable_dataset(
         indexed = Dataset.from_parquet(str(source), columns=input_columns, cache_dir=str(cache_dir))
         if not len(indexed):
             raise ValueError(f"No training rows in {source}")
+        if getattr(args, "trace_source_rows", False):
+            indexed = indexed.add_column(
+                "source_row_id", pa.array(np.arange(len(indexed), dtype=np.int64))
+            )
         order_path = getattr(args, "train_order_path", None)
         if order_path is not None:
             order = np.load(order_path, allow_pickle=False)
@@ -1238,7 +1261,43 @@ path to this `final_model` directory.
         f.write(model_card)
 
 
+class SourceRowTracingCollator:
+    """Carry source-row IDs through the data loader without sending them to the model."""
+
+    def __init__(self, collator: MolecularMLMCollator):
+        self.collator = collator
+
+    def __call__(self, features: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
+        batch = self.collator(features)
+        if all("source_row_id" in feature for feature in features):
+            batch["source_row_id"] = torch.tensor(
+                [int(feature["source_row_id"]) for feature in features], dtype=torch.long
+            )
+        return batch
+
+
+class SourceRowTracingTrainer(Trainer):
+    trace_path: Path
+
+    def _prepare_inputs(self, inputs: dict[str, Any]) -> dict[str, Any]:
+        source_ids = inputs.pop("source_row_id", None)
+        if source_ids is not None:
+            with self.trace_path.open("a", encoding="utf-8") as trace:
+                trace.write(
+                    json.dumps(
+                        {
+                            "step_before_batch": int(self.state.global_step),
+                            "source_row_ids": source_ids.tolist(),
+                        }
+                    )
+                    + "\n"
+                )
+        return super()._prepare_inputs(inputs)
+
+
 def main() -> None:
+    torch.set_float32_matmul_precision("high")
+    torch._dynamo.config.assume_static_by_default = False
     args = parse_args()
     load_dotenv()
 
@@ -1388,6 +1447,7 @@ def main() -> None:
         dataloader_pin_memory=(backend == "cuda"),
         remove_unused_columns=False,
         prediction_loss_only=not args.compute_masked_accuracy,
+        include_num_input_tokens_seen="non_padding",
         report_to=report_to,
         seed=args.seed,
         data_seed=args.seed,
@@ -1404,17 +1464,21 @@ def main() -> None:
 
     log_training_plan(args, backend, n_params=n_params, world_size=world_size)
 
-    trainer = Trainer(
+    trainer_type = SourceRowTracingTrainer if args.trace_source_rows else Trainer
+    trainer = trainer_type(
         model=model,
         args=training_args,
         train_dataset=train_dataset,  # type: ignore[arg-type]
         eval_dataset=eval_dataset,
-        data_collator=collator,
+        data_collator=SourceRowTracingCollator(collator) if args.trace_source_rows else collator,
         compute_metrics=compute_metrics if args.compute_masked_accuracy else None,
         preprocess_logits_for_metrics=(
             preprocess_logits_for_metrics if args.compute_masked_accuracy else None
         ),
     )
+    if args.trace_source_rows:
+        assert isinstance(trainer, SourceRowTracingTrainer)
+        trainer.trace_path = output_dir / "source_rows.jsonl"
 
     log("Starting training...")
     log(f"Training logs will print every {args.logging_steps} steps.")

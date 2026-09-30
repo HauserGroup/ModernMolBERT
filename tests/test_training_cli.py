@@ -3,11 +3,14 @@ import sys
 from pathlib import Path
 
 import pytest
+import numpy as np
 import torch
 from datasets import Dataset
 from transformers.models.modernbert.configuration_modernbert import ModernBertConfig
 
+from modernmolbert.collator import MolecularMLMCollator
 from modernmolbert.train_selfies_ape_modernbert import (
+    SourceRowTracingCollator,
     build_modernbert_config,
     compute_metrics,
     _encode_without_truncation,
@@ -107,6 +110,49 @@ def test_explicit_train_file_also_hashes_validation_file(tmp_path: Path, monkeyp
     )
     hashes = _run_input_hashes(args, train, valid)
     assert hashes["validation_parquet"] == "valid.parquet"
+
+
+def test_source_row_trace_collator_keeps_ids_out_of_eval_batches():
+    base = MolecularMLMCollator(
+        pad_token_id=1,
+        mask_token_id=4,
+        vocab_size=10,
+        mlm_probability=0.15,
+        special_token_ids=[0, 1, 2, 3, 4],
+    )
+    collator = SourceRowTracingCollator(base)
+    train_batch = collator([{"input_ids": [0, 5, 2], "source_row_id": 17}])
+    eval_batch = collator([{"input_ids": [0, 5, 2]}])
+    assert train_batch["source_row_id"].tolist() == [17]
+    assert "source_row_id" not in eval_batch
+
+
+def test_frozen_order_trace_uses_original_parquet_row_ids(tmp_path: Path):
+    train = tmp_path / "train.parquet"
+    Dataset.from_dict({"selfies": ["row_0", "row_1", "row_2"]}).to_parquet(str(train))
+    order = tmp_path / "order.npy"
+    np.save(order, np.array([2, 0, 1], dtype=np.int64))
+
+    class Tokenizer:
+        def __call__(self, sequence: str, **_kwargs):
+            return {"input_ids": [0, int(sequence[-1]) + 5, 2]}
+
+    args = argparse.Namespace(
+        data_dir=None,
+        data_files=str(train),
+        dataset_name=str(tmp_path),
+        train_split="train",
+        molecule_column="selfies",
+        output_dir=str(tmp_path / "run"),
+        train_order_path=order,
+        trace_source_rows=True,
+        global_train_shuffle=True,
+        use_validation_split=True,
+        max_seq_length=16,
+        seed=42,
+    )
+    rows = list(make_train_iterable_dataset(args, Tokenizer()))  # type: ignore[arg-type]
+    assert [row["source_row_id"] for row in rows] == [2, 0, 1]
 
 
 def test_pretokenized_rows_use_stable_hash_split(monkeypatch):

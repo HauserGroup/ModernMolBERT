@@ -16,7 +16,7 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=Path,
-        default=Path("runs/modernmolbert_best_span"),
+        default=Path("runs/chembl36_small_mask_mlm_lr_sweep/modernmolbert_best_span/final_model"),
     )
     parser.add_argument(
         "--tokenizer",

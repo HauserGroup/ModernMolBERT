@@ -609,6 +609,7 @@ def build_staging_dir(
 
     for name in (
         "run_args.json",
+        "run_metadata.json",
         "trainer_state.json",
         "tokenizer_metadata.json",
         "ape_tokenizer_metadata.json",

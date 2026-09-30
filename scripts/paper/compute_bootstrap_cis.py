@@ -47,8 +47,8 @@ Outputs
 
 Usage
 -----
-    python scripts/compute_bootstrap_cis.py
-    python scripts/compute_bootstrap_cis.py --n_boot 5000 --seed 99
+    uv run python scripts/paper/compute_bootstrap_cis.py
+    uv run python scripts/paper/compute_bootstrap_cis.py --n_boot 5000 --seed 99
 """
 
 import argparse

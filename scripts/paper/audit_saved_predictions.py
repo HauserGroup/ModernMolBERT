@@ -112,7 +112,9 @@ def main() -> None:
             raise ValueError(f"Missing {col} from results CSVs")
     prepared_test_labels = {}
     prepared_test_indices = {}
-    for path in args.prepared_dir.glob("*.json"):
+    for path in sorted(args.prepared_dir.glob("*.json")):
+        if path.name.endswith(".manifest.json") or path.name == "migration_manifest.json":
+            continue
         dataset = Dataset.deserialize_legacy(path)
         indices = list(dataset.splits.get("test", []))
         prepared_test_labels[path.stem] = dataset.labels.iloc[indices].to_numpy(dtype=float)

@@ -39,8 +39,8 @@ Outputs
 
 Usage
 -----
-    uv run python scripts/make_ape_token_table.py            # default top 30
-    uv run python scripts/make_ape_token_table.py --top 50
+    uv run python scripts/paper/make_ape_token_table.py            # default top 30
+    uv run python scripts/paper/make_ape_token_table.py --top 50
 """
 
 import argparse
@@ -112,11 +112,24 @@ def count_token_frequencies(
 # ── LaTeX emission ──────────────────────────────────────────────────────────
 
 
+# \detokenize is not usable here: it doubles "#" and adds a space after control words.
+_LATEX_ESCAPES = {
+    "\\": r"\textbackslash{}",
+    "#": r"\#",
+    "$": r"\$",
+    "%": r"\%",
+    "&": r"\&",
+    "_": r"\_",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+}
+
+
 def _safe(tok: str) -> str:
-    """Render a SELFIES token without interpreting #, backslashes or underscores."""
-    if "{" in tok or "}" in tok:
-        raise ValueError("APE token contains a brace that cannot be used in \\detokenize")
-    return r"\texttt{\detokenize{" + tok + "}}"
+    """Render a SELFIES token literally in typewriter font."""
+    return r"\texttt{" + "".join(_LATEX_ESCAPES.get(ch, ch) for ch in tok) + "}"
 
 
 def emit_latex(df: pd.DataFrame, out_path: Path, top: int = 30) -> None:

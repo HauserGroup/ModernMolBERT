@@ -206,9 +206,9 @@ def validate_args(args: argparse.Namespace) -> None:
     sample_indices_path = getattr(args, "sample_indices_path", None)
     if (aligned_sample_parquet is None) != (sample_indices_path is None):
         raise ValueError("--aligned_sample_parquet and --sample_indices_path are required together")
-    if (
-        aligned_sample_parquet is not None
-        and args.corpus_primitive_parquet != aligned_sample_parquet
+    if aligned_sample_parquet is not None and (
+        args.corpus_primitive_parquet is None
+        or Path(args.corpus_primitive_parquet).resolve() != Path(aligned_sample_parquet).resolve()
     ):
         raise ValueError("Aligned sampling requires the same full-Parquet primitive scan")
 

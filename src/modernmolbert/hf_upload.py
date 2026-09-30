@@ -1,7 +1,8 @@
 """Shared helpers for the Hugging Face Hub upload scripts.
 
-Deliberately light: standard library plus ``huggingface_hub`` only, so the
-upload entry points can import these without pulling in torch via utils.
+Deliberately light: standard library plus ``huggingface_hub`` only.
+``modernmolbert.utils`` re-exports ``file_sha256`` from here, so this module
+must not import ``utils``.
 """
 
 import hashlib

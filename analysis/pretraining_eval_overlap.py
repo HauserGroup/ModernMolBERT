@@ -96,7 +96,13 @@ def _load_prepared_dataset(path: Path) -> Dataset:
 
 
 def _prepared_dataset_paths(prepared_dir: Path) -> list[Path]:
-    stems = {p.with_suffix("") for p in prepared_dir.glob("*") if p.suffix in {".json", ".joblib"}}
+    stems = {
+        p.with_suffix("")
+        for p in prepared_dir.glob("*")
+        if p.suffix in {".json", ".joblib"}
+        and not p.name.endswith(".manifest.json")
+        and p.name != "migration_manifest.json"
+    }
     return sorted(stems)
 
 

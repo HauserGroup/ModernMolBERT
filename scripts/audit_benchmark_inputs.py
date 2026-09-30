@@ -113,7 +113,11 @@ def main() -> None:
         raise ValueError("max-length must leave room for BOS, content, and EOS")
     raw = args.vocab.read_bytes()
     tokenizer, representation = load_checkpoint_tokenizer(args.vocab)
-    paths = sorted(args.prepared_dir.glob("*.json"))
+    paths = [
+        p
+        for p in sorted(args.prepared_dir.glob("*.json"))
+        if not p.name.endswith(".manifest.json") and p.name != "migration_manifest.json"
+    ]
     if not paths:
         raise FileNotFoundError(f"No prepared benchmark JSON files in {args.prepared_dir}")
     rows = []

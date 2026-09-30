@@ -12,13 +12,13 @@ The vocab JSON is a flat {"token": id} mapping. This script:
      .metadata.json suffix) if one exists alongside the input file.
 
 Usage (run from the project root):
-    uv run python patch_tokenizer_vocab.py \\
+    uv run python -m modernmolbert.tokenization.patch_tokenizer_vocab \\
         --input_file  tokenizer/chembl36_selfies_2m_ape_max8.json \\
         --extra_file  tokenizer/extra_symbols/benchmark_missing_selfies_symbols_min10.txt \\
         --output_file tokenizer/chembl36_selfies_2m_ape_max8.json
 
     # preview without writing:
-    uv run python patch_tokenizer_vocab.py ... --dry_run
+    uv run python -m modernmolbert.tokenization.patch_tokenizer_vocab ... --dry_run
 """
 
 import argparse

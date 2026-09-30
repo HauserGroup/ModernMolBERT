@@ -25,7 +25,7 @@ uv run python -m modernmolbert.upload_model \
 | `--commit_message` | `"Upload trained ModernMolBERT checkpoint"` | HF commit message |
 | `--hf_login` | false | Call `huggingface_hub.login()` using `HF_TOKEN_ORG` or `HF_TOKEN` from env |
 | `--dry_run` | false | Stage and validate without uploading |
-| `--keep_staging_dir` | — | Keep staged files at this path for inspection |
+| `--keep_staging_dir` | — | Keep staged files at this path for inspection (must be empty or absent) |
 
 ### Checkpoint resolution
 
@@ -116,7 +116,7 @@ No CLI flags. Edit the constants at the top of [upload_tokenizer.py](../src/mode
 ### What it does
 
 1. Verifies metadata against expected values: `vocab_size=631`, `representation=SELFIES`, `max_merge_pieces=2`, `min_freq_for_merge=3000`, `tokenizer_train_size=2_000_000`, and special token IDs `bos=0 pad=1 eos=2 unk=3 mask=4`.
-2. Instantiates `APEPreTrainedTokenizer` and saves it to `./tmp-hf-tokenizer/`.
+2. Instantiates `APEPreTrainedTokenizer` and saves it to `./tmp-hf-tokenizer/`. The staging directory must be empty or absent; remove it after a dry run.
 3. Copies `tokenization_ape.py` and `metadata.json` into the staging directory.
 4. Reloads the tokenizer via `AutoTokenizer` and verifies `model_max_length=128`, `vocab_size=631`, and that an example SELFIES fits within max length.
 5. Creates the HF repo (private, `exist_ok=True`) and uploads.

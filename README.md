@@ -68,6 +68,11 @@ selfies = "[C][C][=Branch1][C][=O][O][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=
 if "".join(tokenizer.tokenize(selfies)) != selfies:
     raise ValueError("Tokenizer loses molecular symbols; do not use this input as a valid embedding")
 inputs = tokenizer(selfies, return_tensors="pt")
+if inputs["input_ids"].shape[1] > model.config.max_position_embeddings:
+    raise ValueError(
+        f"Input length ({inputs['input_ids'].shape[1]}) exceeds model max positions "
+        f"({model.config.max_position_embeddings}); do not embed beyond trained context"
+    )
 if inputs["input_ids"].eq(tokenizer.unk_token_id).any():
     raise ValueError("Input contains unknown tokens; do not use it as a valid embedding")
 with torch.no_grad():

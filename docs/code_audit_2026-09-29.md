@@ -17,8 +17,10 @@ Audited oldest-touched first. Covered all tracked Python and R in `src/`, `scrip
 files. R4 is pinned at four workers and 32 × 8 for all five pilots; a traced
 200-step interrupted/resumed run consumed exactly the same 51,200 source-row
 IDs and produced byte-identical terminal weights and optimizer/RNG state.
-R56's ignored outer CV worker limit was fixed in `5058425`. R117 is addressed
-by the gated launcher rather than changing historical trainer defaults. R57
+An additional outer-CV worker-limit bug was fixed in `5058425`; R56 (the
+missing per-run code revision) is only partly addressed by the commit-matched
+launcher and Helios environment manifest and remains open in `run_identity.json`.
+R117 is addressed by the gated launcher rather than changing historical trainer defaults. R57
 is partly addressed by the 25-task coverage and common-row manifests in
 `docs/revision_factorial_v1_preflight.md`; all 125 pilot embeddings were
 aligned on identical train/validation/test rows. R6 remains open because

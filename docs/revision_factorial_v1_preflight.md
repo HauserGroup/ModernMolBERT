@@ -115,7 +115,7 @@ for it. All 125 embedding jobs completed. `scripts/build_revision_coverage_manif
 verified their embedding/prepared-data hashes, finite vectors and source-row
 maps, and wrote
 `outputs/audit/revision_factorial_v1/pilot_benchmark_coverage.json` on Helios
-(SHA-256 `214626c96d35ac8b2cf67503a9e9c694c75025c152c13b2e446d9c8aa9343b69`).
+(SHA-256 `71732086786d643eb857634456a3cb2d94134be20189dc7a7bf7c16e977a44ea`).
 Across the 241,949 source rows assigned to supervised train/validation/test
 splits, 240,659 are common to all five tokenizers: **1,290 exclusions (0.53%)**.
 There were zero over-context rows. The largest proportional common losses
@@ -123,10 +123,22 @@ were SIDER, 62/1,427 (4.34%), and HIV, 895/41,120 (2.18%). The original
 hERG JSON has 22 source rows assigned to no supervised split; the manifest
 records them but keeps the original split unchanged. MUV test endpoints 0
 and 12 have no positive class even before embedding, so this was not caused
-by common-row filtering. The five full-cohort embedding passes took about
+by common-row filtering. No previously scorable classification endpoint lost
+both classes after the common-row intersection. The five full-cohort embedding passes took about
 6.1 minutes combined on Helios; the 25-task scoring and common-fold timing
 is still unmeasured. Final-model embeddings and source-row hashes must be
 rechecked after production; these pilot weights never enter paper scores.
+
+`scripts/materialize_revision_common_embeddings.py` wrote 125 aligned pilot
+embedding files under `PREFLIGHT_COMMON_*`, with SHA-256 manifest
+`1b7da5f90690636a56324133084d1246394659d6bec350735b8816d8bd8c9263`
+at `outputs/audit/revision_factorial_v1/pilot_common_embeddings.json` on
+Helios. An independent reload checked that each task's five files have
+identical original source-row IDs, labels and train/validation/test indices.
+The original hERG split remains 500 common train and 130 common test rows;
+its unassigned source rows were not moved into a split. These diagnostic
+cohorts establish the shared-row scoring path; production embeddings must be
+materialized afresh after full training.
 
 ## Remaining launch gates
 

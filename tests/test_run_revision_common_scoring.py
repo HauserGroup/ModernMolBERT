@@ -37,24 +37,27 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
         ),
         encoding="utf-8",
     )
-    kwargs = dict(
-        manifest_path=manifest,
-        run_id="small_ape_selfies",
-        task="example",
-        output_root=tmp_path / "scores",
-        n_jobs=4,
-    )
-    command = scoring.command_for(**kwargs)
+
+    def run_cmd() -> list[str]:
+        return scoring.command_for(
+            manifest_path=manifest,
+            run_id="small_ape_selfies",
+            task="example",
+            output_root=tmp_path / "scores",
+            n_jobs=4,
+        )
+
+    command = run_cmd()
     assert command[-1].endswith("scores/small_ape_selfies/example.csv")
     assert "--no-cache" in command and "--no-resume" in command
     assert command[command.index("--missing-labels") + 1] == "as-negative"
 
     embedding.write_bytes(b"changed")
     with pytest.raises(ValueError, match="missing or changed"):
-        scoring.command_for(**kwargs)
+        run_cmd()
     embedding.write_bytes(b"frozen embedding")
     output = Path(command[-1])
     output.parent.mkdir(parents=True)
     output.write_text("older result", encoding="utf-8")
     with pytest.raises(FileExistsError, match="already exists"):
-        scoring.command_for(**kwargs)
+        run_cmd()

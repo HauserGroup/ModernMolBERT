@@ -81,10 +81,22 @@ def _select_vocab_file(
     selfies_vocab_file: str | os.PathLike[str] | None,
     smiles_vocab_file: str | os.PathLike[str] | None,
 ) -> str | os.PathLike[str] | None:
-    if representation == "SELFIES" and selfies_vocab_file is not None:
-        return selfies_vocab_file
-    if representation == "SMILES" and smiles_vocab_file is not None:
-        return smiles_vocab_file
+    alias = selfies_vocab_file if representation == "SELFIES" else smiles_vocab_file
+    if alias is not None and vocab_file is not None:
+        alias_p = Path(alias)
+        vocab_p = Path(vocab_file)
+        if (
+            alias_p.resolve() != vocab_p.resolve()
+            and alias_p.is_file()
+            and vocab_p.is_file()
+            and alias_p.read_bytes() != vocab_p.read_bytes()
+        ):
+            raise ValueError(
+                f"Conflicting vocabulary files found: '{vocab_file}' and '{alias}'. "
+                "Representation-specific alias file differs from vocab.json."
+            )
+    if alias is not None:
+        return alias
     return vocab_file
 
 

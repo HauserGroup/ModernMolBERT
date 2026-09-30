@@ -266,7 +266,11 @@ def test_training_encoding_rejects_over_context_molecule():
         _encode_without_truncation(Tokenizer(), "CCO", 4)  # type: ignore[arg-type]
 
 
-def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path):
+def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path, monkeypatch):
+    revision = {"commit": "a" * 40, "dirty": False}
+    monkeypatch.setattr(
+        "modernmolbert.train_selfies_ape_modernbert.get_git_revision", lambda: revision.copy()
+    )
     tokenizer = tmp_path / "tokenizer.json"
     metadata = tmp_path / "tokenizer.metadata.json"
     tokenizer.write_text("original")
@@ -281,6 +285,7 @@ def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path):
         use_validation_split=False,
         seed=42,
         max_steps=30_000,
+        require_clean_git=True,
     )
     assert prepare_run_directory(args, tokenizer, metadata) is None
     original = (output / "run_args.json").read_bytes()
@@ -296,9 +301,24 @@ def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path):
     assert prepare_run_directory(args, tokenizer, metadata) == checkpoint
     assert (output / "run_args.json").read_bytes() == original
 
-    tokenizer.write_text("changed")
-    with pytest.raises(ValueError, match="input hashes differ"):
+    revision["commit"] = "b" * 40
+    with pytest.raises(ValueError, match="code revision differ"):
         prepare_run_directory(args, tokenizer, metadata)
+    revision["commit"] = "a" * 40
+
+    tokenizer.write_text("changed")
+    with pytest.raises(ValueError, match="inputs, or code revision differ"):
+        prepare_run_directory(args, tokenizer, metadata)
+
+
+def test_clean_git_requirement_rejects_dirty_checkout(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        "modernmolbert.train_selfies_ape_modernbert.get_git_revision",
+        lambda: {"commit": "a" * 40, "dirty": True},
+    )
+    args = argparse.Namespace(output_dir=str(tmp_path / "run"), require_clean_git=True)
+    with pytest.raises(ValueError, match="clean Git checkout"):
+        prepare_run_directory(args, tmp_path / "vocab.json", tmp_path / "metadata.json")
 
 
 def test_masked_accuracy_reduces_logits_before_accumulation():
@@ -307,3 +327,21 @@ def test_masked_accuracy_reduces_logits_before_accumulation():
     predictions = preprocess_logits_for_metrics(logits, labels)
     assert predictions.shape == labels.shape
     assert compute_metrics((predictions.numpy(), labels.numpy())) == {"masked_accuracy": 1.0}
+
+
+def test_hf_login_checks_both_tokens(monkeypatch):
+    from modernmolbert.hf_upload import resolve_hf_token
+
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HF_TOKEN_ORG", raising=False)
+    assert resolve_hf_token(hf_login=False) is None
+
+    monkeypatch.setenv("HF_TOKEN_ORG", "org_tok")
+    assert resolve_hf_token(hf_login=False) == "org_tok"
+
+    monkeypatch.setenv("HF_TOKEN", "user_tok")
+    # HF_TOKEN_ORG takes precedence
+    assert resolve_hf_token(hf_login=False) == "org_tok"
+
+    monkeypatch.delenv("HF_TOKEN_ORG", raising=False)
+    assert resolve_hf_token(hf_login=False) == "user_tok"

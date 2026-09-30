@@ -16,10 +16,10 @@ import math
 import platform
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-import os
 
 from dotenv import load_dotenv
-from huggingface_hub import login
+
+from modernmolbert.hf_upload import resolve_hf_token
 
 import numpy as np
 import torch
@@ -54,6 +54,7 @@ from modernmolbert.utils import (
     file_sha256,
     find_local_dataset,
     get_streaming_dataset,
+    get_git_revision,
     infer_molecule_column,
     infer_validation_split,
     load_tokenizer_metadata,
@@ -330,9 +331,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--debug", action="store_true", help="Run a tiny smoke test.")
     parser.add_argument(
+        "--require_clean_git",
+        action="store_true",
+        help="Reject a dirty or unresolved Git revision and pin it for resumption.",
+    )
+    parser.add_argument(
         "--hf_login",
         action="store_true",
-        help="Call huggingface_hub.login using HF_TOKEN before loading datasets/models.",
+        help="Log in to Hugging Face Hub using HF_TOKEN_ORG or HF_TOKEN before loading datasets/models.",
     )
 
     return parser.parse_args()
@@ -390,9 +396,15 @@ def prepare_run_directory(
     """Pin a fresh run's inputs, or fail before altering an incompatible run."""
     output_dir = Path(args.output_dir)
     manifest_path = output_dir / "run_identity.json"
+    git_revision = get_git_revision()
+    if getattr(args, "require_clean_git", False) and (
+        git_revision["commit"] is None or git_revision["dirty"] is not False
+    ):
+        raise ValueError("This run requires a clean Git checkout with a resolved commit")
     identity = {
         "args": _serializable_args(args),
         "input_sha256": _run_input_hashes(args, vocab_path, metadata_path),
+        "git": git_revision,
     }
     checkpoint = args.resume_from_checkpoint
     if checkpoint is not None:
@@ -407,7 +419,7 @@ def prepare_run_directory(
         if not manifest_path.is_file():
             raise ValueError("Cannot resume: original run_identity.json is missing")
         if json.loads(manifest_path.read_text(encoding="utf-8")) != identity:
-            raise ValueError("Cannot resume: run arguments or input hashes differ from original")
+            raise ValueError("Cannot resume: run arguments, inputs, or code revision differ")
         return checkpoint
 
     if output_dir.exists() and any(output_dir.iterdir()):
@@ -1129,6 +1141,7 @@ def write_run_metadata(
         "platform": platform.platform(),
         "torch_version": torch.__version__,
         "transformers_version": transformers.__version__,
+        "git": json.loads((output_dir / "run_identity.json").read_text(encoding="utf-8"))["git"],
         "vocab_size": vocab_size,
         "special_ids": special_ids,
         "num_parameters": n_params,
@@ -1306,10 +1319,12 @@ def main() -> None:
     load_dotenv()
 
     if args.hf_login:
-        hf_token = os.environ.get("HF_TOKEN")
-        if not hf_token:
-            raise ValueError("--hf_login was set but HF_TOKEN is not available.")
-        login(token=hf_token)
+        token = resolve_hf_token(hf_login=False)
+        if not token:
+            raise ValueError(
+                "--hf_login was set but neither HF_TOKEN_ORG nor HF_TOKEN is available."
+            )
+        resolve_hf_token(hf_login=True)
 
     tokenizer, tokenizer_metadata, tokenizer_vocab_path, tokenizer_metadata_path = (
         read_training_tokenizer(args)

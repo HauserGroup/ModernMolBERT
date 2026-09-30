@@ -281,7 +281,7 @@ def test_modernmolbert_selfies_featurizer_records_metadata(tiny_modernmolbert_di
     batch = featurizer.featurize_smiles(["CCO", "not_a_smiles"])
 
     assert batch.metadata["featurizer"] == "modernmolbert_pilot_test"
-    assert batch.metadata["backend"] == "modernmolbert_selfies"
+    assert batch.metadata["backend"] == "modernmolbert"
     assert batch.metadata["pooling"] == "mean"
     assert batch.metadata["max_seq_length"] == 32
     assert batch.metadata["n_inputs"] == 2

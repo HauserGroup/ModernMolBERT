@@ -433,3 +433,26 @@ def test_regression_path_returns_1d_predictions() -> None:
     assert result.model == "ridge"
     assert result.y_test_pred.ndim == 1
     assert result.y_test_pred.shape == (5,)
+
+
+def test_dataset_labels_preserves_substring_id_columns() -> None:
+    data = pd.DataFrame(
+        {
+            "Drug_ID": ["d1", "d2"],
+            "mol_id": ["m1", "m2"],
+            "id": [1, 2],
+            "split": ["train", "test"],
+            "smiles": ["C", "CC"],
+            "graph": [None, None],
+            "APR_HepG2_OxidativeStress_24h_up": [0, 1],
+            "activity": [1, 0],
+        }
+    )
+    ds = Dataset(
+        name="toxcast_sample",
+        task="classification",
+        data=data,
+        splits={"train": [0], "valid": [], "test": [1]},
+    )
+    labels = ds.labels
+    assert list(labels.columns) == ["APR_HepG2_OxidativeStress_24h_up", "activity"]

@@ -180,3 +180,14 @@ def test_run_eval_returns_false_on_failure_in_safe_mode(monkeypatch, tmp_path) -
     )
 
     assert ok is False
+
+
+def test_get_disabled_reason_disables_knn_for_hiv_and_muv() -> None:
+    muv_info = make_dataset_info("clf_ogbg-molmuv")
+    hiv_info = make_dataset_info("clf_ogbg-molhiv")
+    ames_info = make_dataset_info("clf_AMES")
+
+    assert score.get_disabled_reason(muv_info, "knn") == "KNN disabled for MUV"
+    assert score.get_disabled_reason(hiv_info, "knn") == "KNN disabled for HIV"
+    assert score.get_disabled_reason(ames_info, "knn") is None
+    assert score.get_disabled_reason(hiv_info, "rf") is None

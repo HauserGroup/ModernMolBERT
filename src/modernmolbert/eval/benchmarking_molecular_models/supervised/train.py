@@ -98,7 +98,7 @@ def fit_model(
 
     if task == "regression":
         scorer = "r2"
-        y_model = y_arr.ravel()
+        y_model = y_arr if is_multioutput else y_arr.ravel()
     elif is_multioutput:
         log.info("Using multioutput AUROC scorer")
         scorer = make_scorer(multioutput_auroc_score, response_method="predict_proba")
@@ -237,9 +237,8 @@ def fit_multioutput_finite_label_model(
             best_score = mean_score
             best_params = params
 
-    if best_params is None:
-        best_params = {}
-        best_score = np.nan
+    if best_params is None or not np.isfinite(best_score):
+        raise ValueError(f"All cross-validation scores are nonfinite for {model_head}")
 
     final_estimator = clone(base_pipeline)
     final_estimator.set_params(**best_params)

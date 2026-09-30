@@ -174,14 +174,6 @@ class ModernMolBERTSelfiesFeaturizer:
         out.check(n_inputs=len(smiles))
         return out
 
-    def featurize(
-        self,
-        smiles: Sequence[str],
-        *,
-        batch_size: int | None = None,
-    ) -> FeatureBatch:
-        return self.featurize_smiles(smiles, batch_size=batch_size)
-
     def _metadata(
         self,
         *,
@@ -192,7 +184,7 @@ class ModernMolBERTSelfiesFeaturizer:
     ) -> dict[str, object]:
         return {
             "featurizer": self.name,
-            "backend": "modernmolbert_selfies",
+            "backend": "modernmolbert",
             "model_dir": str(self.model_dir),
             "tokenizer_path": str(self.tokenizer_path),
             "representation": self.representation,

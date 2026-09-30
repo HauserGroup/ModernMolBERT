@@ -32,7 +32,6 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
   --datasets all \
   --batch-size 32 \
   --device auto \
-  --max-seq-length 256 \
   --pooling mean
 ```
 
@@ -46,7 +45,7 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
 | `--datasets` | `all` | Dataset config stems, globs, or `all` |
 | `--batch-size` | `32` | Inference batch size |
 | `--device` | `auto` | `cpu`, `cuda`, or `auto` |
-| `--max-seq-length` | `256` | Truncation length |
+| `--max-seq-length` | model context | Max sequence length; defaults to checkpoint context. Over-length molecules are rejected. |
 | `--pooling` | `mean` | `mean` or `cls` |
 | `--overwrite` | false | Re-embed even if output file exists |
 
@@ -85,7 +84,7 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
 | `--resume` / `--no-resume` | `true` | Skip dataset/embedder pairs with existing checkpoints |
 | `--cache` / `--no-cache` | from `score.yaml` | Skip already-evaluated rows in the output CSV (`override = not cache`) |
 | `--safe` / `--no-safe` | from `score.yaml` | Log errors and continue instead of aborting on first failure |
-| `--missing-labels` | `observed` | Missing labels in multi-endpoint datasets (Tox21, MUV): fit each endpoint on its observed labels, or `as-negative` to match the imported Praski et al. table |
+| `--missing-labels` | `as-negative` | Missing labels in multi-endpoint datasets (Tox21, MUV): `as-negative` counts them as negatives during fitting and CV, matching the imported Praski et al. table; `observed` fits each endpoint on its observed labels. Do not mix the two in one results file |
 | `overrides` | — | Positional `key=value` pairs, e.g. `model_name=my_embedder` |
 
 ### Config files
@@ -135,7 +134,7 @@ Three heads run per dataset by default. Each is a `sklearn` `Pipeline` with `Gri
 | `ridge` | `LogisticRegression` (clf) / `Ridge` (reg), `StandardScaler` | `C` / `alpha` log-spaced over 10 values |
 | `knn` | `KNeighborsClassifier` / `KNeighborsRegressor`, `StandardScaler` | `n_neighbors` ∈ [1,3,5,7,9]; cosine distance for float embeddings, Tanimoto for integer |
 
-KNN is skipped on MUV datasets. Multi-output classification uses `MultiOutputClassifier(LogisticRegression())`.
+KNN is skipped on the MUV and HIV datasets; the imported Praski et al. table has no kNN head there. Random forests use `random_state=0`. Multi-output classification uses `MultiOutputClassifier(LogisticRegression())`.
 
 ### Checkpoint resume
 
@@ -152,7 +151,9 @@ On re-run with `--resume`, any dataset with a non-empty checkpoint is skipped en
 Results append to the output CSV with this column order:
 
 ```
-id, dataset, task, embedder, model, hyperparams, library_hash,
+id, dataset, task, embedder, pooling, pooling_special_tokens_excluded,
+embedding_model_dir, embedding_tokenizer_path, embedding_max_seq_length,
+model, hyperparams, library_hash, missing_labels, prepared_data_sha256,
 cv_metric_name, cv_metric, test_metric_name, test_metric, key
 ```
 
@@ -165,6 +166,8 @@ cv_metric_name, cv_metric, test_metric_name, test_metric, key
 | `model` | Head: `rf`, `ridge`, or `knn` |
 | `hyperparams` | Sorted JSON of selected `GridSearchCV` params |
 | `library_hash` | Stable digest of scoring grids; changes if grids change |
+| `missing_labels` | `as-negative` or `observed` |
+| `prepared_data_sha256` | SHA-256 of the prepared dataset file the embedding was built from |
 | `cv_metric` | Model-selection score (train+valid) |
 | `test_metric` | Held-out test score |
 | `key` | `{dataset}_{embedder}_{model}` |

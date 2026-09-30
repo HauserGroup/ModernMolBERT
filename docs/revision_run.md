@@ -197,8 +197,9 @@ baselines (§5):
 
 - `--missing-labels as-negative` treats missing labels in the multi-endpoint
   datasets (Tox21 and MUV) as negatives during head fitting and CV, as the
-  scorer behind that table did. The default, `observed`, fits each endpoint on
-  its observed labels only; do not mix the two settings in one results file.
+  scorer behind that table did. It is now the CLI default; `observed` fits each
+  endpoint on its observed labels only. Do not mix the two settings in one
+  results file.
   Each result row records the setting in its `missing_labels` column. Test
   ROC-AUC still ignores missing test labels in both settings.
 - kNN is not scored on HIV and MUV. The imported table has no kNN head there

@@ -118,8 +118,8 @@ def check_if_already_evaluated(
             model=head_name,
         )
     except Exception as exc:
-        # Corrupt or unreadable CSV — treat as not yet evaluated so the run
-        # proceeds and overwrites the bad file.
+        # Corrupt or unreadable CSV — treat as not yet evaluated. The later
+        # append reads the file again and raises, so the bad file is never replaced.
         log.warning(f"Could not read results CSV ({output_csv}): {exc}. Treating as not evaluated.")
         return False
 

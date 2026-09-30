@@ -16,6 +16,7 @@ PRASKI_COLUMNS = [
     "hyperparams",
     "library_hash",
     "missing_labels",
+    "prepared_data_sha256",
     "cv_metric_name",
     "cv_metric",
     "test_metric_name",
@@ -107,7 +108,7 @@ def read_results_csv(output_csv: str | Path) -> pd.DataFrame:
         return empty_results_frame()
     try:
         return to_praski_schema(pd.read_csv(output_csv))
-    except Exception:
+    except pd.errors.EmptyDataError:
         return empty_results_frame()
 
 

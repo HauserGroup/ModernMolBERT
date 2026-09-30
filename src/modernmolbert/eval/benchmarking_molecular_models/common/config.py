@@ -36,8 +36,15 @@ def load_yaml_config(path: str | Path) -> Config:
         return as_config(yaml.safe_load(f) or {})
 
 
+# Keys of older embedding configs that nothing reads any more.
+_RETIRED_EMBEDDING_KEYS = ("data_directory", "clock_directory", "svd_directory")
+
+
 def load_embedding_config(config_dir: str | Path) -> Config:
-    return load_yaml_config(Path(config_dir) / "embedding" / "default.yaml")
+    config = load_yaml_config(Path(config_dir) / "embedding" / "default.yaml")
+    for key in _RETIRED_EMBEDDING_KEYS:
+        config.pop(key, None)
+    return config
 
 
 def load_dataset_registry(config_dir: str | Path) -> Config:

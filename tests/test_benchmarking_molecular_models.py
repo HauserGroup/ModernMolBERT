@@ -450,3 +450,26 @@ def test_dataset_labels_preserves_substring_id_columns() -> None:
     )
     labels = ds.labels
     assert list(labels.columns) == ["APR_HepG2_OxidativeStress_24h_up", "activity"]
+
+
+def test_embedding_config_ignores_retired_directory_keys(tmp_path) -> None:
+    from modernmolbert.eval.benchmarking_molecular_models.common.config import (
+        load_embedding_config,
+    )
+    from modernmolbert.eval.benchmarking_molecular_models.common.types import EmbeddingConfig
+
+    (tmp_path / "embedding").mkdir()
+    (tmp_path / "embedding" / "default.yaml").write_text(
+        "raw_directory: data/raw\n"
+        "embedded_directory: data/embedded\n"
+        "prepared_directory: data/prepared\n"
+        "predictions_directory: data/predictions\n"
+        "data_directory: data/downloaded\n"
+        "clock_directory: data/clock\n"
+        "svd_directory: data/svd\n"
+        "max_invalid_embeddings: 50\n"
+    )
+
+    config = EmbeddingConfig(**load_embedding_config(tmp_path))
+
+    assert config.prepared_directory == "data/prepared"

@@ -7,7 +7,7 @@ lines, including every fixed finding and each verification step) is in git histo
 finding numbers (`R…`, plain numbers, `N…`) match commit messages and older notes.
 
 Closed and not listed here: 1, 3, 5, 6, 8–13, 15–17, 20, 22–23, 32, 36–37 and N1–N8;
-R1, R5, R7, R8, R18, R19, R23, R25, R26, R30, R34, R39, R40, R44–R46, R49, R50, R58–R60,
+R1, R5, R7, R8, R18, R19, R23, R25, R26, R30, R34, R35, R39, R40, R44–R46, R49, R50, R58–R60,
 R62, R63, R72, R73, R75–R77, R83, R89, R90, R93, R95–R97, R99, R101–R105, R109–R113.
 Notes on how these were verified are in the commit messages of `c35f1fa`, `97a13de`,
 `30adf4f`, `1fc70b3`, `dfebfd2` and `a589bff`.
@@ -101,8 +101,6 @@ Ordered by likely effect on the revised results.
 - **R33, R84.** `compare_praski_tables` selects heads with an unstable sort and
   `groupby().first()` (fields from different rows) and collapses variants by test score.
   Diagnostic only; do not let it feed paper numbers.
-- **R35.** `score.yaml` defaults to HIV only, so `score.py` without `--datasets` scores one
-  dataset and the common-row builder would leave the rest missing.
 - **R36.** Audits use different dataset universes (25 configured versus everything in
   `data/prepared`, which includes ToxCast). Totals depend on which one a script used.
 - **R52.** `paired_task_differences` and `common_task_matrix` use different cohort rules;
@@ -112,8 +110,8 @@ Ordered by likely effect on the revised results.
   to `n_over_context`.
 - **R61.** kNN on integer embeddings standardises before a count-Tanimoto metric. Not used
   by the campaign (ECFP4 is imported).
-- **R64.** `max_invalid_embeddings` is declared and never read; `clock_directory`,
-  `svd_directory` and `data_directory` are unused too.
+- **R64.** `max_invalid_embeddings` is declared and never read (the three unused directory keys
+  were removed).
 - **R70.** Each molecule is tokenised three times in `featurize_smiles`; reuse the
   validated `content_ids`. Behaviour unchanged.
 - **R91, R92 (and the R21 remainder).** `prediction_export` stamps archives with the current

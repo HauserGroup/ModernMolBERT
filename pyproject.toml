@@ -107,6 +107,7 @@ modernmolbert = [
 ]
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 markers = [
     "smoke: optional end-to-end smoke tests",
     "mps: tests intended for Apple MPS",

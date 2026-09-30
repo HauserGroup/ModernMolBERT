@@ -7,7 +7,7 @@ from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
 )
 from modernmolbert.hf_upload import file_sha256
-from scripts import materialize_revision_common_embeddings as common
+import materialize_revision_common_embeddings as common
 
 
 def test_common_embeddings_share_source_rows_labels_and_splits(tmp_path, monkeypatch):

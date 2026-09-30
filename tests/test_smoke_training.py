@@ -116,6 +116,7 @@ def test_local_tokenizer_encode_selfies_examples() -> None:
 
 
 @pytest.mark.smoke
+@pytest.mark.model
 def test_existing_minimal_model_selfies_encoding() -> None:
     """Verify that a minimal trained model can encode SELFIES and produce finite logits.
 

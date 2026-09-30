@@ -64,11 +64,12 @@ def inspect_task(name: str, prefix: str) -> dict[str, Any]:
     source_splits = {split: set(map(int, ids)) for split, ids in prepared.splits.items()}
     if set(source_splits) != {"train", "valid", "test"}:
         raise ValueError(f"Unexpected split names for {name}: {sorted(source_splits)}")
-    if (
-        set.union(*source_splits.values()) != set(range(n_rows))
-        or sum(map(len, source_splits.values())) != n_rows
+    supervised_rows = set.union(*source_splits.values())
+    if not supervised_rows <= set(range(n_rows)) or sum(map(len, source_splits.values())) != len(
+        supervised_rows
     ):
-        raise ValueError(f"Source splits are not a complete partition for {name}")
+        raise ValueError(f"Source splits overlap or contain invalid indices for {name}")
+    unassigned_rows = set(range(n_rows)) - supervised_rows
 
     retained_sets: list[set[int]] = []
     model_coverage: dict[str, Any] = {}
@@ -108,6 +109,7 @@ def inspect_task(name: str, prefix: str) -> dict[str, Any]:
         }
 
     common = set.intersection(*retained_sets)
+    common_supervised = common & supervised_rows
     labels = prepared.labels.to_numpy(dtype=float)
     splits: dict[str, Any] = {}
     for split, source_ids in source_splits.items():
@@ -123,6 +125,9 @@ def inspect_task(name: str, prefix: str) -> dict[str, Any]:
         "source_rows": n_rows,
         "common_rows": len(common),
         "common_source_row_indices_sha256": row_hash(common),
+        "common_supervised_rows": len(common_supervised),
+        "unassigned_source_rows": len(unassigned_rows),
+        "unassigned_source_row_indices_sha256": row_hash(unassigned_rows),
         "models": model_coverage,
         "splits": splits,
     }

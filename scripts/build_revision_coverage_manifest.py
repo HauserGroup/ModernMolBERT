@@ -114,11 +114,24 @@ def inspect_task(name: str, prefix: str) -> dict[str, Any]:
     splits: dict[str, Any] = {}
     for split, source_ids in source_splits.items():
         common_ids = common & source_ids
+        original_labels = label_coverage(labels[sorted(source_ids)], prepared.task)
+        common_labels = label_coverage(labels[sorted(common_ids)], prepared.task)
+        newly_unscorable = [
+            endpoint
+            for endpoint, (before, after) in enumerate(
+                zip(original_labels, common_labels, strict=True)
+            )
+            if prepared.task == "classification"
+            and before.get("positive", 0) > 0
+            and before.get("negative", 0) > 0
+            and (after.get("positive", 0) == 0 or after.get("negative", 0) == 0)
+        ]
         splits[split] = {
             "source_rows": len(source_ids),
             "common_rows": len(common_ids),
             "common_source_row_indices_sha256": row_hash(common_ids),
-            "labels": label_coverage(labels[sorted(common_ids)], prepared.task),
+            "labels": common_labels,
+            "newly_unscorable_classification_endpoints": newly_unscorable,
         }
     return {
         "prepared_sha256": prepared_sha,

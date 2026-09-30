@@ -93,35 +93,51 @@ print(result["staged_files"])
 
 ## upload_tokenizer
 
-Uploads the APE SELFIES tokenizer to `HauserGroup/ApeTokenizer-SELFIES`. Paths are hardcoded; run from repo root.
+Uploads an APE tokenizer to the Hub. Defaults target `HauserGroup/ApeTokenizer-SELFIES` and the
+committed 631-token vocabulary; run from the repository root. The card it writes is the fixed
+historical one (audit finding R41), so do not use it for the factorial tokenizers before that is
+generalised.
 
 ### Command
 
 ```bash
-uv run python -m modernmolbert.upload_tokenizer
+uv run python -m modernmolbert.upload_tokenizer \
+  --repo_id HauserGroup/ApeTokenizer-SELFIES \
+  --vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000.json \
+  --dry_run
 ```
 
-No CLI flags. Edit the constants at the top of [upload_tokenizer.py](../src/modernmolbert/upload_tokenizer.py) to change targets.
+### Flags
 
-### Hardcoded constants
-
-| Constant | Value |
-|----------|-------|
-| `REPO_ID` | `HauserGroup/ApeTokenizer-SELFIES` |
-| `VOCAB_PATH` | `tokenizer/chembl36_selfies_2m_ape_max2_min3000.json` |
-| `METADATA_PATH` | `tokenizer/chembl36_selfies_2m_ape_max2_min3000.metadata.json` |
-| `TOKENIZER_CODE` | `src/modernmolbert/tokenization_ape.py` |
-| `MODEL_MAX_LENGTH` | `128` |
+| Flag | Default | Meaning |
+|---|---|---|
+| `--repo_id` | `HauserGroup/ApeTokenizer-SELFIES` | Target Hub repository |
+| `--vocab_path` | `tokenizer/chembl36_selfies_2m_ape_max2_min3000.json` | Vocabulary JSON |
+| `--metadata_path` | `<vocab stem>.metadata.json` | Tokenizer metadata |
+| `--staging_dir` | `./tmp-hf-tokenizer` | Staging directory; must be empty or absent |
+| `--model_max_length` | `128` | Context stored in the tokenizer config |
+| `--commit_message` | generated | Hub commit message |
+| `--private` | false | Create or update the repository as private |
+| `--hf_login` | false | Log in with `HF_TOKEN_ORG` or `HF_TOKEN` from the environment or `.env` |
+| `--dry_run` | false | Stage and validate without contacting the Hub |
+| `--keep_staging_dir` | false | Keep the staging directory after a successful upload |
 
 ### What it does
 
-1. Verifies metadata against expected values: `vocab_size=631`, `representation=SELFIES`, `max_merge_pieces=2`, `min_freq_for_merge=3000`, `tokenizer_train_size=2_000_000`, and special token IDs `bos=0 pad=1 eos=2 unk=3 mask=4`.
-2. Instantiates `APEPreTrainedTokenizer` and saves it to `./tmp-hf-tokenizer/`. The staging directory must be empty or absent; remove it after a dry run.
-3. Copies `tokenization_ape.py` and `metadata.json` into the staging directory.
-4. Reloads the tokenizer via `AutoTokenizer` and verifies `model_max_length=128`, `vocab_size=631`, and that an example SELFIES fits within max length.
-5. Creates the HF repo (private, `exist_ok=True`) and uploads.
-6. Deletes `./tmp-hf-tokenizer/`.
+1. Verifies the metadata: representation is SELFIES or SMILES, `max_merge_pieces`,
+   `min_freq_for_merge`, `tokenizer_train_size` and `vocab_size` are present, the vocabulary
+   file's SHA-256 matches `tokenizer_sha256`, the vocabulary size matches `vocab_size`, and
+   the special IDs are `bos=0 pad=1 eos=2 unk=3 mask=4`.
+2. Saves an `APEPreTrainedTokenizer` to the staging directory and copies `tokenization_ape.py`
+   and the metadata (as `metadata.json`, `tokenizer_metadata.json` and
+   `ape_tokenizer_metadata.json`).
+3. Writes the model card, reloads the staged tokenizer through `AutoTokenizer` and checks
+   `model_max_length`, the vocabulary size and that an example molecule fits.
+4. Creates the repository (`exist_ok=True`) and uploads; a dry run stops before this step.
+5. Removes the staging directory unless `--keep_staging_dir` is set. A dry run leaves it, so
+   delete it before the next run.
 
 ### Authentication
 
-Reads credentials from the HuggingFace cache (`huggingface-cli login`) or `HF_TOKEN` env var. No explicit login call in the script.
+Credentials come from the Hugging Face cache (`huggingface-cli login`) or `HF_TOKEN_ORG` /
+`HF_TOKEN`; `--hf_login` performs an explicit login.

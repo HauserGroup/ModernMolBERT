@@ -14,6 +14,7 @@ from modernmolbert.train_selfies_ape_modernbert import (
     make_eval_dataset,
     make_train_iterable_dataset,
     prepare_run_directory,
+    _run_input_hashes,
     preprocess_logits_for_metrics,
     sequence_bucket,
     validate_args,
@@ -78,6 +79,34 @@ def test_validate_args_rejects_unsupported_cuda_bf16(monkeypatch):
 
     with pytest.raises(ValueError, match="Use --no-bf16"):
         validate_args(args, backend="cuda")
+
+
+def test_frozen_train_order_requires_global_shuffle():
+    args = argparse.Namespace(train_order_path=Path("order.npy"), global_train_shuffle=False)
+    with pytest.raises(ValueError, match="requires --global_train_shuffle"):
+        validate_args(args, backend="cpu")
+
+
+def test_explicit_train_file_also_hashes_validation_file(tmp_path: Path, monkeypatch):
+    train = tmp_path / "train.parquet"
+    valid = tmp_path / "valid.parquet"
+    train.write_bytes(b"train")
+    valid.write_bytes(b"valid")
+    args = argparse.Namespace(
+        dataset_name=str(tmp_path),
+        data_files=str(train),
+        train_split="train",
+        validation_split="valid",
+        use_validation_split=True,
+        train_order_path=None,
+        validation_row_ids_path=None,
+    )
+    monkeypatch.setattr("modernmolbert.train_selfies_ape_modernbert._MODERNBERT_BASE_CONFIG", train)
+    monkeypatch.setattr(
+        "modernmolbert.train_selfies_ape_modernbert.file_sha256", lambda path: path.name
+    )
+    hashes = _run_input_hashes(args, train, valid)
+    assert hashes["validation_parquet"] == "valid.parquet"
 
 
 def test_pretokenized_rows_use_stable_hash_split(monkeypatch):

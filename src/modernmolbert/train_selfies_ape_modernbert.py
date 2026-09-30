@@ -356,7 +356,7 @@ def _run_input_hashes(
         paths["train_parquet"] = Path(args.data_files)
     elif root.is_dir():
         paths["train_parquet"] = root / f"{args.train_split}.parquet"
-    if root.is_dir() and args.use_validation_split:
+    if args.use_validation_split and (args.data_files is not None or root.is_dir()):
         paths["validation_parquet"] = root / f"{args.validation_split}.parquet"
     train_order_path = getattr(args, "train_order_path", None)
     if train_order_path is not None:
@@ -428,6 +428,10 @@ def detect_backend(args: argparse.Namespace) -> str:
 
 
 def validate_args(args: argparse.Namespace, backend: str) -> None:
+    if getattr(args, "train_order_path", None) is not None and not getattr(
+        args, "global_train_shuffle", False
+    ):
+        raise ValueError("--train_order_path requires --global_train_shuffle")
     if args.max_seq_length is not None and args.max_seq_length <= 0:
         raise ValueError("max_seq_length must be positive")
     if not 0.0 <= args.mlm_probability <= 1.0:

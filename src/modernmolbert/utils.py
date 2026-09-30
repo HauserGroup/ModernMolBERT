@@ -773,3 +773,22 @@ def compute_tokenization_stats(
         "silent_loss_rate": float(silent_losses / len(sequences)),
     }
     return stats
+
+
+def get_git_revision() -> dict[str, object]:
+    """Return the current Git commit hash and dirty status, or None values if unavailable."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], capture_output=True, text=True, check=False
+        )
+        if proc.returncode == 0:
+            commit = proc.stdout.strip()
+            return {"commit": commit if commit else None, "dirty": bool(status.stdout.strip())}
+    except Exception:
+        pass
+    return {"commit": None, "dirty": None}

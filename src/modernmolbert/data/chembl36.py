@@ -1,5 +1,6 @@
 import hashlib
 import json
+import sys
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 from tqdm.auto import tqdm
 
 from modernmolbert.common.rdkit_safety import looks_like_smiles
+from modernmolbert.utils import get_git_revision
 
 load_dotenv()
 
@@ -130,6 +132,8 @@ def prepare_chembl36_selfies(config: ChemBL36SelfiesPrepConfig) -> None:
         },
         "versions": collect_preparation_versions(),
         "created_at_utc": datetime.now(UTC).isoformat(),
+        "argv": list(sys.argv),
+        "git": get_git_revision(),
         "creation_command": "python -m modernmolbert.data.prepare_chembl36_selfies",
     }
 

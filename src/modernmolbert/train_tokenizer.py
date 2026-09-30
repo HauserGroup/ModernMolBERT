@@ -27,6 +27,7 @@ uv run python -m modernmolbert.train_tokenizer \\
 import argparse
 import hashlib
 import re
+import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -46,6 +47,7 @@ from modernmolbert.utils import (
     assert_special_ids,
     collect_corpus_for_tokenizer,
     file_sha256,
+    get_git_revision,
     infer_molecule_column,
     metadata_path_for_vocab,
     resolve_special_ids,
@@ -547,6 +549,8 @@ def main(argv: list[str] | None = None) -> None:
         "tokenizer_sha256": vocab_sha256,
         "aligned_sample": sample_provenance,
         **fields,
+        "argv": list(argv if argv is not None else sys.argv),
+        "git": get_git_revision(),
         "creation_command": "python -m modernmolbert.train_tokenizer",
     }
     write_tokenizer_metadata(metadata_path, metadata)

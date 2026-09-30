@@ -109,6 +109,25 @@ They are stored as `PREFLIGHT_*` embeddings on Helios and must not enter paper
 scores. This confirms one endpoint's common-row path; G7 still requires
 coverage and shared supervised rows/folds across all 25 endpoints.
 
+The same five pilot checkpoints then embedded all **25 frozen paper tasks**,
+excluding ogbg-moltoxcast because the imported Praski table has no baseline
+for it. All 125 embedding jobs completed. `scripts/build_revision_coverage_manifest.py`
+verified their embedding/prepared-data hashes, finite vectors and source-row
+maps, and wrote
+`outputs/audit/revision_factorial_v1/pilot_benchmark_coverage.json` on Helios
+(SHA-256 `214626c96d35ac8b2cf67503a9e9c694c75025c152c13b2e446d9c8aa9343b69`).
+Across the 241,949 source rows assigned to supervised train/validation/test
+splits, 240,659 are common to all five tokenizers: **1,290 exclusions (0.53%)**.
+There were zero over-context rows. The largest proportional common losses
+were SIDER, 62/1,427 (4.34%), and HIV, 895/41,120 (2.18%). The original
+hERG JSON has 22 source rows assigned to no supervised split; the manifest
+records them but keeps the original split unchanged. MUV test endpoints 0
+and 12 have no positive class even before embedding, so this was not caused
+by common-row filtering. The five full-cohort embedding passes took about
+6.1 minutes combined on Helios; the 25-task scoring and common-fold timing
+is still unmeasured. Final-model embeddings and source-row hashes must be
+rechecked after production; these pilot weights never enter paper scores.
+
 ## Remaining launch gates
 
 - Measure CPU evaluation runtime after G7 scoring is ready, then revise the

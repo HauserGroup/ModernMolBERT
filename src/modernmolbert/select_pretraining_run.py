@@ -73,7 +73,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Write winner summary JSON to this path. "
-            "Defaults to {run_root}/best_run.json. "
+            "Defaults to {run_root}/best_run.json, or "
+            "{run_root}/best_{masking_strategy}_run.json with --masking_strategy. "
             "Use --no_output_best_json to suppress."
         ),
     )
@@ -156,7 +157,10 @@ def summarize_run(run_dir: Path, metric: str, lower_is_better: bool) -> dict[str
     eval_results = read_json(run_dir / "eval_results.json")
     train_results = read_json(run_dir / "train_results.json")
     trainer_state = read_json(run_dir / "trainer_state.json")
-    metadata = read_json(run_dir / "ape_tokenizer_metadata.json")
+    metadata_path = run_dir / "run_metadata.json"
+    if not metadata_path.exists():
+        metadata_path = run_dir / "ape_tokenizer_metadata.json"
+    metadata = read_json(metadata_path)
 
     final_model = run_dir / "final_model"
     has_final_model = (
@@ -251,7 +255,12 @@ def discover_runs(run_root: Path) -> list[Path]:
 
 
 def copy_best_model(best_row: dict[str, Any], destination: Path) -> None:
-    src = Path(best_row["final_model"])
+    final_model = best_row.get("final_model")
+    if not final_model:
+        raise ValueError(
+            f"Winning run {best_row.get('run_name', 'unknown')} has no final_model directory"
+        )
+    src = Path(final_model)
     if not src.exists():
         raise FileNotFoundError(f"Best final_model does not exist: {src}")
     if destination.exists():
@@ -306,7 +315,7 @@ def write_report(df: pd.DataFrame, args: argparse.Namespace, path: Path) -> None
         "global_step",
         "max_steps",
     ]
-    lines += [_markdown_table(df[[c for c in overview_cols if c in df.columns]]), ""]
+    lines += [_markdown_table(df.loc[:, [c for c in overview_cols if c in df.columns]]), ""]
 
     lines += [f"## Best run: `{best['run_name']}`", ""]
 
@@ -356,6 +365,8 @@ def write_best_json(df: pd.DataFrame, path: Path, metric: str) -> None:
 
     record: dict[str, Any] = {
         "metric": metric,
+        # The value the ranking used; best_metric is trainer_state's own record.
+        "selection_metric": _val("selection_metric"),
         "best_metric": _val("best_metric"),
         "model_size": _val("model_size"),
         "masking_strategy": _val("masking_strategy"),
@@ -388,12 +399,12 @@ def main() -> None:
     df = pd.DataFrame(rows)
 
     if args.masking_strategy:
-        df = df[df["masking_strategy"] == args.masking_strategy]
+        df = df.loc[df["masking_strategy"] == args.masking_strategy]
 
     if args.require_complete:
-        df = df[df["completed_max_steps"]]
+        df = df.loc[df["completed_max_steps"].astype(bool)]
 
-    df = df[df["selection_metric"].notna()].copy()
+    df = df.loc[df["selection_metric"].notna()].copy()
     if df.empty:
         raise SystemExit("No runs had a usable selection metric.")
 
@@ -440,7 +451,10 @@ def main() -> None:
         print(f"wrote report: {args.output_report}")
 
     if not args.no_output_best_json:
-        best_json_path = args.output_best_json or (args.run_root / "best_run.json")
+        default_name = (
+            f"best_{args.masking_strategy}_run.json" if args.masking_strategy else "best_run.json"
+        )
+        best_json_path = args.output_best_json or (args.run_root / default_name)
         write_best_json(df, best_json_path, args.metric)
         print(f"wrote best_run.json: {best_json_path}")
 

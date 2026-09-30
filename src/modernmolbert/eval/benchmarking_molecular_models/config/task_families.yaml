@@ -1,0 +1,24 @@
+# Benchmark datasets that are not independent pieces of evidence.
+#
+# Each family shares an assay source, and its test sets share molecules
+# (scripts/paper/audit_task_overlap.py). Families were fixed from data
+# provenance and that model-free overlap audit on 29 September 2026, before
+# any corrected benchmark result existed. Do not regroup tasks after seeing
+# model scores. Datasets not listed here are single-task families.
+#
+# Deliberately not grouped: the two SARS-CoV-2 datasets measure different
+# assays and share no test molecules.
+families:
+  CYP-Veith:
+    - CYP1A2_Veith
+    - CYP2C19_Veith
+    - CYP2C9_Veith
+    - CYP2D6_Veith
+    - CYP3A4_Veith
+  CYP-substrate:
+    - CYP2C9_Substrate_CarbonMangels
+    - CYP2D6_Substrate_CarbonMangels
+    - CYP3A4_Substrate_CarbonMangels
+  hERG:
+    - hERG
+    - hERG_Karim

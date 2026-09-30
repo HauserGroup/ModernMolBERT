@@ -4,16 +4,13 @@
 This utility uses a temporary Hugging Face cache directory and removes it at the end.
 
 Examples:
-    uv run python analysis/examples/count_hf_params.py
     uv run python analysis/examples/count_hf_params.py bert-base-uncased roberta-base
-    uv run python analysis/examples/count_hf_params.py --trust-remote-code ibm-research/MoLFormer-XL-both-10pct
     uv run python analysis/examples/count_hf_params.py \
         --hf-file dptech/Uni-Mol-Models mol_pre_all_h_220816.pt
 """
 
 import argparse
 import gc
-import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -22,9 +19,6 @@ from typing import Any
 import torch
 from huggingface_hub import hf_hub_download
 from transformers import AutoModel
-
-DEFAULT_MODEL_IDS = ["ibm-research/MoLFormer-XL-both-10pct"]
-AUTO_TRUST_PREFIXES = ("ibm-research/MoLFormer",)
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,18 +31,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "model_ids",
         nargs="*",
-        default=DEFAULT_MODEL_IDS,
         help="One or more Hugging Face model IDs.",
     )
     parser.add_argument(
         "--trust-remote-code",
         action="store_true",
         help="Allow execution of custom modeling code from the model repository.",
-    )
-    parser.add_argument(
-        "--no-trust-remote-code",
-        action="store_true",
-        help="Force-disable remote code execution (overrides auto-detection).",
     )
     parser.add_argument(
         "--hf-file",
@@ -90,15 +78,10 @@ def _count_tensors(obj: Any) -> tuple[int, set[int]]:
 
 
 def count_model_params(model_id: str, *, trust_remote_code: bool) -> None:
-    # Use an isolated temporary cache so no files remain in the default HF cache.
+    # Download weights into an isolated temporary cache that is removed afterwards.
+    # (Setting HF_HOME here would have no effect: huggingface_hub reads it at import.)
     tmp_root = Path(tempfile.mkdtemp(prefix="hf_param_count_"))
-    hf_home = tmp_root / "hf_home"
     transformers_cache = tmp_root / "transformers_cache"
-
-    old_hf_home = os.environ.get("HF_HOME")
-    old_transformers_cache = os.environ.get("TRANSFORMERS_CACHE")
-    os.environ["HF_HOME"] = str(hf_home)
-    os.environ["TRANSFORMERS_CACHE"] = str(transformers_cache)
 
     print(f"Model: {model_id}")
     print(f"Temporary cache root: {tmp_root}")
@@ -137,16 +120,6 @@ def count_model_params(model_id: str, *, trust_remote_code: bool) -> None:
         print(f"Removed temporary cache: {tmp_root}")
         print()
 
-        if old_hf_home is None:
-            os.environ.pop("HF_HOME", None)
-        else:
-            os.environ["HF_HOME"] = old_hf_home
-
-        if old_transformers_cache is None:
-            os.environ.pop("TRANSFORMERS_CACHE", None)
-        else:
-            os.environ["TRANSFORMERS_CACHE"] = old_transformers_cache
-
 
 def count_checkpoint_file_params(repo_id: str, filename: str) -> None:
     """Count tensor elements in a raw checkpoint file downloaded from Hugging Face Hub."""
@@ -182,22 +155,11 @@ def count_checkpoint_file_params(repo_id: str, filename: str) -> None:
 def main() -> None:
     args = parse_args()
 
-    if args.trust_remote_code and args.no_trust_remote_code:
-        raise ValueError("Use either --trust-remote-code or --no-trust-remote-code, not both.")
+    if not args.model_ids and not args.hf_file:
+        raise SystemExit("Pass at least one model ID or --hf-file.")
 
     for model_id in args.model_ids:
-        if args.no_trust_remote_code:
-            trust_remote_code = False
-        elif args.trust_remote_code:
-            trust_remote_code = True
-        else:
-            trust_remote_code = model_id.startswith(AUTO_TRUST_PREFIXES)
-            if trust_remote_code:
-                print(
-                    f"Auto-enabling trust_remote_code for known model family: {model_id}",
-                )
-
-        count_model_params(model_id, trust_remote_code=trust_remote_code)
+        count_model_params(model_id, trust_remote_code=args.trust_remote_code)
 
     for repo_id, filename in args.hf_file or []:
         count_checkpoint_file_params(repo_id=repo_id, filename=filename)

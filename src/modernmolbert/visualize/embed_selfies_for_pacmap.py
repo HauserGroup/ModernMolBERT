@@ -1,5 +1,3 @@
-# scripts/visualize_embeddings/embed_selfies_for_pacmap.py
-
 import argparse
 import json
 from pathlib import Path
@@ -145,7 +143,7 @@ def parse_args() -> argparse.Namespace:
         "--input",
         type=Path,
         required=True,
-        help="Input parquet/CSV produced by load_chembl_for_umap.py.",
+        help="Input parquet/CSV produced by load_chembl_for_pacmap.py.",
     )
 
     parser.add_argument(

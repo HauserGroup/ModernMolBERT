@@ -1,0 +1,35 @@
+{
+  "ape_source": "modernmolbert.local",
+  "corpus_primitive_scan": {
+    "n_added_after_merge_learning": 6,
+    "n_distinct_primitives": 338,
+    "n_rows": 2390314,
+    "path": "data/pretrain/chembl36_selfies/train.parquet",
+    "sha256": "5ba76a62d62c7dc628e5af4a6707eb05f4e03f79d563fd895484e4ac6fccdc7e"
+  },
+  "created_at_utc": "2026-09-28T21:48:27.871204+00:00",
+  "creation_command": "python -m modernmolbert.train_ape_tokenizer",
+  "dataset_name": "data/pretrain/chembl36_selfies",
+  "extra_vocab_selfies_path": null,
+  "extra_vocab_symbols_added": 0,
+  "extra_vocab_symbols_path": null,
+  "extra_vocab_symbols_requested": 0,
+  "max_merge_pieces": 2,
+  "max_vocab_size": 2000,
+  "min_freq_for_merge": 3000,
+  "molecule_column": "selfies",
+  "representation": "SELFIES",
+  "seed": 42,
+  "shuffle_buffer_size": 100000,
+  "special_ids": {
+    "bos_token": 0,
+    "eos_token": 2,
+    "mask_token": 4,
+    "pad_token": 1,
+    "unk_token": 3
+  },
+  "tokenizer_path": "tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json",
+  "tokenizer_sha256": "c097b8d1295343a77b8d60c278a78c3974b3ff85d5a8395697359acbd6a86796",
+  "tokenizer_train_size": 2000000,
+  "vocab_size": 588
+}

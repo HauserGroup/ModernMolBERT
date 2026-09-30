@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import sys
 
@@ -9,20 +10,27 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 # Paper-analysis scripts live in scripts/paper/ and are imported by name in tests.
-for scripts_dir in (ROOT / "scripts", ROOT / "scripts" / "paper"):
+for scripts_dir in (ROOT, ROOT / "scripts", ROOT / "scripts" / "paper"):
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
 
 
 def find_existing_minimal_model() -> Path | None:
     """Return the first available tiny trained model directory, or None."""
-    candidates = [
-        ROOT / "runs" / "mps_base_minimal_pubchem10m" / "final_model",
-        ROOT / "runs" / "mps_debug" / "final_model",
-        ROOT / "runs" / "mps_base_smoke_512_symbol_tokenizer" / "final_model",
-        ROOT / "runs" / "mps_base_smoke_256_symbol_tokenizer" / "final_model",
-        ROOT / "runs" / "zinc20_debug" / "final_model",
-    ]
+    candidates: list[Path] = []
+    env_dir = os.environ.get("MODERNMOLBERT_TEST_MODEL_DIR")
+    if env_dir:
+        candidates.append(Path(env_dir).resolve())
+    candidates.extend(
+        [
+            ROOT / "runs" / "debug_selfies" / "final_model",
+            ROOT / "runs" / "mps_base_minimal_pubchem10m" / "final_model",
+            ROOT / "runs" / "mps_debug" / "final_model",
+            ROOT / "runs" / "mps_base_smoke_512_symbol_tokenizer" / "final_model",
+            ROOT / "runs" / "mps_base_smoke_256_symbol_tokenizer" / "final_model",
+            ROOT / "runs" / "zinc20_debug" / "final_model",
+        ]
+    )
     for path in candidates:
         if (
             path.exists()

@@ -4,4 +4,4 @@ defaults:
 cache: true
 model_name: null
 datasets:
-  - clf_ogbg-molhiv
+  - all

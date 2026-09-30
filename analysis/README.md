@@ -13,9 +13,8 @@ analysis/
 ├── sweep/          MLM hyperparameter sweep collection and comparison
 ├── benchmark/      downstream benchmark evaluation and visualisation
 ├── validation/     tokenizer and model sanity checks
-├── debugging/      diagnostic notebooks for data and encoding issues
 ├── examples/       self-contained worked examples
-└── pxr/            PXR Challenge 2025 submission code
+└── Fig_PacMap/     PaCMAP embedding figure notebooks
 ```
 
 ---
@@ -35,22 +34,6 @@ uv run python analysis/tokenization/check_tokenized_lengths.py
 ---
 
 ## sweep/
-
-### `collect_sweep_results.py`
-Python version of sweep result aggregation. Scans a sweep directory for
-`mask_*__mlm_*__lr_*` subdirectories and collects metrics from
-`all_results.json`, `run_args.json`, and `trainer_state.json` into a CSV.
-
-Superseded by `R/collect_sweep_results.R`, which is more complete (adds
-throughput metrics, span hyperparams, best-run flags, and fixed-eval join).
-Kept for environments without R.
-
-**Run:**
-```bash
-uv run python analysis/sweep/collect_sweep_results.py \
-  --sweep runs/chembl36_small_mask_mlm_lr_sweep \
-  --out results/sweep_results.csv
-```
 
 ### `fixed_eval_best_models.py`
 Apples-to-apples fixed-mask evaluation. Loads the best checkpoint from each
@@ -74,34 +57,6 @@ datasets, and plots ROC curves by masking probability.
 
 ---
 
-## benchmark/
-
-### `wrangle_for_dabest.py`
-Wrangles benchmark results into the format expected by DABEST (Data Analysis
-using Bootstrap-coupled ESTimation). Loads ModernMolBERT results alongside
-Praski et al. reference results and normalises them to a common schema for
-estimation-statistics comparison.
-
-**Run:**
-```bash
-uv run python analysis/benchmark/wrangle_for_dabest.py \
-  --results outputs/eval/praski_best_span/results.csv \
-  --out outputs/dabest/combined.csv
-```
-
-### `fixup.ipynb`
-Data-cleaning notebook. Converts legacy embedded-model joblib files from
-bare numpy arrays to the current `EmbeddedDataset` format, and removes broken
-molecules from embedding datasets. Run once after downloading pre-computed
-embeddings that were produced with an older version of the pipeline.
-
-### `visualizations.ipynb`
-Comprehensive benchmark visualisation notebook. Loads and ranks embedded
-models, applies best-variant selection logic, generates AUROC tables,
-per-dataset performance tables, and cross-model win-rate plots. Primary
-notebook for producing paper-ready benchmark figures.
-
----
 
 ## validation/
 
@@ -131,39 +86,13 @@ uv run python analysis/validation/check_hf_tokenizer_matches_local.py \
 
 ---
 
-## debugging/
-
-### `selfies_debugger.ipynb`
-Diagnostic notebook. Validates SELFIES encoding across all prepared datasets,
-detects dative bonds and SELFIES parsing failures, and writes per-dataset JSON
-reports. Use when a dataset shows unexpectedly high `<unk>` rates or embedding
-failures.
-
----
-
-## pxr/
-
-PXR Challenge 2025 (activity track) submission code. Both scripts predict
-hPXR pEC50 from binary ECFP4 fingerprints using Tanimoto kernel methods.
-
-### `pxr_tanimoto_svr_knn.py`
-Ensemble of Support Vector Regression (Tanimoto kernel) and KNN. Lighter
-and faster; used as the primary submission.
-
-### `pxr_tanimoto_krr.py`
-Selectivity-weighted heteroskedastic Tanimoto Kernel Ridge Regression.
-Weights training samples by reliability estimates derived from measurement
-variance. More complex; used to explore uncertainty-aware regression.
-
----
-
 ## Related files outside this directory
 
 | Location | Purpose |
 |---|---|
-| `R/collect_sweep_results.R` | Preferred sweep collector — richer than the Python version; outputs `sweep_results.csv` and `fixed_eval_collected.csv` |
+| `R/collect_sweep_results.R` | Sweep collector; outputs `sweep_results.csv` and `fixed_eval_collected.csv` |
 | `R/FigX.R` | ggplot2 figure comparing masking strategies across MLM probabilities and learning rates |
-| `scripts/sweeps/run_sweep.py --model-size small` | Full small-model sweep (standard + span + hetero_span, three MLM probs, three LRs) |
+| `scripts/sweeps/run_sweep.py --model-size small` | Small-model sweep (standard + span, three MLM probs, three LRs; add `--masking standard span hetero_span` for the opt-in hetero_span ablation) |
 | `scripts/sweeps/run_sweep.py --model-size small --masking standard` | Standard-masking-only small-model sweep |
 | `scripts/sweeps/run_sweep.py --model-size base` | Base-size model sweep |
-| `exploratory/README.md` | Documents `--extra_vocab_symbols_path` / `--extra_vocab_selfies_path` arguments for tokenizer training |
+| `docs/tokenizer.md` | Documents `--extra_vocab_symbols_path` / `--extra_vocab_selfies_path` arguments for tokenizer training |

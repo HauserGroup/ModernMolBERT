@@ -1,20 +1,16 @@
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
-from abc import ABC, abstractmethod
 
 import logging as log
 import pandas as pd
 import numpy as np
 import json
 import base64
-import torch
+import sys
 
 
-try:
-    from typing import Literal
-except ImportError:
-    from typing import Literal
+from typing import Literal
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -22,7 +18,9 @@ class NumpyEncoder(json.JSONEncoder):
         """
         if input object is a ndarray it will be converted into a dict holding dtype, shape and the data base64 encoded
         """
-        if isinstance(o, torch.Tensor):
+        # A tensor can only exist if torch is already imported, so avoid importing it here.
+        torch = sys.modules.get("torch")
+        if torch is not None and isinstance(o, torch.Tensor):
             data_b64 = base64.b64encode(o.cpu().numpy().tobytes()).decode("utf-8")
             return dict(__torch_tensor__=data_b64, dtype=str(o.dtype).split(".")[-1], shape=o.shape)
         if isinstance(o, np.ndarray):
@@ -47,6 +45,8 @@ def json_numpy_obj_hook(dct):
     elif isinstance(dct, dict) and "__dataframe__" in dct:
         return pd.DataFrame(**dct["__dataframe__"])
     elif isinstance(dct, dict) and "__torch_tensor__" in dct:
+        import torch
+
         data = base64.b64decode(dct["__torch_tensor__"])
         as_tensor = getattr(torch, "as_" + "tensor")
         return as_tensor(np.frombuffer(data, dct["dtype"]).reshape(dct["shape"]))
@@ -58,17 +58,9 @@ class EmbeddingConfig:
     raw_directory: str
     embedded_directory: str
     predictions_directory: str
-    data_directory: str
-    clock_directory: str
     prepared_directory: str
-    svd_directory: str
     max_invalid_embeddings: int
     max_samples: int | None = None
-
-
-@dataclass
-class SystemConfig:
-    embedding_config: EmbeddingConfig
 
 
 @dataclass
@@ -78,38 +70,10 @@ class Dataset:
     data: Any
     splits: Any
 
-    def filter_out_problematic_molecules(self, illegal_smiles: list[str]):
-        """
-        Filters out rows from the dataset where the 'smiles' column contains any of the illegal SMILES strings.
-        :param illegal_smiles: List of illegal SMILES strings to filter out.
-        """
-        if "smiles" not in self.data.columns:
-            raise ValueError("Dataset does not contain a 'smiles' column.")
-
-        if "split" not in self.data.columns:
-            log.warning("Dataset does not contain split in dataframe, fixing")
-            self.data["split"] = "UNKNOWN"
-            for k, indices in self.splits.items():
-                idx_list = list(indices) if not isinstance(indices, list) else indices
-                if len(idx_list) > 0:
-                    self.data.iloc[idx_list, self.data.columns.get_loc("split")] = k
-
-        initial_count = len(self.data)
-        self.data = self.data[~self.data["smiles"].isin(illegal_smiles)]
-        filtered_count = len(self.data)
-
-        log.info(
-            f"Filtered out {initial_count - filtered_count} problematic molecules from dataset '{self.name}'."
-        )
-        log.info("Fixing splits indices")
-        self.splits = {k: np.where(self.data["split"] == k)[0].tolist() for k in self.splits}
-        if "UNKNOWN" in self.splits:
-            log.error("Something went really wrong.... ")
-            raise ValueError("Dataset contains 'UNKNOWN' split, which should not happen.")
-
     @property
     def labels(self) -> pd.DataFrame:
-        id_cols = [x for x in self.data.columns if "id" in x.lower() or "split" in x.lower()]
+        id_names = {"drug_id", "mol_id", "id", "split"}
+        id_cols = [x for x in self.data.columns if x.lower() in id_names]
 
         return self.data.drop(columns=(["smiles", "graph"] + id_cols), errors="ignore")
 
@@ -176,24 +140,6 @@ class EmbeddedDataset:
             return arr.flatten()
         return arr
 
-    def serialize_legacy(self, path):
-        import json
-
-        obj = {
-            "name": self.name,
-            "task": self.task,
-            "embedder": self.embedder,
-            "splits": self.splits,
-            "X": self.X,
-            "y": self.y,
-            "metadata": self.metadata,
-            "pooling": "mean",
-            "special_tokens_excluded": True,
-            "max_seq_length": 128,
-        }
-        with open(path, "w") as f:
-            json.dump(obj, f, cls=NumpyEncoder)
-
     @classmethod
     def deserialize_legacy(cls, path):
         import json
@@ -211,6 +157,8 @@ class HeadResult:
     cv_score: float
     model: str
     hyperparams: dict[str, Any]
+    test_source_row_indices: np.ndarray | None = None
+    prepared_data_sha256: str | None = None
 
 
 @dataclass
@@ -221,47 +169,3 @@ class EvaluationResult:
     cv_metric_value: float
     model: str
     hyperparams: dict[str, Any]
-
-
-class Embedder(ABC):
-    @abstractmethod
-    def embed(self, data):
-        pass
-
-    @property
-    def name(self):
-        return type(self).__name__
-
-    @property
-    def device_used(self):
-        raise NotImplementedError("This method should be implemented in subclasses.")
-
-
-class SmilesEmbedder(Embedder):
-    @abstractmethod
-    def forward(self, smiles):
-        pass
-
-    def embed(self, data):
-        nulls = data["smiles"].isna().sum()
-        if nulls > 0:
-            raise ValueError(
-                f"Input data contains {nulls} null SMILES strings, which cannot be processed."
-            )
-        illegal_smiles = data["smiles"].str.contains("*", regex=False).sum()
-        if illegal_smiles > 0:
-            log.warning(
-                f"Input data contains {illegal_smiles} SMILES strings with illegal characters ('*'). Replacing wildcards with 'C'."
-            )
-            data["smiles"] = data["smiles"].str.replace("*", "C", regex=False)
-
-        return self.forward(data["smiles"])
-
-
-class GraphEmbedder(Embedder):
-    @abstractmethod
-    def forward(self, graphs):
-        pass
-
-    def embed(self, data):
-        return self.forward(data["graph"])

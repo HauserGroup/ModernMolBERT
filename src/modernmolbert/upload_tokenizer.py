@@ -6,9 +6,13 @@ import shutil
 from pathlib import Path
 
 from dotenv import load_dotenv
-from transformers import AutoTokenizer
 
-from modernmolbert.hf_upload import file_sha256, push_folder_to_hub, resolve_hf_token
+from modernmolbert.hf_upload import (
+    file_sha256,
+    make_staging_dir,
+    push_folder_to_hub,
+    resolve_hf_token,
+)
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 
 
@@ -48,12 +52,6 @@ def parse_args() -> argparse.Namespace:
         help="Do not remove the staging directory after a successful run.",
     )
     return parser.parse_args()
-
-
-def clean_tmp(staging_dir: Path) -> None:
-    if staging_dir.exists():
-        shutil.rmtree(staging_dir)
-    staging_dir.mkdir(parents=True, exist_ok=True)
 
 
 def resolve_metadata_path(vocab_path: Path, metadata_path: Path | None) -> Path:
@@ -157,6 +155,8 @@ def verify_saved_tokenizer(
             f"{saved_max_length!r}; expected {model_max_length}"
         )
 
+    from transformers import AutoTokenizer
+
     loaded = AutoTokenizer.from_pretrained(
         str(staging_dir),
         trust_remote_code=True,
@@ -221,7 +221,7 @@ def upload_tokenizer_to_hub(
 ) -> None:
     vocab_path = vocab_path.resolve()
     metadata_path = resolve_metadata_path(vocab_path, metadata_path)
-    clean_tmp(staging_dir)
+    staging_dir, _cleanup = make_staging_dir(staging_dir)
 
     metadata = load_metadata(metadata_path)
     representation = verify_metadata(metadata, vocab_path)

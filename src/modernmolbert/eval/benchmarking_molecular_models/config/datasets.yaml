@@ -1,3 +1,6 @@
+# Benchmarking dataset registry.
+# Note: n_samples, n_tasks, and pct_positive are source-publication metadata,
+# not the prepared cohort counts.
 datasets:
   clf_AMES:
     name: AMES
@@ -24,7 +27,6 @@ datasets:
   clf_CYP1A2_Veith:
     name: CYP1A2_Veith
     metric: roc_auc
-    ranking_metric: roc_auc
     task: classification
     n_samples: 12579
     n_tasks: 1

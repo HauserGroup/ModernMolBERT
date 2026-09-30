@@ -11,9 +11,11 @@ former per-variant shell scripts. Run from the repo root:
 
 Batch geometry, warmup, and the default learning-rate grid follow the model
 size (see PRESETS); every axis can be overridden on the command line. Each run
-writes to runs/<run-root>/<run-name>/ and tees its output to train.log.
-Already-populated output directories are skipped, so re-running after a partial
-failure resumes the remaining runs.
+writes to runs/<run-root>/<run-name>/ and tees its output to
+runs/<run-root>/<run-name>.train.log (outside the run directory, which the
+trainer requires to be empty for a fresh run). Runs with a saved final model and
+all_results.json are skipped; an incomplete run directory stops the sweep so it
+can be resumed or removed explicitly.
 """
 
 import argparse
@@ -42,6 +44,8 @@ NUM_WORKERS = 4
 SEED = 42
 
 ALL_MASKING = ["standard", "span", "hetero_span"]
+# hetero_span is an opt-in ablation (not in the manuscript); request it via --masking.
+DEFAULT_MASKING = ["standard", "span"]
 # Strings (not floats) so run-directory names match the literal CLI tokens.
 DEFAULT_MLM_PROBS = ["0.15", "0.20", "0.25"]
 
@@ -73,8 +77,8 @@ def parse_args() -> argparse.Namespace:
         "--masking",
         nargs="+",
         choices=ALL_MASKING,
-        default=ALL_MASKING,
-        help="Masking strategies to sweep (default: all three).",
+        default=DEFAULT_MASKING,
+        help="Masking strategies to sweep (default: standard span; hetero_span is opt-in).",
     )
     parser.add_argument(
         "--mlm-probs",
@@ -226,7 +230,7 @@ def main() -> None:
 
     if not args.dry_run:
         preflight(args)
-    run_root.mkdir(parents=True, exist_ok=True)
+        run_root.mkdir(parents=True, exist_ok=True)
 
     pending: list[tuple[str, str, str, Path, str]] = []
     total = skipped = 0
@@ -236,10 +240,19 @@ def main() -> None:
                 total += 1
                 name = run_name_for(masking, mlm, lr)
                 output_dir = run_root / name
-                if output_dir.is_dir() and any(output_dir.iterdir()):
-                    print(f"SKIP  already populated: {output_dir}")
+                # all_results.json is written after the final model, tokenizer files and
+                # final evaluation, so its presence marks a finished run.
+                if (output_dir / "all_results.json").is_file() and (
+                    output_dir / "final_model" / "model.safetensors"
+                ).is_file():
+                    print(f"SKIP  already complete: {output_dir}")
                     skipped += 1
                     continue
+                if output_dir.is_dir() and any(output_dir.iterdir()):
+                    sys.exit(
+                        f"Incomplete run directory: {output_dir}. Resume it with the trainer's "
+                        "--resume_from_checkpoint or remove it before relaunching the sweep."
+                    )
                 pending.append((masking, mlm, lr, output_dir, name))
 
     bar = "─" * 62
@@ -263,8 +276,7 @@ def main() -> None:
             print("  " + " ".join(cmd))
             continue
 
-        output_dir.mkdir(parents=True, exist_ok=True)
-        log_file = output_dir / "train.log"
+        log_file = run_root / f"{name}.train.log"
         print(f"  log    → {log_file}")
         code = launch(cmd, log_file)
         if code != 0:

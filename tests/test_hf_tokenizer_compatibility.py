@@ -91,3 +91,21 @@ def test_auto_tokenizer_loads_custom_ape_tokenizer_for_selfies_and_smiles(tmp_pa
         batch = loaded(text, add_special_tokens=True, return_tensors="pt")
         assert batch["input_ids"].ndim == 2
         assert batch["attention_mask"].shape == batch["input_ids"].shape
+
+
+def test_vocab_alias_conflict_raises(tmp_path: Path):
+    import pytest
+
+    vocab_file = tmp_path / "vocab.json"
+    alias_file = tmp_path / "selfies_vocab.json"
+    vocab_file.write_text(json.dumps({"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<mask>": 4}))
+    alias_file.write_text(
+        json.dumps({"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<mask>": 4, "[C]": 5})
+    )
+
+    with pytest.raises(ValueError, match="Conflicting vocabulary files found"):
+        APEPreTrainedTokenizer(
+            vocab_file=str(vocab_file),
+            selfies_vocab_file=str(alias_file),
+            representation="SELFIES",
+        )

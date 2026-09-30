@@ -2,10 +2,10 @@
 """Check SELFIES tokenized length distribution and truncation rate.
 
 Example:
-  uv run python scripts/check_tokenized_lengths.py \
+  uv run python analysis/tokenization/check_tokenized_lengths.py \
     --dataset_name data/pretrain/chembl36_selfies \
-    --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_tokenizer.json \
-    --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_tokenizer.metadata.json \
+    --tokenizer_vocab_path tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.json \
+    --tokenizer_metadata_path tokenizer/chembl36_selfies_2m_ape_max2_min3000_corpus_v1.metadata.json \
     --selfies_column selfies \
     --max_seq_length 256 \
     --sample_size 100000

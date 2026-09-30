@@ -269,9 +269,12 @@ def dataset_is_complete(
 
 def get_disabled_reason(dataset_info: Any, head: str) -> str | None:
     """Return explicit disable reason for dataset/head, otherwise None."""
-    dataset_name = str(getattr(dataset_info, "name", ""))
-    if head == "knn" and "muv" in dataset_name.lower():
-        return "KNN disabled for MUV"
+    dataset_name = str(getattr(dataset_info, "name", "")).lower()
+    if head == "knn":
+        if "muv" in dataset_name:
+            return "KNN disabled for MUV"
+        if "hiv" in dataset_name:
+            return "KNN disabled for HIV"
 
     return None
 
@@ -291,24 +294,6 @@ def dataset_checkpoint_path(
     safe_dataset = safe_file_component(dataset)
     safe_embedder = safe_file_component(embedder)
     return Path(checkpoint_dir) / f"{safe_dataset}__{safe_embedder}.csv"
-
-
-def checkpoint_exists(
-    *,
-    checkpoint_dir: Path | None,
-    dataset: str,
-    embedder: str,
-) -> bool:
-    """Check whether a dataset/embedder checkpoint already exists."""
-    if checkpoint_dir is None:
-        return False
-
-    path = dataset_checkpoint_path(
-        checkpoint_dir=checkpoint_dir,
-        dataset=dataset,
-        embedder=embedder,
-    )
-    return path.exists() and path.stat().st_size > 0
 
 
 def make_short_model_name(model_name: str) -> str:
@@ -522,6 +507,12 @@ def subsample_embedded_dataset(
     }
 
     y = dataset.y.iloc[selected].reset_index(drop=True)
+    metadata = dict(dataset.metadata)
+    source_rows = metadata.get("source_row_indices")
+    if source_rows is not None:
+        if len(source_rows) != len(dataset.X):
+            raise ValueError(f"Source row mapping length mismatch for {dataset.name}")
+        metadata["source_row_indices"] = [source_rows[int(index)] for index in selected]
     subset = EmbeddedDataset(
         name=dataset.name,
         task=dataset.task,
@@ -529,7 +520,7 @@ def subsample_embedded_dataset(
         splits=remapped_splits,
         X=dataset.X[selected],
         y=y,
-        metadata=dict(dataset.metadata),
+        metadata=metadata,
     )
 
     log.info(
@@ -666,6 +657,7 @@ def run_eval(
     override: bool,
     preloaded: Any = None,
     n_jobs: int | None = None,
+    missing_labels: str = "as-negative",
 ) -> bool:
     """Run one dataset/head evaluation.
 
@@ -696,6 +688,7 @@ def run_eval(
             override=override,
             preloaded=preloaded,
             n_jobs=n_jobs,
+            missing_labels=missing_labels,
         )
     except Exception as exc:
         if not safe:
@@ -872,6 +865,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for scoring-time subsampling. Defaults to 42.",
+    )
+
+    parser.add_argument(
+        "--missing-labels",
+        choices=["observed", "as-negative"],
+        default="as-negative",
+        help=(
+            "Handling of missing labels in multi-endpoint datasets (Tox21, MUV). "
+            "'observed' fits each endpoint on its observed labels; 'as-negative' "
+            "treats them as negatives, matching the scorer behind the imported "
+            "Praski et al. results. Use 'as-negative' when comparing with that table."
+        ),
     )
 
     parser.add_argument(
@@ -1059,6 +1064,7 @@ def main() -> int:
                     override=override,
                     preloaded=embedded_data,
                     n_jobs=args.n_jobs,
+                    missing_labels=args.missing_labels,
                 )
             except Exception as exc:
                 success = False

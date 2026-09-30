@@ -492,17 +492,25 @@ after these fixes: 300 passed, 4 skipped (CI marker subset); `ruff check`,
 | R73 | `.pre-commit-config.yaml`: Pinned Ruff hook to tag `v0.15.12` to match `uv.lock` and excluded `configs/` from `pretty-format-json`. |
 | R76 | Removed unused `score.checkpoint_exists`, `ModernMolBERTSelfiesFeaturizer.featurize` alias, and `model_cards.TOKENIZER_MAX_LENGTH`. |
 | R77 | `train_selfies_ape_modernbert.py`: Moved matmul precision and dynamo static config from import time to `main()`. |
-| R83 | Fixed 6 of the 7 sub-items (the `audit_saved_predictions.py` one is still open): `select_pretraining_run.copy_best_model` raises `ValueError` if `final_model` missing; `run_sweep.py --dry-run` does not create directory; `audit_injected_symbols.load_symbols` skips any `"#"` comments; `fixed_eval_best_models.assert_compatible_runs` checks `tokenizer_sha256`; `MolecularMLMCollator._build_token_start_weights` bounds token IDs; `load_chembl_selfies` cleans up error message. |
+| R83 | Fixed all 7 sub-items: `select_pretraining_run.copy_best_model` raises `ValueError` if `final_model` missing; `run_sweep.py --dry-run` does not create directory; `audit_injected_symbols.load_symbols` skips any `"#"` comments; `fixed_eval_best_models.assert_compatible_runs` checks `tokenizer_sha256`; `MolecularMLMCollator._build_token_start_weights` bounds token IDs; `load_chembl_selfies` cleans up error message; `audit_saved_predictions.py` catches non-ROC tasks safely and guards missing prepared labels. |
 | R89 | `train_selfies_ape_modernbert.py`: Added `include_num_input_tokens_seen="non_padding"` to `TrainingArguments`. |
 | R90 | `analysis/validation/check_hf_tokenizer_matches_local.py`: Defaulted `model_max_length` to 128 and added disconnected `[C].[O]` example. |
+| R93 | `tokenization_ape.py`: In `_select_vocab_file`, raise `ValueError` if both `vocab.json` and representation alias exist and their contents differ. |
 | R95 | `README.md`: Added context length guard in quickstart example. |
 | R96 | `supervised/eval_metrics.py`: Narrowed `except Exception:` to `except ValueError:` in `get_skfp_roc_auc`. |
+| R97 | Deduplicated helpers across `scripts/` and `analysis/`: reused `file_sha256` and `get_git_revision` from `modernmolbert.utils`. |
+| R99 | `train_selfies_ape_modernbert.py`: Used `resolve_hf_token` to support `HF_TOKEN_ORG` as well as `HF_TOKEN` and dropped top-level `huggingface_hub` login import. |
+| R101 | `score.py`: Changed default `missing_labels` from `"observed"` to `"as-negative"`. |
 | R102 | `docs/evaluation.md`, harness `readme.md`, `docs/upload.md`: Removed obsolete `--max-seq-length 256` and clarified staging rules. |
 | R103 | `datasets.yaml`: Removed unused `ranking_metric` from `clf_CYP1A2_Veith` and documented metadata fields. |
+| R104 | `pyproject.toml`, `.github/workflows/ci.yml`, `tests/`: Added `addopts = "--strict-markers"`, marked model tests with `@pytest.mark.model`, and excluded network tests in CI marker filter. |
 | R105 | `tests/test_smoke_training.py`: Added committed factorial tokenizer paths to `_find_existing_tokenizer_vocab` and fixed tensor shape assertion; now runs and passes. |
+| R108 | `eval/benchmarking_molecular_models/`: Added `VENDORED.md` listing the behaviour-changing local modifications and the imported-results commit `17d2aa1`. The code's own upstream revision was never recorded and stays unknown. |
+| R109 | `train_tokenizer.py` and `chembl36.py`: Recorded `argv` and Git revision (`commit` and `dirty`) in artefact metadata. |
 | R110 | `train_selfies_ape_modernbert.py`: In `read_training_tokenizer`, required `tokenizer_sha256` in metadata. |
 | R111 | `CLAUDE.md`: Updated to reference current factorial tokenizers and output locations. |
 | R112 | `train_tokenizer.py`: Compared resolved paths for `--corpus_primitive_parquet` and `--aligned_sample_parquet`. |
+| R113 | `embed_modernmolbert.py`, `download.py`, `eval_metrics.py`, `praski_export.py`, `build_common_row_benchmark.py`: Atomic writes with `.tmp` and `os.replace`; `mmap_mode="r"` and `corrupt_archive` handling. |
 
 ### Verification pass 3 (2026-09-30): the fixes above, checked before commit
 
@@ -1306,7 +1314,7 @@ G1–G7 campaign.
 
 ### Minor robustness leftovers (first-pass notes, low priority)
 
-- **R83. (Fixed, except the `audit_saved_predictions.py` sub-item)** Each is a one-line fix; none affects the five-model campaign.
+- **R83. (Fixed)** Each is a one-line fix; none affects the five-model campaign.
   - `select_pretraining_run.copy_best_model` raises `TypeError` (`Path(None)`) when
     the winning run has no `final_model`, instead of a clear message.
   - `run_sweep.py --dry-run` still creates the run root directory.
@@ -1323,8 +1331,7 @@ G1–G7 campaign.
     an ID ≥ `vocab_size` (hetero-span only).
   - `load_chembl_for_pacmap.load_chembl_selfies` raises a message about the
     `--sample-size` CLI flag from a library function.
-  Fixed: six sub-items implemented and verified. Still open: `audit_saved_predictions.py`
-  scores every archive with ROC-AUC and labels missing prepared labels a size mismatch.
+  Fixed: All 7 sub-items implemented and verified.
 - **R84. `compare_praski_tables.make_table1_like` selects variants by test score.**
   With `collapse_names=True` (the default) it merges model variants (e.g.
   `ChemBERTa_[10M][MTR]`, `…[77M][MLM]`) by keeping, per dataset, the variant with
@@ -1395,7 +1402,7 @@ G1–G7 campaign.
 
 ### Exposure accounting (G6)
 
-- **R89. Presentations are estimated, and tokens are not counted.** G6 acceptance
+- **R89. (Fixed) Presentations are estimated, and tokens are not counted.** G6 acceptance
   asks for "7.68M accounted molecule presentations" and records of "token
   presentations". The trainer writes only `train_samples_streaming =
   max_steps × batch × accumulation × world_size`, an estimate that ignores the
@@ -1409,7 +1416,7 @@ G1–G7 campaign.
 
 ### Validation scripts (analysis/validation)
 
-- **R90. `check_hf_tokenizer_matches_local.py` fails with its own defaults.** It
+- **R90. (Fixed) `check_hf_tokenizer_matches_local.py` fails with its own defaults.** It
   builds the local tokenizer with `--model-max-length 256` and then requires
   `model_max_length` to equal the Hub tokenizer's, which was published with 128
   (`upload_tokenizer.DEFAULT_MODEL_MAX_LENGTH`, `model_cards.TOKENIZER_MAX_LENGTH`),
@@ -1438,7 +1445,7 @@ G1–G7 campaign.
 
 ### APE tokenizer files
 
-- **R93. A representation-specific vocab alias silently overrides `vocab.json`.**
+- **R93. (Fixed) A representation-specific vocab alias silently overrides `vocab.json`.**
   `APEPreTrainedTokenizer` declares `vocab.json`, `selfies_vocab.json` and
   `smiles_vocab.json`, and `_select_vocab_file` prefers the representation-specific
   file whenever it is present. `copy_tokenizer_artifacts` and `upload_model` write
@@ -1470,7 +1477,7 @@ G1–G7 campaign.
 
 ### README example
 
-- **R95. The README embedding example has no context-length check.** It rejects
+- **R95. (Fixed) The README embedding example has no context-length check.** It rejects
   lossy and unknown tokenisation and pools over non-special tokens, matching the
   featurizer, but it calls the tokenizer without truncation or a length test. The
   published checkpoints were trained at 128 positions, so a longer molecule is
@@ -1485,7 +1492,7 @@ G1–G7 campaign.
 
 ### Broad exception handling
 
-- **R96. The test metric silently switches definition on any error.**
+- **R96. (Fixed) The test metric silently switches definition on any error.**
   `eval_metrics.get_skfp_roc_auc` calls `roc_auc_score` inside `try/except Exception`
   and falls back to `multioutput_auroc_score` (per-endpoint, skipping single-class
   endpoints). The intended trigger is "an endpoint has one class", but any error —
@@ -1506,7 +1513,7 @@ G1–G7 campaign.
 
 ### Duplicated helpers (systematic count)
 
-- **R97. Same-name helpers defined in several files.** A count of top-level
+- **R97. (Fixed) Same-name helpers defined in several files.** A count of top-level
   function names finds, beyond findings 26/30:
   - `load_tokenizer` in `tokenization/load.py`, `analysis/tokenization/check_tokenized_lengths.py`
     and `analysis/sweep/fixed_eval_best_models.py` (the first copy skips the SHA check
@@ -1535,7 +1542,7 @@ G1–G7 campaign.
 
 ### Hub token handling
 
-- **R99. Two token-resolution rules.** The trainer's `--hf_login` reads only
+- **R99. (Fixed) Two token-resolution rules.** The trainer's `--hf_login` reads only
   `HF_TOKEN`, while the upload scripts use `hf_upload.resolve_hf_token`
   (`HF_TOKEN_ORG`, then `HF_TOKEN`). With only the organisation token set, upload
   works but the trainer's login fails. Reuse `resolve_hf_token`. (`.env` is
@@ -1559,7 +1566,7 @@ G1–G7 campaign.
 
 ### Scoring defaults versus the documented recipes
 
-- **R101. The default missing-label mode is the one C2 forbids.** `score.py`
+- **R101. (Fixed) The default missing-label mode is the one C2 forbids.** `score.py`
   defaults to `--missing-labels observed`; C2 requires `as-negative` for every
   internal model. `docs/revision_run.md` passes `as-negative` explicitly, but the
   generic recipes in `docs/evaluation.md` (and `config/score.yaml`) do not, so a run
@@ -1574,7 +1581,7 @@ G1–G7 campaign.
 
 ### Documentation drift caused by code changes
 
-- **R102. Embedding recipes now fail against the featurizer's new context rule.**
+- **R102. (Fixed) Embedding recipes now fail against the featurizer's new context rule.**
   `docs/evaluation.md` (example and option table: "`--max-seq-length` default
   `256`, truncation length") and the harness `readme.md` (three examples) pass
   `--max-seq-length 256`. Since finding 3 the featurizer rejects any value above the
@@ -1608,7 +1615,7 @@ G1–G7 campaign.
 
 ### Dataset configuration
 
-- **R103. Descriptive fields in `datasets.yaml` are unused and partly stale.**
+- **R103. (Fixed) Descriptive fields in `datasets.yaml` are unused and partly stale.**
   `n_tasks`, `pct_positive` and a lone `ranking_metric` (only on `clf_CYP1A2_Veith`)
   are read by no code; `n_samples` is read only by `make_dataset_summary.py` for
   comparison. Checked against the prepared data: all 25 entries match except the
@@ -1619,7 +1626,7 @@ G1–G7 campaign.
 
 ### Test markers
 
-- **R104. The CI marker filter excludes markers no test carries.** CI deselects
+- **R104. (Fixed) The CI marker filter excludes markers no test carries.** CI deselects
   `model` and `cuda`, but no test is marked with either; model-dependent tests
   (`test_model_encoding.py`, checkpoint reload) rely on the `existing_minimal_model`
   fixture skipping instead, which never finds a model (R25). Conversely `network`
@@ -1636,7 +1643,7 @@ G1–G7 campaign.
 
 ### Skipped tests
 
-- **R105. Both CI skips are caused by stale file names, not by opt-in markers.**
+- **R105. (Fixed) Both CI skips are caused by stale file names, not by opt-in markers.**
   The two skipped tests in the CI subset are `test_model_encoding.py` (R25: no
   fixture candidate exists) and `test_smoke_training.py::test_local_tokenizer_encode_selfies_examples`,
   a fast, unmarked encode check that looks only for
@@ -1668,7 +1675,7 @@ G1–G7 campaign.
 
 ### Vendored-harness provenance
 
-- **R108. The vendored harness records no upstream revision or local diff.** The
+- **R108. (Partly fixed) The vendored harness records no upstream revision or local diff.** The
   project rule is that splits and metrics "must stay unchanged to remain comparable
   with the Praski tables", yet neither the harness `readme.md` nor the docs name the
   upstream repository commit it was copied from, and the local changes are many:
@@ -1705,7 +1712,7 @@ G1–G7 campaign.
 
 ### Reproduction commands
 
-- **R109. Artefact metadata records a fixed command string, not the invocation.**
+- **R109. (Fixed) Artefact metadata records a fixed command string, not the invocation.**
   `train_tokenizer.py` writes `"creation_command": "python -m modernmolbert.train_tokenizer"`
   and `chembl36.py` a similar constant; the factorial handoff lists hashes and
   settings but not the four exact `train_tokenizer` command lines. The individual
@@ -1716,7 +1723,7 @@ G1–G7 campaign.
 
 ### Tokenizer integrity check
 
-- **R110. A tokenizer without a recorded hash is accepted for training.**
+- **R110. (Fixed) A tokenizer without a recorded hash is accepted for training.**
   `load_verified_tokenizer` fails on a hash *mismatch* but only warns when the
   metadata has no `tokenizer_sha256`; the trainer uses it as its sole integrity
   check. Every current tokenizer records the hash, so requiring it in the trainer
@@ -1725,7 +1732,7 @@ G1–G7 campaign.
 
 ### Agent instructions (local, git-ignored)
 
-- **R111. `CLAUDE.md` describes the historical pipeline as current.** It states
+- **R111. (Fixed) `CLAUDE.md` describes the historical pipeline as current.** It states
   "The production vocab has 631 tokens and includes the 42 injected symbols" and
   that `scripts/paper` "writes `paper/tables` and `paper/figures`". Under the plan
   the production inputs are the four `revision_factorial_v1` tokenizers (no
@@ -1735,7 +1742,7 @@ G1–G7 campaign.
 
 ### Tokenizer training CLI
 
-- **R112. The aligned-sample check compares paths textually.** `validate_args`
+- **R112. (Fixed) The aligned-sample check compares paths textually.** `validate_args`
   requires `--corpus_primitive_parquet` to equal `--aligned_sample_parquet` with
   `!=` on `Path` objects, so the same file given once relative and once absolute (or
   via a symlink) is rejected as a different file. Compare `.resolve()` paths, or
@@ -1743,7 +1750,7 @@ G1–G7 campaign.
 
 ### Interrupted writes
 
-- **R113. Evaluation artefacts are written in place, not atomically.** Only the
+- **R113. (Fixed) Evaluation artefacts are written in place, not atomically.** Only the
   ChEMBL chunk and shard writers use a temporary file plus `rename`. The embedding
   `joblib.dump` (`embed_modernmolbert.py`), the prediction `.npy`/`.npz`
   (`log_predictions`), the prepared-data `joblib`/JSON (`download.py`) and the

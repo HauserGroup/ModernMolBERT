@@ -140,6 +140,14 @@ its unassigned source rows were not moved into a split. These diagnostic
 cohorts establish the shared-row scoring path; production embeddings must be
 materialized afresh after full training.
 
+A diagnostic ridge score on Bioavailability_Ma completed for each of these
+five common cohorts with `--missing-labels as-negative --no-cache --no-resume --n-jobs 4`.
+Each used 511 common train and 128 common test rows. The five
+prediction `.npz` files carried byte-for-byte equal original test-row IDs,
+`y_true` labels and prepared-data SHA-256. Their numerical pilot scores are
+excluded from manuscript analysis. The general scoring harness still needs
+stale-result protection and the complete G7 head-selection/common-fold run.
+
 ## Remaining launch gates
 
 - Measure CPU evaluation runtime after G7 scoring is ready, then revise the

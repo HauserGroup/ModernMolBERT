@@ -44,7 +44,13 @@ def label_hash(labels: pd.DataFrame) -> str:
     return digest.hexdigest()
 
 
-def final_model_identity(source: EmbeddedDataset, run_id: str) -> dict[str, str]:
+def final_model_identity(
+    source: EmbeddedDataset,
+    run_id: str,
+    *,
+    campaign_sha256: str | None = None,
+    campaign_commit: str | None = None,
+) -> dict[str, str]:
     model_dir = source.metadata.get("model_dir")
     if not model_dir:
         raise ValueError(f"Source embedding lacks model_dir for {run_id}")
@@ -56,6 +62,11 @@ def final_model_identity(source: EmbeddedDataset, run_id: str) -> dict[str, str]
         raise ValueError(f"Embedding uses an unexpected final model: {model_path}")
     identity_path = expected.parent / "run_identity.json"
     identity = json.loads(identity_path.read_text(encoding="utf-8"))
+    if campaign_sha256 is not None and (
+        identity.get("inputs", {}).get("campaign_manifest_sha256") != campaign_sha256
+        or identity.get("git", {}).get("commit") != campaign_commit
+    ):
+        raise ValueError(f"Final model does not belong to the frozen campaign: {run_id}")
     result = identity.get("result", {})
     weights = expected / result.get("final_model_file", "")
     if result.get("terminal_step") != 30_000 or not weights.is_file():
@@ -77,6 +88,8 @@ def materialize_task(
     *,
     overwrite: bool,
     require_final_models: bool = False,
+    campaign_sha256: str | None = None,
+    campaign_commit: str | None = None,
 ) -> dict[str, Any]:
     prepared_path = PREPARED / f"{name}.json"
     prepared = Dataset.deserialize_legacy(prepared_path)
@@ -164,7 +177,16 @@ def materialize_task(
 
     for run_id in RUN_IDS:
         source = sources[run_id]
-        model_record = final_model_identity(source, run_id) if require_final_models else {}
+        model_record = (
+            final_model_identity(
+                source,
+                run_id,
+                campaign_sha256=campaign_sha256,
+                campaign_commit=campaign_commit,
+            )
+            if require_final_models
+            else {}
+        )
         positions = [source_maps[run_id][row] for row in ordered_common]
         metadata = {
             key: source.metadata[key]
@@ -238,9 +260,17 @@ def main() -> None:
     campaign_data = json.loads(campaign.read_text(encoding="utf-8"))
     if set(campaign_data.get("run_ids", [])) != set(RUN_IDS):
         raise ValueError("Campaign manifest does not contain the five expected models")
+    task_names = names()
+    prepared_hashes = campaign_data.get("prepared_data_sha256", {})
+    if set(prepared_hashes) != set(task_names):
+        raise ValueError("Campaign manifest does not contain the frozen 25-task cohort")
+    for name in task_names:
+        if file_sha256(PREPARED / f"{name}.json") != prepared_hashes[name]:
+            raise ValueError(f"Prepared task changed since campaign staging: {name}")
+    campaign_sha = file_sha256(campaign)
     result = {
         "schema": 2,
-        "campaign_manifest_sha256": file_sha256(campaign),
+        "campaign_manifest_sha256": campaign_sha,
         "code_commit": campaign_data["code_commit"],
         "source_prefix": args.source_prefix,
         "common_prefix": args.common_prefix,
@@ -254,8 +284,10 @@ def main() -> None:
                 args.common_prefix,
                 overwrite=args.overwrite,
                 require_final_models=True,
+                campaign_sha256=campaign_sha,
+                campaign_commit=campaign_data["code_commit"],
             )
-            for name in names()
+            for name in task_names
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

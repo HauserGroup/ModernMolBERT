@@ -94,11 +94,13 @@ def test_final_model_identity_rejects_embedding_from_other_weights(tmp_path, mon
     identity.write_text(
         json.dumps(
             {
+                "inputs": {"campaign_manifest_sha256": "a" * 64},
+                "git": {"commit": "training-commit"},
                 "result": {
                     "terminal_step": 30_000,
                     "final_model_file": weights.name,
                     "final_model_sha256": expected,
-                }
+                },
             }
         )
     )
@@ -115,5 +117,18 @@ def test_final_model_identity_rejects_embedding_from_other_weights(tmp_path, mon
         common.final_model_identity(source, "small_ape_selfies")
     source.metadata["model_weights_sha256"] = expected
     assert (
-        common.final_model_identity(source, "small_ape_selfies")["final_model_sha256"] == expected
+        common.final_model_identity(
+            source,
+            "small_ape_selfies",
+            campaign_sha256="a" * 64,
+            campaign_commit="training-commit",
+        )["final_model_sha256"]
+        == expected
     )
+    with pytest.raises(ValueError, match="does not belong to the frozen campaign"):
+        common.final_model_identity(
+            source,
+            "small_ape_selfies",
+            campaign_sha256="b" * 64,
+            campaign_commit="training-commit",
+        )

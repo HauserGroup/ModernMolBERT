@@ -173,3 +173,21 @@ Score each accepted seed on CPU with
 session. The queue writes `scoring_seed<seed>.status` and per-task/model
 logs under `outputs/revision_factorial_multiseed_v1/`. Its scorer verifies
 the seed-specific common embedding and manifest hashes before every pair.
+
+When every seed has 125 accepted task/model scores, build each seed's
+`common_task_matrix.csv` with `build_common_row_benchmark.py`, passing that
+seed's evaluation manifest via `--evaluation-manifest` and all five
+`REVISION_COMMON_s<seed>_<run_id>` embedders. Give them the same five paper
+labels. Seed 42 uses the unsuffixed `REVISION_COMMON_<run_id>` prefix. Keep
+the resulting selection `manifest.json` next to each matrix.
+
+Pass those five matrices and five evaluation manifests as `SEED=PATH`
+arguments to `scripts/paper/aggregate_revision_seeds.py`. It requires all
+25 task rows and the same supervised row, label, split and endpoint hashes
+across seeds. Its `mean_common_task_matrix.csv` supplies internal paper
+scores; `seed_task_contrasts.csv` and `overall_contrast_summary.csv` retain
+five independent seed-level effects. Run
+`scripts/paper/compute_revision_contrast_intervals.py` on the mean matrix
+and overall contrast summary for separate task and fixed-family bootstrap
+intervals. These intervals condition on the five trained seeds; report the
+between-seed SD beside them, not as 125 independent training replicates.

@@ -58,6 +58,12 @@ uv run --locked python src/modernmolbert/eval/benchmarking_molecular_models/embe
   --batch-size 32 --device cuda --pooling mean
 ```
 
+After the five-model queue reports complete, the Helios wrapper
+`bash scripts/run_revision_final_embeddings.sh` checks the campaign and final
+model hashes, requires an idle shared GPU at each model boundary, logs each
+embedding pass, and then materializes the common cohort. It stops on a failed
+check or embedding. Use `UV_BIN` to override `/opt/lab/bin/uv` on another host.
+
 Preserve the source embedding joblibs in `data/embedded/`. The current registry
 contains exactly the 25 frozen paper tasks. The embedding pipeline records the
 final weight hash, row IDs and rejection counts; it rejects lossy, unknown,

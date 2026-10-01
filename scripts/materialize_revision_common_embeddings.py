@@ -62,6 +62,8 @@ def final_model_identity(source: EmbeddedDataset, run_id: str) -> dict[str, str]
         raise ValueError(f"Incomplete final model for {run_id}")
     if file_sha256(weights) != result.get("final_model_sha256"):
         raise ValueError(f"Final weights changed for {run_id}")
+    if source.metadata.get("model_weights_sha256") != result["final_model_sha256"]:
+        raise ValueError(f"Embedding weights differ from final run identity for {run_id}")
     return {
         "run_identity_sha256": file_sha256(identity_path),
         "final_model_sha256": result["final_model_sha256"],
@@ -170,6 +172,7 @@ def materialize_task(
                 "pooling",
                 "pooling_special_tokens_excluded",
                 "model_dir",
+                "model_weights_sha256",
                 "tokenizer_path",
                 "max_seq_length",
             )

@@ -58,8 +58,9 @@ uv run --locked python src/modernmolbert/eval/benchmarking_molecular_models/embe
   --batch-size 32 --device cuda --pooling mean
 ```
 
-Preserve the source embedding joblibs in `data/embedded/`. The embedding
-pipeline records row IDs and rejection counts; it rejects lossy, unknown,
+Preserve the source embedding joblibs in `data/embedded/`. The current registry
+contains exactly the 25 frozen paper tasks. The embedding pipeline records the
+final weight hash, row IDs and rejection counts; it rejects lossy, unknown,
 over-context, and invalid molecules under the declared policy. Avoid
 overwriting an embedding without rebuilding the evaluation manifest.
 

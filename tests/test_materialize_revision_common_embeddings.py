@@ -1,3 +1,5 @@
+import json
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -79,3 +81,39 @@ def test_common_embeddings_share_source_rows_labels_and_splits(tmp_path, monkeyp
     joblib.dump(source_embedding, path)
     with pytest.raises(ValueError, match="split differs"):
         common.materialize_task("tiny", "PREFLIGHT_", "OTHER_", overwrite=False)
+
+
+def test_final_model_identity_rejects_embedding_from_other_weights(tmp_path, monkeypatch):
+    monkeypatch.setattr(common, "ROOT", tmp_path)
+    model = tmp_path / "runs/revision_factorial_v1/small_ape_selfies/seed42/final_model"
+    model.mkdir(parents=True)
+    weights = model / "model.safetensors"
+    weights.write_bytes(b"accepted weights")
+    expected = file_sha256(weights)
+    identity = model.parent / "run_identity.json"
+    identity.write_text(
+        json.dumps(
+            {
+                "result": {
+                    "terminal_step": 30_000,
+                    "final_model_file": weights.name,
+                    "final_model_sha256": expected,
+                }
+            }
+        )
+    )
+    source = EmbeddedDataset(
+        name="tiny",
+        task="classification",
+        embedder="REVISION_small_ape_selfies",
+        splits={"train": [0], "valid": [], "test": [1]},
+        X=np.zeros((2, 2), dtype=np.float32),
+        y=pd.DataFrame({"Y": [0, 1]}),
+        metadata={"model_dir": str(model), "model_weights_sha256": "0" * 64},
+    )
+    with pytest.raises(ValueError, match="Embedding weights differ"):
+        common.final_model_identity(source, "small_ape_selfies")
+    source.metadata["model_weights_sha256"] = expected
+    assert (
+        common.final_model_identity(source, "small_ape_selfies")["final_model_sha256"] == expected
+    )

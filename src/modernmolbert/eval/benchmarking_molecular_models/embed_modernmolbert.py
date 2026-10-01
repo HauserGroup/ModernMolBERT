@@ -8,6 +8,7 @@ the MLM head weights and are intentionally discarded — this is expected and sa
 
 import argparse
 import gc
+import json
 import os
 import time
 from pathlib import Path
@@ -106,7 +107,29 @@ def load_prepared_dataset(path: Path) -> Dataset:
     return joblib.load(path)
 
 
-def assert_reusable_embedding(output_path: Path, prepared_path: Path) -> None:
+def model_weight_sha256(model_dir: Path) -> str | None:
+    """Identify local weights, checking a completed run record when one exists."""
+    identity_path = model_dir.parent / "run_identity.json"
+    if identity_path.is_file():
+        result = json.loads(identity_path.read_text(encoding="utf-8")).get("result", {})
+        filename = result.get("final_model_file")
+        expected = result.get("final_model_sha256")
+        if result.get("terminal_step") != 30_000 or not filename or not expected:
+            raise ValueError(f"Incomplete final run identity: {identity_path}")
+        weights = model_dir / filename
+        if not weights.is_file() or file_sha256(weights) != expected:
+            raise ValueError(f"Final model weights differ from run identity: {weights}")
+        return expected
+    for filename in ("model.safetensors", "pytorch_model.bin"):
+        weights = model_dir / filename
+        if weights.is_file():
+            return file_sha256(weights)
+    return None
+
+
+def assert_reusable_embedding(
+    output_path: Path, prepared_path: Path, *, model_sha256: str | None = None
+) -> None:
     """Never skip a stale or unreadable pickle as if it matched the prepared cohort."""
     source_path = prepared_path.with_suffix(".json")
     if not source_path.exists():
@@ -129,6 +152,11 @@ def assert_reusable_embedding(output_path: Path, prepared_path: Path) -> None:
             f"Existing embedding {output_path} has a different prepared-data hash; "
             "regenerate it with --overwrite"
         )
+    if model_sha256 is not None and embedded.metadata.get("model_weights_sha256") != model_sha256:
+        raise ValueError(
+            f"Existing embedding {output_path} has a different model-weights hash; "
+            "regenerate it with --overwrite"
+        )
 
 
 def make_featurizer(args: argparse.Namespace):
@@ -149,6 +177,7 @@ def make_featurizer(args: argparse.Namespace):
 
 def main() -> None:
     args = parse_args()
+    model_sha256 = model_weight_sha256(args.model_dir)
     root = Path(__file__).resolve().parent
     config_dir = root / args.config_dir
     embed_config = EmbeddingConfig(**load_embedding_config(config_dir))
@@ -173,7 +202,7 @@ def main() -> None:
         output_path = output_dir / f"{args.embedder}.joblib"
 
         if output_path.exists() and not args.overwrite:
-            assert_reusable_embedding(output_path, prepared_path)
+            assert_reusable_embedding(output_path, prepared_path, model_sha256=model_sha256)
             print(
                 f"[{idx:>2}/{n_total}] SKIP  {dataset_name} — embedding exists",
                 flush=True,
@@ -201,6 +230,8 @@ def main() -> None:
             source_path = prepared_path
         embedded.metadata["prepared_data_path"] = str(source_path)
         embedded.metadata["prepared_data_sha256"] = file_sha256(source_path)
+        if model_sha256 is not None:
+            embedded.metadata["model_weights_sha256"] = model_sha256
 
         # Free the prepared dataset before writing the embedded one
         del dataset
@@ -221,6 +252,8 @@ def main() -> None:
         del embedded
         gc.collect()
 
+    if model_weight_sha256(args.model_dir) != model_sha256:
+        raise ValueError(f"Model weights changed during embedding: {args.model_dir}")
     total_elapsed = time.perf_counter() - wall_start
     print(f"\n[embed] finished {n_total} datasets in {total_elapsed:.1f}s", flush=True)
 

@@ -540,7 +540,8 @@ def adjust_args_for_backend(args: argparse.Namespace, backend: str) -> argparse.
         args.num_workers = 0
 
     if args.debug:
-        args.eval_size = min(args.eval_size, 500)
+        if getattr(args, "validation_row_ids_path", None) is None:
+            args.eval_size = min(args.eval_size, 500)
         args.max_steps = min(args.max_steps, 200)
         args.logging_steps = min(args.logging_steps, 10)
         args.eval_steps = min(args.eval_steps, 50)

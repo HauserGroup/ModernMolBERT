@@ -10,6 +10,7 @@ from datasets import Dataset
 from transformers.models.modernbert.configuration_modernbert import ModernBertConfig
 
 from modernmolbert.train_selfies_ape_modernbert import (
+    adjust_args_for_backend,
     build_modernbert_config,
     compute_metrics,
     _encode_without_truncation,
@@ -37,6 +38,26 @@ class _Argv:
 
     def __exit__(self, exc_type, exc, tb):
         sys.argv = self._old
+
+
+def test_debug_keeps_frozen_validation_population():
+    args = argparse.Namespace(
+        debug=True,
+        eval_size=4096,
+        validation_row_ids_path=Path("validation_rows.npy"),
+        max_steps=30_000,
+        logging_steps=100,
+        eval_steps=5000,
+        save_steps=5000,
+        tokenizer_validation_samples=10_000,
+        bf16=True,
+        fp16=False,
+        num_workers=4,
+    )
+    adjusted = adjust_args_for_backend(args, "cuda")
+    assert adjusted.eval_size == 4096
+    assert adjusted.max_steps == 200
+    assert adjusted.eval_steps == adjusted.save_steps == 50
 
 
 def test_molecular_model_config_uses_vocabulary_boundaries_for_cls_and_sep(monkeypatch):

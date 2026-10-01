@@ -159,3 +159,17 @@ checkpoint; a partial run without such a checkpoint stops for inspection.
 The original seed-42 campaign manifest and final evaluation files remain
 their own evidence; merge results across seeds only after each seed has
 passed the same embedding and scoring policy.
+
+After the training queue completes, embed each new seed on an idle GPU with
+`bash scripts/run_revision_multiseed_embeddings.sh <seed>`. This verifies the
+five final weights against the multiseed manifest and all frozen prepared
+tasks, writes per-model logs, then creates
+`outputs/revision_factorial_multiseed_v1/evaluation_seed<seed>.json`.
+It checks that the retained supervised rows, labels and split hashes match
+the accepted seed-42 cohort. An occupied GPU stops an embedding pass.
+
+Score each accepted seed on CPU with
+`bash scripts/run_revision_final_scoring.sh <seed>` in a persistent `tmux`
+session. The queue writes `scoring_seed<seed>.status` and per-task/model
+logs under `outputs/revision_factorial_multiseed_v1/`. Its scorer verifies
+the seed-specific common embedding and manifest hashes before every pair.

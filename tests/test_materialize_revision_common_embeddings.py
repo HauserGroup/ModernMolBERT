@@ -132,3 +132,5 @@ def test_final_model_identity_rejects_embedding_from_other_weights(tmp_path, mon
             campaign_sha256="b" * 64,
             campaign_commit="training-commit",
         )
+    with pytest.raises(ValueError, match="unexpected final model"):
+        common.final_model_identity(source, "small_ape_selfies", seed=43)

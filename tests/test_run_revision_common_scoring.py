@@ -64,3 +64,23 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
     output.parent.mkdir(parents=True)
     output.write_text("older result", encoding="utf-8")
     assert run_cmd() == command
+
+    seed43_embedding = embedding.with_name("REVISION_COMMON_s43_small_ape_selfies.joblib")
+    seed43_embedding.write_bytes(b"seed 43 common embedding")
+    seed43_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+    seed43_manifest["seed"] = 43
+    seed43_manifest["common_prefix"] = "REVISION_COMMON_s43_"
+    seed43_manifest["tasks"]["example"]["models"]["small_ape_selfies"][
+        "common_embedding_sha256"
+    ] = file_sha256(seed43_embedding)
+    manifest.write_text(json.dumps(seed43_manifest), encoding="utf-8")
+    seed43 = scoring.command_for(
+        manifest_path=manifest,
+        run_id="small_ape_selfies",
+        task="example",
+        output_root=tmp_path / "seed43_scores",
+        n_jobs=4,
+        seed=43,
+        campaign_path=campaign,
+    )
+    assert seed43[seed43.index("--embedder") + 1] == "REVISION_COMMON_s43_small_ape_selfies"

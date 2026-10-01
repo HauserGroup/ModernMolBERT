@@ -48,6 +48,7 @@ def final_model_identity(
     source: EmbeddedDataset,
     run_id: str,
     *,
+    seed: int = 42,
     campaign_sha256: str | None = None,
     campaign_commit: str | None = None,
 ) -> dict[str, str]:
@@ -57,7 +58,7 @@ def final_model_identity(
     model_path = Path(model_dir)
     if not model_path.is_absolute():
         model_path = ROOT / model_path
-    expected = ROOT / "runs/revision_factorial_v1" / run_id / "seed42/final_model"
+    expected = ROOT / "runs/revision_factorial_v1" / run_id / f"seed{seed}/final_model"
     if model_path.resolve() != expected.resolve():
         raise ValueError(f"Embedding uses an unexpected final model: {model_path}")
     identity_path = expected.parent / "run_identity.json"
@@ -88,6 +89,7 @@ def materialize_task(
     *,
     overwrite: bool,
     require_final_models: bool = False,
+    seed: int = 42,
     campaign_sha256: str | None = None,
     campaign_commit: str | None = None,
 ) -> dict[str, Any]:
@@ -181,6 +183,7 @@ def materialize_task(
             final_model_identity(
                 source,
                 run_id,
+                seed=seed,
                 campaign_sha256=campaign_sha256,
                 campaign_commit=campaign_commit,
             )
@@ -203,6 +206,7 @@ def materialize_task(
         metadata.update(
             {
                 "common_row_policy": "five_model_supervised_intersection_v1",
+                "seed": seed,
                 "source_row_indices": ordered_common,
                 "common_source_row_indices_sha256": manifest["common_source_row_indices_sha256"],
                 "prepared_data_sha256": prepared_sha,
@@ -238,6 +242,7 @@ def materialize_task(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--source-prefix", default="REVISION_")
     parser.add_argument("--common-prefix", default="REVISION_COMMON_")
     parser.add_argument("--overwrite", action="store_true")
@@ -258,6 +263,8 @@ def main() -> None:
     if not campaign.is_file():
         raise FileNotFoundError(f"Stage the campaign manifest first: {campaign}")
     campaign_data = json.loads(campaign.read_text(encoding="utf-8"))
+    if args.seed not in campaign_data.get("seeds", [42]):
+        raise ValueError("Requested seed is not in the frozen campaign manifest")
     if set(campaign_data.get("run_ids", [])) != set(RUN_IDS):
         raise ValueError("Campaign manifest does not contain the five expected models")
     task_names = names()
@@ -272,6 +279,7 @@ def main() -> None:
         "schema": 2,
         "campaign_manifest_sha256": campaign_sha,
         "code_commit": campaign_data["code_commit"],
+        "seed": args.seed,
         "source_prefix": args.source_prefix,
         "common_prefix": args.common_prefix,
         "run_ids": RUN_IDS,
@@ -284,6 +292,7 @@ def main() -> None:
                 args.common_prefix,
                 overwrite=args.overwrite,
                 require_final_models=True,
+                seed=args.seed,
                 campaign_sha256=campaign_sha,
                 campaign_commit=campaign_data["code_commit"],
             )

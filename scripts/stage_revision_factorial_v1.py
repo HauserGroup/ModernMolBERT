@@ -50,7 +50,7 @@ def build_manifest() -> dict:
         path = ROOT / relative
         if not path.is_file() or file_sha256(path) != expected:
             raise ValueError(f"Frozen campaign input missing or changed: {path}")
-        if relative.startswith("tokenizer/"):
+        if relative.startswith("tokenizer/") and not relative.endswith(".metadata.json"):
             metadata = path.with_suffix(".metadata.json")
             if (
                 not metadata.is_file()

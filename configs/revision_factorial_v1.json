@@ -7,9 +7,13 @@
     "data/pretrain/chembl36_selfies/train_order_seed42.npy": "60069ea515283bf5e7fb4ca28196092c41f849a5eb4b1fa157dba6441de126a1",
     "data/pretrain/chembl36_selfies/validation_rows_seed42_4096.npy": "8f5b52b43d88a766b2c1e806eaa0225b0d83c839bd882dfb9d1c14a4eb020040",
     "tokenizer/revision_factorial_v1/ape_selfies.json": "8871e9414362c2f1fb313a2dc844a57f077b8e82c7e99195cfb88aa1d741f0f2",
+    "tokenizer/revision_factorial_v1/ape_selfies.metadata.json": "7366edba61465cb214bfbd1a195e82a0b99cd4e2a85155392ab2e49c0894d03e",
     "tokenizer/revision_factorial_v1/ape_smiles.json": "a6f40f48409378a8726bac930ecd68d1a57509851388fefa2aeccb6119a98bc5",
+    "tokenizer/revision_factorial_v1/ape_smiles.metadata.json": "f691cb6eab40d84135f0f31c256d6156ecd69b60bce25ac78317872d31857660",
     "tokenizer/revision_factorial_v1/bpe_selfies.json": "e33ac36a5f4e4907689b02d2b22efbea6612c5e56819d0d20d8d950c1782f7f6",
-    "tokenizer/revision_factorial_v1/bpe_smiles.json": "b08c4285f505cb94ba522209e499c291dcd6e9c66fb4252bde0f89c43d169d5f"
+    "tokenizer/revision_factorial_v1/bpe_selfies.metadata.json": "ef9e7062ea3dcae364a29956fab65863691f5ea4f8e6bf81234463b0be69a140",
+    "tokenizer/revision_factorial_v1/bpe_smiles.json": "b08c4285f505cb94ba522209e499c291dcd6e9c66fb4252bde0f89c43d169d5f",
+    "tokenizer/revision_factorial_v1/bpe_smiles.metadata.json": "a1b011b01142a9a20e2ab3b85349260571e760f0d30dc2b8acf1d988e12e9d7a"
   },
   "runs": {
     "small_ape_selfies": {"tokenizer": "ape_selfies", "molecule_column": "selfies", "model_size": "small"},

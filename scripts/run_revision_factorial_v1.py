@@ -36,9 +36,12 @@ def check_campaign_manifest(path: Path, spec: dict) -> None:
         or manifest.get("run_ids") != list(spec["runs"])
     ):
         raise RuntimeError("Campaign manifest does not match this code and five-run recipe")
-    for relative in spec["frozen_files"]:
-        if not (ROOT / relative).is_file():
-            raise FileNotFoundError(f"Staged campaign input is missing: {relative}")
+    if manifest.get("frozen_files_sha256") != spec["frozen_files"]:
+        raise RuntimeError("Campaign manifest does not match the frozen input recipe")
+    for relative, expected in spec["frozen_files"].items():
+        path = ROOT / relative
+        if not path.is_file() or file_sha256(path) != expected:
+            raise RuntimeError(f"Staged campaign input is missing or changed: {relative}")
 
 
 def check_gpu_available() -> None:

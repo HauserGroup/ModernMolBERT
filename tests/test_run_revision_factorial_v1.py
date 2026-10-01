@@ -64,3 +64,35 @@ def test_manifest_rejects_another_code_revision(tmp_path: Path, monkeypatch):
     )
     with pytest.raises(RuntimeError, match="does not match"):
         launcher.check_campaign_manifest(manifest, spec)
+
+
+def test_manifest_rejects_changed_frozen_input(tmp_path: Path, monkeypatch):
+    frozen = tmp_path / "train.parquet"
+    frozen.write_bytes(b"original")
+    spec = {"runs": {"model": {}}, "frozen_files": {"train.parquet": launcher.file_sha256(frozen)}}
+    spec_path = tmp_path / "spec.json"
+    spec_path.write_text("spec", encoding="utf-8")
+    monkeypatch.setattr(launcher, "ROOT", tmp_path)
+    monkeypatch.setattr(launcher, "SPEC", spec_path)
+    monkeypatch.setattr(
+        launcher.subprocess,
+        "check_output",
+        lambda args, **_kwargs: "a" * 40 if "rev-parse" in args else "",
+    )
+    manifest = tmp_path / "campaign.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "code_commit": "a" * 40,
+                "spec_sha256": launcher.file_sha256(spec_path),
+                "run_ids": ["model"],
+                "frozen_files_sha256": spec["frozen_files"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    launcher.check_campaign_manifest(manifest, spec)
+    frozen.write_bytes(b"changed")
+    with pytest.raises(RuntimeError, match="missing or changed"):
+        launcher.check_campaign_manifest(manifest, spec)

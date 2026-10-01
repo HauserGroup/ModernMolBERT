@@ -43,8 +43,8 @@ def benchmark_names(spec: dict) -> list[str]:
     return names
 
 
-def build_manifest() -> dict:
-    spec = read_spec()
+def build_manifest(spec_path: Path = SPEC) -> dict:
+    spec = read_spec(spec_path)
     commit = git_commit()
     for relative, expected in spec["frozen_files"].items():
         path = ROOT / relative
@@ -71,13 +71,14 @@ def build_manifest() -> dict:
         "schema": 1,
         "campaign": spec["campaign"],
         "code_commit": commit,
-        "spec_sha256": file_sha256(SPEC),
+        "spec_sha256": file_sha256(spec_path),
         "lockfile_sha256": file_sha256(ROOT / "uv.lock"),
         "frozen_files_sha256": spec["frozen_files"],
         "prepared_data_sha256": prepared,
         "baseline_csv": spec["baseline_csv"],
         "baseline_sha256": file_sha256(baseline),
         "run_ids": list(spec["runs"]),
+        "seeds": spec.get("seeds", [42]),
         "evaluation": spec["evaluation"],
         "environment": {
             "python": platform.python_version(),
@@ -101,13 +102,15 @@ def write_manifest(output: Path, manifest: dict) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--spec", type=Path, default=SPEC)
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    manifest = build_manifest()
-    write_manifest(args.output, manifest)
+    manifest = build_manifest(args.spec)
+    output = args.output or ROOT / "outputs" / manifest["campaign"] / "campaign_manifest.json"
+    write_manifest(output, manifest)
     print(f"Verified {len(manifest['frozen_files_sha256'])} frozen inputs")
     print(f"Verified {len(manifest['prepared_data_sha256'])} benchmark tasks")
-    print(f"Campaign manifest: {args.output} ({file_sha256(args.output)})")
+    print(f"Campaign manifest: {output} ({file_sha256(output)})")
 
 
 if __name__ == "__main__":

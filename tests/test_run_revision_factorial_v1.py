@@ -39,6 +39,21 @@ def test_five_commands_share_frozen_recipe_and_manifest():
         assert "--no-load_best_model_at_end" in command
 
 
+def test_multiseed_commands_keep_frozen_inputs_and_separate_destinations():
+    spec = launcher.read_spec(Path("configs/revision_factorial_multiseed_v1.json"))
+    assert spec["seeds"] == [42, 43, 44, 45, 46]
+    for seed in spec["seeds"]:
+        command = launcher.command_for(
+            "base_ape_selfies", None, Path("multiseed_campaign.json"), spec, seed
+        )
+        assert command[command.index("--seed") + 1] == str(seed)
+        assert command[command.index("--output_dir") + 1].endswith(f"base_ape_selfies/seed{seed}")
+        assert command[command.index("--campaign_manifest") + 1] == "multiseed_campaign.json"
+        assert command[command.index("--train_order_path") + 1].endswith("train_order_seed42.npy")
+    with pytest.raises(ValueError, match="not in the frozen campaign"):
+        launcher.command_for("base_ape_selfies", None, spec=spec, seed=47)
+
+
 def test_manifest_rejects_another_code_revision(tmp_path: Path, monkeypatch):
     spec = {"runs": {"model": {}}, "frozen_files": {}}
     spec_path = tmp_path / "spec.json"

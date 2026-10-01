@@ -129,6 +129,33 @@ run the upload command without `--dry_run`. The uploaded model card is derived
 from the final run record; historical pilot and audit files are diagnostic
 evidence, not additional launch requirements.
 
-The campaign has one pretraining seed. Its tokenizer vocabularies have
+The initial accepted campaign has one pretraining seed. Its tokenizer vocabularies have
 different realized sizes, so the factorial compares complete
 tokenizer/representation configurations. Report both facts with the results.
+
+## 6. Four additional seeds per configuration
+
+The five completed seed-42 runs are the first replicate. The separate
+`configs/revision_factorial_multiseed_v1.json` recipe requests seeds 43–46
+for each of the same five configurations, with the same frozen corpus,
+tokenizers, training-row order, validation IDs, exposure, and optimizer recipe.
+Stage a new manifest from the clean code commit used for these runs:
+
+```bash
+uv run --locked python scripts/stage_revision_factorial_v1.py \
+  --spec configs/revision_factorial_multiseed_v1.json
+```
+
+On Helios, inspect `nvidia-smi --query-compute-apps=pid,process_name,used_gpu_memory
+--format=csv,noheader` before starting the persistent queue. Run
+`bash scripts/run_revision_multiseed_queue.sh` in `tmux`. The queue checks
+GPU occupancy before each run and waits while another compute process uses
+it. It writes progress to
+`outputs/revision_factorial_multiseed_v1/queue_status.txt` and one training
+log per run/seed, verifies step 30,000 and the final weight hash, then checks
+the separate `/data/modernmolbert_revision_factorial_v1/` copy before
+advancing. An interrupted run resumes only from its newest complete Trainer
+checkpoint; a partial run without such a checkpoint stops for inspection.
+The original seed-42 campaign manifest and final evaluation files remain
+their own evidence; merge results across seeds only after each seed has
+passed the same embedding and scoring policy.

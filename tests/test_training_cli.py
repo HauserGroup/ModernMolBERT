@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -8,12 +9,11 @@ import torch
 from datasets import Dataset
 from transformers.models.modernbert.configuration_modernbert import ModernBertConfig
 
-from modernmolbert.collator import MolecularMLMCollator
 from modernmolbert.train_selfies_ape_modernbert import (
-    SourceRowTracingCollator,
     build_modernbert_config,
     compute_metrics,
     _encode_without_truncation,
+    finalize_run_identity,
     make_eval_dataset,
     make_train_iterable_dataset,
     prepare_run_directory,
@@ -23,6 +23,7 @@ from modernmolbert.train_selfies_ape_modernbert import (
     sequence_bucket,
     validate_args,
 )
+from modernmolbert.utils import load_run_args
 
 
 class _Argv:
@@ -147,22 +148,7 @@ def test_explicit_train_file_also_hashes_validation_file(tmp_path: Path, monkeyp
     assert hashes["validation_parquet"] == "valid.parquet"
 
 
-def test_source_row_trace_collator_keeps_ids_out_of_eval_batches():
-    base = MolecularMLMCollator(
-        pad_token_id=1,
-        mask_token_id=4,
-        vocab_size=10,
-        mlm_probability=0.15,
-        special_token_ids=[0, 1, 2, 3, 4],
-    )
-    collator = SourceRowTracingCollator(base)
-    train_batch = collator([{"input_ids": [0, 5, 2], "source_row_id": 17}])
-    eval_batch = collator([{"input_ids": [0, 5, 2]}])
-    assert train_batch["source_row_id"].tolist() == [17]
-    assert "source_row_id" not in eval_batch
-
-
-def test_frozen_order_trace_uses_original_parquet_row_ids(tmp_path: Path):
+def test_frozen_order_uses_original_parquet_row_ids(tmp_path: Path):
     train = tmp_path / "train.parquet"
     Dataset.from_dict({"selfies": ["row_0", "row_1", "row_2"]}).to_parquet(str(train))
     order = tmp_path / "order.npy"
@@ -180,14 +166,13 @@ def test_frozen_order_trace_uses_original_parquet_row_ids(tmp_path: Path):
         molecule_column="selfies",
         output_dir=str(tmp_path / "run"),
         train_order_path=order,
-        trace_source_rows=True,
         global_train_shuffle=True,
         use_validation_split=True,
         max_seq_length=16,
         seed=42,
     )
     rows = list(make_train_iterable_dataset(args, Tokenizer()))  # type: ignore[arg-type]
-    assert [row["source_row_id"] for row in rows] == [2, 0, 1]
+    assert [row["input_ids"] for row in rows] == [[0, 7, 2], [0, 5, 2], [0, 6, 2]]
 
 
 def test_pretokenized_rows_use_stable_hash_split(monkeypatch):
@@ -288,7 +273,8 @@ def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path, m
         require_clean_git=True,
     )
     assert prepare_run_directory(args, tokenizer, metadata) is None
-    original = (output / "run_args.json").read_bytes()
+    original = (output / "run_identity.json").read_bytes()
+    assert not (output / "run_args.json").exists()
 
     checkpoint = output / "checkpoint-5000"
     checkpoint.mkdir()
@@ -299,7 +285,7 @@ def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path, m
     for filename in ("trainer_state.json", "optimizer.pt", "scheduler.pt", "rng_state.pth"):
         (checkpoint / filename).write_text("state")
     assert prepare_run_directory(args, tokenizer, metadata) == checkpoint
-    assert (output / "run_args.json").read_bytes() == original
+    assert (output / "run_identity.json").read_bytes() == original
 
     revision["commit"] = "b" * 40
     with pytest.raises(ValueError, match="code revision differ"):
@@ -309,6 +295,82 @@ def test_resume_requires_identical_run_and_complete_checkpoint(tmp_path: Path, m
     tokenizer.write_text("changed")
     with pytest.raises(ValueError, match="inputs, or code revision differ"):
         prepare_run_directory(args, tokenizer, metadata)
+
+
+def test_campaign_run_identity_uses_shared_manifest(tmp_path: Path, monkeypatch):
+    revision = {"commit": "a" * 40, "dirty": False}
+    monkeypatch.setattr(
+        "modernmolbert.train_selfies_ape_modernbert.get_git_revision", lambda: revision
+    )
+    tokenizer = tmp_path / "tokenizer.json"
+    tokenizer.write_bytes(b"tokenizer")
+    metadata = tmp_path / "tokenizer.metadata.json"
+    metadata.write_text("metadata", encoding="utf-8")
+    from modernmolbert.utils import file_sha256
+
+    manifest = tmp_path / "campaign.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "code_commit": revision["commit"],
+                "frozen_files_sha256": {str(tokenizer): file_sha256(tokenizer)},
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = argparse.Namespace(
+        output_dir=str(tmp_path / "run"),
+        resume_from_checkpoint=None,
+        campaign_manifest=manifest,
+        require_clean_git=True,
+    )
+    assert prepare_run_directory(args, tokenizer, metadata) is None
+    identity = json.loads((tmp_path / "run/run_identity.json").read_text(encoding="utf-8"))
+    assert identity["inputs"] == {"campaign_manifest_sha256": file_sha256(manifest)}
+    assert "input_sha256" not in identity
+
+
+def test_final_run_result_is_appended_without_changing_resume_identity(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        "modernmolbert.train_selfies_ape_modernbert.load_tokenizer_metadata",
+        lambda _path: {"tokenizer_sha256": "b" * 64},
+    )
+    run = tmp_path / "run"
+    model = run / "final_model"
+    model.mkdir(parents=True)
+    (model / "model.safetensors").write_bytes(b"weights")
+    (run / "run_identity.json").write_text(
+        json.dumps({"schema": 2, "args": {"max_steps": 30_000}, "git": {"commit": "a"}}),
+        encoding="utf-8",
+    )
+    finalize_run_identity(
+        args=argparse.Namespace(output_dir=str(run), load_best_model_at_end=False),
+        backend="cuda",
+        vocab_size=600,
+        special_ids={"bos_token": 0},
+        n_params=1,
+        tokenizer_stats={},
+        tokenizer_metadata_path=tmp_path / "metadata.json",
+        final_model_dir=model,
+        selected_step=30_000,
+        final_eval_metrics={"eval_loss": 2.0},
+        trainer_state={"global_step": 30_000},
+    )
+    identity = json.loads((run / "run_identity.json").read_text(encoding="utf-8"))
+    assert identity["args"] == {"max_steps": 30_000}
+    assert identity["result"]["terminal_step"] == 30_000
+    assert identity["result"]["tokenizer_sha256"] == "b" * 64
+    assert not (run / "run_metadata.json").exists()
+
+
+def test_run_argument_reader_supports_new_and_legacy_records(tmp_path: Path):
+    (tmp_path / "run_args.json").write_text('{"seed": 1}', encoding="utf-8")
+    assert load_run_args(tmp_path) == {"seed": 1}
+    (tmp_path / "run_identity.json").write_text(
+        json.dumps({"schema": 2, "args": {"seed": 42}}), encoding="utf-8"
+    )
+    assert load_run_args(tmp_path) == {"seed": 42}
 
 
 def test_clean_git_requirement_rejects_dirty_checkout(tmp_path: Path, monkeypatch):

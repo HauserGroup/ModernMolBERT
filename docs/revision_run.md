@@ -3,9 +3,10 @@
 How scores become the manuscript's tables and figures: embed, score, select heads by
 cross-validation, compare on common test rows, then generate the paper artefacts. The steps
 apply to any newly trained encoder. For the five-model campaign, the inputs, the shared
-supervised cohort and the launch gates are in
-[revision_factorial_v1_handoff.md](revision_factorial_v1_handoff.md) and
-[revision_factorial_v1_preflight.md](revision_factorial_v1_preflight.md); the plan is
+supervised cohort and current commands are in
+[revision_factorial_v1_reproduce.md](revision_factorial_v1_reproduce.md); the historical
+input and pilot records are [revision_factorial_v1_handoff.md](revision_factorial_v1_handoff.md)
+and [revision_factorial_v1_preflight.md](revision_factorial_v1_preflight.md). The plan is
 `MASTER_REVISION_PLAN.md` in the manuscript repository (G7, C2, C3).
 
 The one-model run this file was first written for (`revision_clean_small_v1`, stopped at step
@@ -31,15 +32,13 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --datasets all --skip_datasets ogbg-molhiv ogbg-molmuv \
   --heads rf ridge knn --missing-labels as-negative \
   --embedder <embedder> \
-  --output-csv outputs/eval/<run>/results.csv \
-  --checkpoint-dir outputs/eval/<run>/checkpoints
+  --output-csv outputs/eval/<run>/results.csv
 
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --datasets ogbg-molhiv ogbg-molmuv \
   --heads rf ridge --missing-labels as-negative \
   --embedder <embedder> \
-  --output-csv outputs/eval/<run>/results.csv \
-  --checkpoint-dir outputs/eval/<run>/checkpoints
+  --output-csv outputs/eval/<run>/results.csv
 ```
 
 - **Prepared data.** `download.py` reuses cached prepared datasets; freeze and verify those
@@ -58,9 +57,9 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
 - **kNN is not scored on HIV and MUV** (`score.py` disables it): the imported table has no
   kNN rows there, so the shared candidate set would drop it anyway. The second command adds
   the other two heads for those datasets to the same results file.
-- **Resume.** Cache and resume skip on dataset, embedder and head only, so a regenerated
-  embedding or a changed mode keeps old rows (audit finding R6). Score with `--no-cache
-  --no-resume` into a fresh output directory until that is closed.
+- **Resume.** A result is complete only when its scoring identity matches both the
+  CSV row and its prediction archive. Changes to the embedding, scoring grid,
+  code revision, or missing-label mode fail rather than reusing an old row.
 - Select the paper-facing head per dataset from the training-side `cv_metric` only, and
   evaluate the selected head's held-out `test_metric` once.
 

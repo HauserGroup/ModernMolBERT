@@ -17,6 +17,7 @@ PRASKI_COLUMNS = [
     "hyperparams",
     "library_hash",
     "missing_labels",
+    "scoring_identity",
     "prepared_data_sha256",
     "cv_metric_name",
     "cv_metric",
@@ -131,54 +132,20 @@ def result_mask(
     )
 
 
-def count_result_rows(
-    output_csv: str | Path,
-    *,
-    dataset: str,
-    embedder: str,
-    cv_metric_name: str,
-    model: str,
-) -> int:
-    frame = read_results_csv(output_csv)
-    return int(
-        result_mask(
-            frame,
-            dataset=dataset,
-            embedder=embedder,
-            cv_metric_name=cv_metric_name,
-            model=model,
-        ).sum()
-    )
-
-
-def delete_result_rows(
-    output_csv: str | Path,
-    *,
-    dataset: str,
-    embedder: str,
-    cv_metric_name: str,
-    model: str,
+def append_result_row(
+    output_csv: str | Path, row: dict, *, replace_existing: bool = False
 ) -> pd.DataFrame:
     output_csv = Path(output_csv)
-    frame = read_results_csv(output_csv)
-    mask = result_mask(
-        frame,
-        dataset=dataset,
-        embedder=embedder,
-        cv_metric_name=cv_metric_name,
-        model=model,
-    )
-    out = frame.loc[~mask].copy()
-    output_csv.parent.mkdir(parents=True, exist_ok=True)
-    tmp_csv = output_csv.with_suffix(output_csv.suffix + ".tmp")
-    out.to_csv(tmp_csv, index=False)
-    os.replace(tmp_csv, output_csv)
-    return out
-
-
-def append_result_row(output_csv: str | Path, row: dict) -> pd.DataFrame:
-    output_csv = Path(output_csv)
     existing = read_results_csv(output_csv)
+    if replace_existing:
+        mask = result_mask(
+            existing,
+            dataset=row["dataset"],
+            embedder=row["embedder"],
+            cv_metric_name=row["cv_metric_name"],
+            model=row["model"],
+        )
+        existing = existing.loc[~mask].copy()
     next_id = next_result_id(existing)
 
     row_frame = to_praski_schema(pd.DataFrame([{**row, "id": next_id}]))
@@ -188,30 +155,4 @@ def append_result_row(output_csv: str | Path, row: dict) -> pd.DataFrame:
     tmp_csv = output_csv.with_suffix(output_csv.suffix + ".tmp")
     out.to_csv(tmp_csv, index=False)
     os.replace(tmp_csv, output_csv)
-    return out
-
-
-def write_dataset_checkpoint(
-    *,
-    results_csv: str | Path,
-    checkpoint_dir: str | Path,
-    dataset: str,
-    embedder: str,
-) -> pd.DataFrame:
-    frame = read_results_csv(results_csv)
-    if frame.empty:
-        out = empty_results_frame()
-    else:
-        out = frame.loc[(frame["dataset"] == dataset) & (frame["embedder"] == embedder)].copy()
-
-    checkpoint_dir = Path(checkpoint_dir)
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    safe_dataset = dataset.replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
-    safe_embedder = (
-        embedder.replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
-    )
-    output_path = checkpoint_dir / f"{safe_dataset}__{safe_embedder}.csv"
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    out.to_csv(tmp_path, index=False)
-    os.replace(tmp_path, output_path)
     return out

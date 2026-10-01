@@ -9,6 +9,9 @@ from scripts import run_revision_common_scoring as scoring
 
 def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(scoring, "ROOT", tmp_path)
+    campaign = tmp_path / "campaign.json"
+    campaign.write_text('{"campaign": "test"}', encoding="utf-8")
+    monkeypatch.setattr(scoring, "CAMPAIGN", campaign)
     config = tmp_path / "datasets.yaml"
     config.write_text("datasets:\n  clf_example:\n    name: example\n", encoding="utf-8")
     monkeypatch.setattr(scoring, "CONFIG", config)
@@ -22,7 +25,8 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
     manifest.write_text(
         json.dumps(
             {
-                "schema": 1,
+                "schema": 2,
+                "campaign_manifest_sha256": file_sha256(campaign),
                 "run_ids": sorted(scoring.RUN_IDS),
                 "common_prefix": "REVISION_COMMON_",
                 "tasks": {
@@ -49,7 +53,7 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
 
     command = run_cmd()
     assert command[-1].endswith("scores/small_ape_selfies/example.csv")
-    assert "--no-cache" in command and "--no-resume" in command
+    assert "--resume" in command
     assert command[command.index("--missing-labels") + 1] == "as-negative"
 
     embedding.write_bytes(b"changed")
@@ -59,5 +63,4 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
     output = Path(command[-1])
     output.parent.mkdir(parents=True)
     output.write_text("older result", encoding="utf-8")
-    with pytest.raises(FileExistsError, match="already exists"):
-        run_cmd()
+    assert run_cmd() == command

@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from huggingface_hub import HfApi
 
 from modernmolbert.hf_upload import make_staging_dir, push_folder_to_hub, resolve_hf_token
-from modernmolbert.utils import copy_tokenizer_metadata_from_anywhere, repo_root
+from modernmolbert.utils import copy_tokenizer_metadata_from_anywhere, load_run_args, repo_root
 
 
 # Default collator parameters per masking strategy.
@@ -104,7 +104,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         choices=["standard", "span", "hetero_span"],
         help=(
-            "Optional assertion of the strategy recorded in run_args.json. "
+            "Optional assertion of the strategy recorded in the run identity. "
             "Written to collator_config.json in the staged upload so users "
             "know what was used and can switch strategies when fine-tuning."
         ),
@@ -172,12 +172,6 @@ def resolve_source_dir(run_dir: Path, checkpoint: str) -> Path:
     return source
 
 
-def load_json_if_exists(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
 def load_and_patch_config(source_dir: Path, run_dir: Path, vocab_size: int) -> dict[str, Any]:
     config_path = source_dir / "config.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -200,7 +194,7 @@ def load_and_patch_config(source_dir: Path, run_dir: Path, vocab_size: int) -> d
 
     config.pop("auto_map", None)
 
-    run_args = load_json_if_exists(run_dir / "run_args.json")
+    run_args = load_run_args(run_dir)
     if run_args.get("max_seq_length") is not None and int(config["max_position_embeddings"]) != int(
         run_args["max_seq_length"]
     ):
@@ -574,6 +568,7 @@ def build_staging_dir(
     stage_tokenizer_files(source_dir, run_dir, tokenizer_tmp, vocab_path, max_length)
 
     for name in (
+        "run_identity.json",
         "run_args.json",
         "run_metadata.json",
         "trainer_state.json",
@@ -620,14 +615,14 @@ def validate_staged_files(tmp: Path) -> None:
 
 def write_collator_config(tmp: Path, run_dir: Path, masking_strategy: str | None) -> None:
     """Write the collator settings recorded by the training run."""
-    run_args = load_json_if_exists(run_dir / "run_args.json")
+    run_args = load_run_args(run_dir)
     strategy = run_args.get("masking_strategy")
     if strategy is None:
         if masking_strategy is None:
-            raise ValueError("Missing masking_strategy in run_args.json; pass it explicitly")
+            raise ValueError("Missing masking_strategy in run identity; pass it explicitly")
         strategy = masking_strategy
     if masking_strategy is not None and masking_strategy != strategy:
-        raise ValueError("Requested masking strategy differs from run_args.json")
+        raise ValueError("Requested masking strategy differs from run identity")
     if strategy not in MASKING_DEFAULTS:
         raise ValueError(f"Unknown masking strategy in training run: {strategy!r}")
     config = dict(MASKING_DEFAULTS[strategy])

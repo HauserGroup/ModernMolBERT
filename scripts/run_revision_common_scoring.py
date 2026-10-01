@@ -12,21 +12,20 @@ from modernmolbert.utils import file_sha256
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "src/modernmolbert/eval/benchmarking_molecular_models/config/datasets.yaml"
 SCORE = ROOT / "src/modernmolbert/eval/benchmarking_molecular_models/score.py"
-RUN_IDS = {
-    "small_ape_selfies",
-    "small_ape_smiles",
-    "small_bpe_selfies",
-    "small_bpe_smiles",
-    "base_ape_selfies",
-}
+SPEC = ROOT / "configs/revision_factorial_v1.json"
+CAMPAIGN = ROOT / "outputs/revision_factorial_v1/campaign_manifest.json"
+SPEC_DATA = json.loads(SPEC.read_text(encoding="utf-8"))
+RUN_IDS = set(SPEC_DATA["runs"])
 
 
 def command_for(
     *, manifest_path: Path, run_id: str, task: str, output_root: Path, n_jobs: int
 ) -> list[str]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != 1 or set(manifest.get("run_ids", [])) != RUN_IDS:
+    if manifest.get("schema") != 2 or set(manifest.get("run_ids", [])) != RUN_IDS:
         raise ValueError("Expected the frozen five-model common-row manifest")
+    if not CAMPAIGN.is_file() or manifest.get("campaign_manifest_sha256") != file_sha256(CAMPAIGN):
+        raise ValueError("Evaluation and campaign manifests differ")
     if manifest.get("common_prefix") != "REVISION_COMMON_":
         raise ValueError("Production scoring requires REVISION_COMMON_ embeddings")
     task_info = manifest["tasks"].get(task)
@@ -45,8 +44,6 @@ def command_for(
     if not prepared.is_file() or file_sha256(prepared) != task_info["prepared_sha256"]:
         raise ValueError(f"Frozen prepared dataset missing or changed: {prepared}")
     output = output_root / run_id / f"{task}.csv"
-    if output.exists():
-        raise FileExistsError(f"Scoring output already exists; preserve or inspect it: {output}")
     if n_jobs < 1:
         raise ValueError("n_jobs must be positive")
     return [
@@ -60,13 +57,10 @@ def command_for(
         "--embedder",
         embedder,
         "--heads",
-        "rf",
-        "ridge",
-        "knn",
+        *SPEC_DATA["evaluation"]["heads"],
         "--missing-labels",
-        "as-negative",
-        "--no-cache",
-        "--no-resume",
+        SPEC_DATA["evaluation"]["missing_labels"],
+        "--resume",
         "--no-safe",
         "--n-jobs",
         str(n_jobs),
@@ -82,7 +76,7 @@ def main() -> None:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=ROOT / "outputs/audit/revision_factorial_v1/final_common_embeddings.json",
+        default=ROOT / "outputs/revision_factorial_v1/evaluation_manifest.json",
     )
     parser.add_argument(
         "--output-root", type=Path, default=ROOT / "outputs/eval/revision_factorial_v1/common_rows"

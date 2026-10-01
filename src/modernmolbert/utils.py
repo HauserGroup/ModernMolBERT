@@ -65,6 +65,19 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
+def load_run_args(run_dir: Path) -> dict[str, Any]:
+    """Read new run identity arguments, falling back to historical run_args.json."""
+    identity_path = run_dir / "run_identity.json"
+    if identity_path.is_file():
+        identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        if identity.get("schema") == 2:
+            return dict(identity["args"])
+    legacy_path = run_dir / "run_args.json"
+    if legacy_path.is_file():
+        return json.loads(legacy_path.read_text(encoding="utf-8"))
+    return {}
+
+
 def _local_dataset_metadata(dataset_name: str) -> dict[str, Any]:
     """The metadata.json of a local dataset directory, or {} if there is none."""
     if not _looks_like_path(dataset_name):

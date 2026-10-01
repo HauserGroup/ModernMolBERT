@@ -1,6 +1,7 @@
 import joblib
 import numpy as np
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     Dataset,
@@ -31,7 +32,11 @@ def test_common_embeddings_share_source_rows_labels_and_splits(tmp_path, monkeyp
             name="tiny",
             task="classification",
             embedder=f"PREFLIGHT_{run_id}",
-            splits={"train": [], "valid": [], "test": []},
+            splits={
+                "train": [position for position, row in enumerate(retained) if row in {0, 1}],
+                "valid": [position for position, row in enumerate(retained) if row == 2],
+                "test": [position for position, row in enumerate(retained) if row == 3],
+            },
             X=np.array([[row, index] for row in retained], dtype=np.float32),
             y=source.labels.iloc[retained].copy(),
             metadata={
@@ -49,12 +54,28 @@ def test_common_embeddings_share_source_rows_labels_and_splits(tmp_path, monkeyp
     manifest = common.materialize_task("tiny", "PREFLIGHT_", "PREFLIGHT_COMMON_", overwrite=False)
     assert manifest["common_supervised_rows"] == 3
     assert manifest["splits"] == {"train": 1, "valid": 1, "test": 1}
+    assert len(manifest["labels_sha256"]) == 64
+    assert set(manifest["split_source_row_indices_sha256"]) == {"train", "valid", "test"}
+    assert manifest["endpoint_viability"]["Y"]["observed_test_rows"] == 1
     for index, run_id in enumerate(common.RUN_IDS):
         embedded = joblib.load(embedded_dir / "tiny" / f"PREFLIGHT_COMMON_{run_id}.joblib")
         assert embedded.metadata["source_row_indices"] == [0, 2, 3]
-        assert embedded.metadata["failed_source_row_indices"] == [1]
+        assert "failed_source_row_indices" not in embedded.metadata
         assert embedded.splits == {"train": [0], "valid": [1], "test": [2]}
         assert embedded.y["Y"].tolist() == [0, 0, 1]
         np.testing.assert_array_equal(
             embedded.X, np.array([[0, index], [2, index], [3, index]], dtype=np.float32)
         )
+
+    path = embedded_dir / "tiny" / f"PREFLIGHT_{common.RUN_IDS[0]}.joblib"
+    source_embedding = joblib.load(path)
+    source_embedding.y.iloc[0, 0] = 99
+    joblib.dump(source_embedding, path)
+    with pytest.raises(ValueError, match="labels differ"):
+        common.materialize_task("tiny", "PREFLIGHT_", "OTHER_", overwrite=False)
+
+    source_embedding.y.iloc[0, 0] = 0
+    source_embedding.splits["test"] = [0]
+    joblib.dump(source_embedding, path)
+    with pytest.raises(ValueError, match="split differs"):
+        common.materialize_task("tiny", "PREFLIGHT_", "OTHER_", overwrite=False)

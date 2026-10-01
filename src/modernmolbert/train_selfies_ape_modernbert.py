@@ -13,7 +13,6 @@ import hashlib
 import time
 import json
 import math
-import platform
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,7 +22,6 @@ from modernmolbert.hf_upload import resolve_hf_token
 
 import numpy as np
 import torch
-import transformers
 from datasets import Dataset, IterableDataset
 from tqdm.auto import tqdm
 from transformers import (
@@ -305,11 +303,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fp16", action="store_true", default=False)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument(
-        "--trace_source_rows",
-        action="store_true",
-        help="Record consumed source-row IDs by microbatch for a short resume proof.",
-    )
-    parser.add_argument(
         "--max_eval_batches",
         type=int,
         default=0,
@@ -330,6 +323,12 @@ def parse_args() -> argparse.Namespace:
         help="Compute masked-token accuracy during eval.",
     )
     parser.add_argument("--debug", action="store_true", help="Run a tiny smoke test.")
+    parser.add_argument(
+        "--campaign_manifest",
+        type=Path,
+        default=None,
+        help="Shared staged campaign manifest; replaces repeated per-run input hashes.",
+    )
     parser.add_argument(
         "--require_clean_git",
         action="store_true",
@@ -390,6 +389,28 @@ def _run_input_hashes(
     return {key: file_sha256(path) for key, path in paths.items()}
 
 
+def _identity_inputs(
+    args: argparse.Namespace, vocab_path: Path, metadata_path: Path, git_commit: object
+) -> dict[str, str]:
+    campaign_path = getattr(args, "campaign_manifest", None)
+    if campaign_path is None:
+        return _run_input_hashes(args, vocab_path, metadata_path)
+    campaign_path = Path(campaign_path)
+    if not campaign_path.is_file():
+        raise FileNotFoundError(f"Campaign manifest is missing: {campaign_path}")
+    campaign = json.loads(campaign_path.read_text(encoding="utf-8"))
+    if campaign.get("schema") != 1 or campaign.get("code_commit") != git_commit:
+        raise ValueError("Campaign manifest does not match the current code commit")
+    relative_tokenizer = str(vocab_path)
+    repo = Path(__file__).resolve().parents[2]
+    if vocab_path.is_absolute() and vocab_path.is_relative_to(repo):
+        relative_tokenizer = str(vocab_path.relative_to(repo))
+    expected = campaign.get("frozen_files_sha256", {}).get(relative_tokenizer)
+    if expected is None or file_sha256(vocab_path) != expected:
+        raise ValueError("Tokenizer does not match the staged campaign")
+    return {"campaign_manifest_sha256": file_sha256(campaign_path)}
+
+
 def prepare_run_directory(
     args: argparse.Namespace, vocab_path: Path, metadata_path: Path
 ) -> Path | None:
@@ -402,8 +423,9 @@ def prepare_run_directory(
     ):
         raise ValueError("This run requires a clean Git checkout with a resolved commit")
     identity = {
+        "schema": 2,
         "args": _serializable_args(args),
-        "input_sha256": _run_input_hashes(args, vocab_path, metadata_path),
+        "inputs": _identity_inputs(args, vocab_path, metadata_path, git_revision["commit"]),
         "git": git_revision,
     }
     checkpoint = args.resume_from_checkpoint
@@ -418,7 +440,18 @@ def prepare_run_directory(
                 raise ValueError(f"Incomplete resume checkpoint: missing {filename}")
         if not manifest_path.is_file():
             raise ValueError("Cannot resume: original run_identity.json is missing")
-        if json.loads(manifest_path.read_text(encoding="utf-8")) != identity:
+        saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if saved.get("schema") == 2:
+            comparable = {key: saved.get(key) for key in identity}
+        else:
+            # Pre-migration runs retain their original input-hash contract.
+            comparable = saved
+            identity = {
+                "args": identity["args"],
+                "input_sha256": _run_input_hashes(args, vocab_path, metadata_path),
+                "git": git_revision,
+            }
+        if comparable != identity:
             raise ValueError("Cannot resume: run arguments, inputs, or code revision differ")
         return checkpoint
 
@@ -426,9 +459,6 @@ def prepare_run_directory(
         raise ValueError(f"Fresh run destination is not empty: {output_dir}")
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(identity, indent=2, sort_keys=True), encoding="utf-8")
-    (output_dir / "run_args.json").write_text(
-        json.dumps(identity["args"], indent=2), encoding="utf-8"
-    )
     return None
 
 
@@ -456,10 +486,6 @@ def validate_args(args: argparse.Namespace, backend: str) -> None:
         args, "use_validation_split", False
     ):
         raise ValueError("--validation_row_ids_path requires --use_validation_split")
-    if getattr(args, "trace_source_rows", False) and not getattr(
-        args, "global_train_shuffle", False
-    ):
-        raise ValueError("--trace_source_rows requires --global_train_shuffle")
     if args.max_seq_length is not None and args.max_seq_length <= 0:
         raise ValueError("max_seq_length must be positive")
     if not 0.0 <= args.mlm_probability <= 1.0:
@@ -778,7 +804,6 @@ def make_train_iterable_dataset(
 ) -> IterableDataset:
     if getattr(args, "global_train_shuffle", False):
         source = corpus_only_training_parquet(args)
-        import pyarrow as pa
         import pyarrow.parquet as pq
 
         available_columns = pq.ParquetFile(source).schema_arrow.names
@@ -793,10 +818,6 @@ def make_train_iterable_dataset(
         indexed = Dataset.from_parquet(str(source), columns=input_columns, cache_dir=str(cache_dir))
         if not len(indexed):
             raise ValueError(f"No training rows in {source}")
-        if getattr(args, "trace_source_rows", False):
-            indexed = indexed.add_column(
-                "source_row_id", pa.array(np.arange(len(indexed), dtype=np.int64))
-            )
         order_path = getattr(args, "train_order_path", None)
         if order_path is not None:
             order = np.load(order_path, allow_pickle=False)
@@ -810,7 +831,7 @@ def make_train_iterable_dataset(
             log(f"Using frozen source-row order {order_path}: {file_sha256(order_path)}")
         else:
             # Compatibility path for previous runs. Factorial runs supply an
-            # explicit order file and pin its hash in run_identity.json.
+            # explicit order file through the shared campaign manifest.
             indexed = indexed.shuffle(seed=args.seed + 100)
         ds = indexed.to_iterable_dataset(num_shards=min(64, len(indexed)))
         if order_path is None:
@@ -1099,217 +1120,50 @@ def log_training_plan(
     print(f"  bf16/fp16:                  {args.bf16}/{args.fp16}", flush=True)
 
 
-def write_run_metadata(
+def finalize_run_identity(
     args: argparse.Namespace,
     backend: str,
     vocab_size: int,
     special_ids: dict[str, int],
     n_params: int,
     tokenizer_stats: dict[str, float],
-    tokenizer_vocab_path: Path,
     tokenizer_metadata_path: Path,
-    final_eval_metrics: dict[str, float] | None = None,
-    trainer_state: dict[str, Any] | None = None,
+    final_model_dir: Path,
+    selected_step: int | None,
+    final_eval_metrics: dict[str, float],
+    trainer_state: dict[str, Any],
 ) -> None:
-    output_dir = Path(args.output_dir)
-    final_model_dir = output_dir / "final_model"
-    final_model_dir.mkdir(parents=True, exist_ok=True)
-    tokenizer_metadata = load_tokenizer_metadata(tokenizer_metadata_path)
-    tokenizer_sha256 = str(tokenizer_metadata.get("tokenizer_sha256", "unknown"))
-    representation = args.representation
-    is_ape = args.tokenizer_algorithm == APE
-    if representation == SELFIES_REPRESENTATION:
-        expected_input = (
-            "SELFIES strings only. Convert SMILES before inference using a helper such "
-            "as smiles_to_selfies()."
-        )
-    else:
-        expected_input = "RDKit canonical isomeric SMILES, as in the pretraining corpus."
-
-    metadata = {
-        "dataset_name": args.dataset_name,
-        "molecule_column": args.molecule_column,
-        "train_split": args.train_split,
-        "validation_split": args.validation_split,
-        "use_validation_split": args.use_validation_split,
-        "representation": representation,
-        "tokenizer_algorithm": args.tokenizer_algorithm,
-        "expected_input": expected_input,
-        "tokenizer_vocab_path": str(tokenizer_vocab_path),
-        "tokenizer_metadata_path": str(tokenizer_metadata_path),
+    """Append final outcome to the run's one machine-readable record."""
+    path = Path(args.output_dir) / "run_identity.json"
+    identity = json.loads(path.read_text(encoding="utf-8"))
+    if identity.get("schema") != 2:
+        raise ValueError("New training runs require a schema-2 run identity")
+    model_files = [
+        candidate
+        for name in ("model.safetensors", "pytorch_model.bin")
+        if (candidate := final_model_dir / name).is_file()
+    ]
+    if len(model_files) != 1:
+        raise ValueError("Expected exactly one final model weight file")
+    metadata = load_tokenizer_metadata(tokenizer_metadata_path)
+    identity["result"] = {
+        "terminal_step": int(trainer_state["global_step"]),
+        "selected_step": int(selected_step) if selected_step is not None else None,
+        "selection_rule": "best_validation" if args.load_best_model_at_end else "terminal_step",
+        "final_model_file": model_files[0].name,
+        "final_model_sha256": file_sha256(model_files[0]),
+        "tokenizer_sha256": metadata["tokenizer_sha256"],
         "backend": backend,
-        "platform": platform.platform(),
-        "torch_version": torch.__version__,
-        "transformers_version": transformers.__version__,
-        "git": json.loads((output_dir / "run_identity.json").read_text(encoding="utf-8"))["git"],
         "vocab_size": vocab_size,
         "special_ids": special_ids,
         "num_parameters": n_params,
         "tokenizer_stats": tokenizer_stats,
         "final_eval_metrics": final_eval_metrics,
         "trainer_state_summary": trainer_state,
-        "args": {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()},
     }
-
-    best_checkpoint_text = ""
-
-    if trainer_state:
-        best_checkpoint_text = f"""
-
-## Best checkpoint
-
-- Best checkpoint: `{trainer_state.get("best_model_checkpoint")}`
-
-- Best metric: `{trainer_state.get("best_metric")}`
-
-- Best global step: `{trainer_state.get("best_global_step")}`
-
-"""
-
-    with (output_dir / "run_metadata.json").open("w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
-
-    final_eval_metrics_text = json.dumps(final_eval_metrics or {}, indent=2, sort_keys=True)
-    if representation == SELFIES_REPRESENTATION:
-        input_text = (
-            "This checkpoint expects SELFIES strings only. Convert SMILES before tokenization."
-        )
-    else:
-        input_text = (
-            "This checkpoint expects RDKit canonical isomeric SMILES, as in the pretraining corpus."
-        )
-    if is_ape:
-        tokenizer_text = f"""This model uses `APEPreTrainedTokenizer`. The tokenizer files are present at the
-repository root and in `ape_tokenizer/`. With current Transformers versions,
-`AutoTokenizer` must load the custom tokenizer from `ape_tokenizer/` because
-remote tokenizer code is disabled for root ModernBERT configs.
-
-Keep these files with the checkpoint:
-
-- `vocab.json`
-- `{representation.lower()}_vocab.json`
-- `tokenizer_metadata.json`
-- `tokenizer_config.json`
-- `special_tokens_map.json`
-- `tokenization_ape.py`"""
-        tokenizer_loading = """tokenizer = AutoTokenizer.from_pretrained(
-    "HauserGroup/<repo-name>",
-    subfolder="ape_tokenizer",
-    trust_remote_code=True,
-)"""
-    else:
-        tokenizer_text = """This model uses a character-level BPE tokenizer, saved as a standard
-`tokenizer.json` at the repository root. It loads with `AutoTokenizer` and
-needs no remote code.
-
-Keep these files with the checkpoint:
-
-- `tokenizer.json`
-- `tokenizer_config.json`
-- `tokenizer_metadata.json`"""
-        tokenizer_loading = 'tokenizer = AutoTokenizer.from_pretrained("HauserGroup/<repo-name>")'
-    model_card = f"""---
-license: mit
-library_name: transformers
-pipeline_tag: fill-mask
-tags:
-- chemistry
-- molecules
-- {representation.lower()}
-- modernbert
-- masked-language-modeling
----
-
-# ModernMolBERT {representation} Masked Language Model
-
-This checkpoint was trained from scratch with ModernBERT for {representation} masked language modeling.
-
-## Representation
-
-`{representation}`
-
-{input_text}
-
-## Tokenizer
-
-{tokenizer_text}
-
-## Dataset
-
-`{args.dataset_name}`
-
-Molecule column: `{args.molecule_column}`
-
-## Model
-
-- Parameters: {n_params / 1e6:.2f}M
-- Vocabulary size: {vocab_size}
-- Max sequence length: {args.max_seq_length}
-- MLM probability: {args.mlm_probability}
-- Masking strategy: `{args.masking_strategy}`
-- Model size preset: `{args.model_size}`
-- Tokenizer source path: `{tokenizer_vocab_path}`
-- Tokenizer SHA256: `{tokenizer_sha256}`
-
-{best_checkpoint_text}
-## Final evaluation metrics
-
-```json
-{final_eval_metrics_text}
-```
-
-## Loading
-
-```python
-from transformers import AutoModelForMaskedLM
-from transformers import AutoTokenizer
-
-model = AutoModelForMaskedLM.from_pretrained("HauserGroup/<repo-name>")
-
-{tokenizer_loading}
-```
-
-For local validation before upload, replace `"HauserGroup/<repo-name>"` with the
-path to this `final_model` directory.
-"""
-    with (output_dir / "README.checkpoint.md").open("w", encoding="utf-8") as f:
-        f.write(model_card)
-    with (final_model_dir / "README.md").open("w", encoding="utf-8") as f:
-        f.write(model_card)
-
-
-class SourceRowTracingCollator:
-    """Carry source-row IDs through the data loader without sending them to the model."""
-
-    def __init__(self, collator: MolecularMLMCollator):
-        self.collator = collator
-
-    def __call__(self, features: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
-        batch = self.collator(features)
-        if all("source_row_id" in feature for feature in features):
-            batch["source_row_id"] = torch.tensor(
-                [int(feature["source_row_id"]) for feature in features], dtype=torch.long
-            )
-        return batch
-
-
-class SourceRowTracingTrainer(Trainer):
-    trace_path: Path
-
-    def _prepare_inputs(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        source_ids = inputs.pop("source_row_id", None)
-        if source_ids is not None:
-            with self.trace_path.open("a", encoding="utf-8") as trace:
-                trace.write(
-                    json.dumps(
-                        {
-                            "step_before_batch": int(self.state.global_step),
-                            "source_row_ids": source_ids.tolist(),
-                        }
-                    )
-                    + "\n"
-                )
-        return super()._prepare_inputs(inputs)
+    pending = path.with_suffix(".json.tmp")
+    pending.write_text(json.dumps(identity, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    pending.replace(path)
 
 
 def main() -> None:
@@ -1487,22 +1341,17 @@ def main() -> None:
 
     log_training_plan(args, backend, n_params=n_params, world_size=world_size)
 
-    trainer_type = SourceRowTracingTrainer if args.trace_source_rows else Trainer
-    trainer = trainer_type(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,  # type: ignore[arg-type]
         eval_dataset=eval_dataset,
-        data_collator=SourceRowTracingCollator(collator) if args.trace_source_rows else collator,
+        data_collator=collator,
         compute_metrics=compute_metrics if args.compute_masked_accuracy else None,
         preprocess_logits_for_metrics=(
             preprocess_logits_for_metrics if args.compute_masked_accuracy else None
         ),
     )
-    if args.trace_source_rows:
-        assert isinstance(trainer, SourceRowTracingTrainer)
-        trainer.trace_path = output_dir / "source_rows.jsonl"
-
     log("Starting training...")
     log(f"Training logs will print every {args.logging_steps} steps.")
     log(f"Evaluation will run every {args.eval_steps} steps.")
@@ -1586,15 +1435,16 @@ def main() -> None:
         "global_step": getattr(trainer.state, "global_step", None),
     }
 
-    write_run_metadata(
+    finalize_run_identity(
         args=args,
         backend=backend,
         vocab_size=vocab_size,
         special_ids=special_ids,
         n_params=n_params,
         tokenizer_stats=tokenizer_stats,
-        tokenizer_vocab_path=tokenizer_vocab_path,
         tokenizer_metadata_path=tokenizer_metadata_path,
+        final_model_dir=final_dir,
+        selected_step=selected_step,
         final_eval_metrics={k: float(v) for k, v in eval_metrics.items()},
         trainer_state=trainer_state_summary,
     )

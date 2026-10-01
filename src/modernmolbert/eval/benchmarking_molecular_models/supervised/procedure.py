@@ -10,11 +10,7 @@ from pathlib import Path
 from os.path import join
 from typing import Any
 
-from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
-    append_result_row,
-    count_result_rows,
-    delete_result_rows,
-)
+from modernmolbert.eval.benchmarking_molecular_models.praski_export import append_result_row
 from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     EvaluationResult,
@@ -84,6 +80,7 @@ def eval_embedding(
     model_head: str,
     n_jobs: int | None = None,
     missing_labels: str = "observed",
+    scoring_identity: str | None = None,
 ) -> EvaluationResult:
     log.info("Training model")
     head_result = fit_and_eval_embedding(
@@ -94,64 +91,12 @@ def eval_embedding(
         missing_labels=missing_labels,
     )
     log.info(f"Training complete, best CV result: {head_result.cv_score}")
+    head_result.scoring_identity = scoring_identity
     return evaluate(head_result, dataset_config, pred_directory)
 
 
 def dump_hyperparams(hyperparams: dict) -> str:
     return json.dumps(hyperparams, sort_keys=True, cls=NpEncoder)
-
-
-def check_if_already_evaluated(
-    output_csv: str | Path,
-    dataset_name: str,
-    model_name: str,
-    metric_name: str,
-    head_name: str,
-) -> bool:
-    ctx = f"dataset={dataset_name!r} embedder={model_name!r} metric={metric_name!r} head={head_name!r}"
-    try:
-        runs = count_result_rows(
-            output_csv,
-            dataset=dataset_name,
-            embedder=model_name,
-            cv_metric_name=metric_name,
-            model=head_name,
-        )
-    except Exception as exc:
-        # Corrupt or unreadable CSV — treat as not yet evaluated. The later
-        # append reads the file again and raises, so the bad file is never replaced.
-        log.warning(f"Could not read results CSV ({output_csv}): {exc}. Treating as not evaluated.")
-        return False
-
-    if runs > 1:
-        # Duplicate rows indicate a previously interrupted override. Remove
-        # all of them and return False so the caller reruns and writes a clean row.
-        log.warning(
-            f"Found {runs} duplicate result rows for {ctx}. Deleting all and re-evaluating."
-        )
-        delete_previous_evaluations(output_csv, dataset_name, model_name, metric_name, head_name)
-        return False
-
-    return runs == 1
-
-
-def delete_previous_evaluations(
-    output_csv: str | Path,
-    dataset_name: str,
-    model_name: str,
-    metric_name: str,
-    head_name: str,
-):
-    delete_result_rows(
-        output_csv,
-        dataset=dataset_name,
-        embedder=model_name,
-        cv_metric_name=metric_name,
-        model=head_name,
-    )
-    log.warning(
-        f"Deleted previous evaluations, dataset: {dataset_name}, model: {model_name}, metric: {metric_name}, head: {head_name}"
-    )
 
 
 def eval_procedure(
@@ -161,29 +106,12 @@ def eval_procedure(
     model_name: str,
     model_head: str,
     output_csv: str | Path,
-    override: bool = False,
     preloaded: "EmbeddedDataset | None" = None,
     n_jobs: int | None = None,
     missing_labels: str = "observed",
+    scoring_identity: str | None = None,
 ):
     model_version_hash = get_model_version_hash()
-
-    if check_if_already_evaluated(
-        output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
-    ):
-        if not override:
-            log.info(
-                f"Already evaluated — skipping. "
-                f"dataset={dataset_info.name!r} embedder={model_name!r} head={model_head!r}"
-            )
-            return
-        log.warning(
-            f"Already evaluated — overriding. "
-            f"dataset={dataset_info.name!r} embedder={model_name!r} head={model_head!r}"
-        )
-        delete_previous_evaluations(
-            output_csv, dataset_info.name, model_name, dataset_info.metric, model_head
-        )
 
     owns_data = preloaded is None
     if owns_data:
@@ -200,6 +128,7 @@ def eval_procedure(
         model_head,
         n_jobs=n_jobs,
         missing_labels=missing_labels,
+        scoring_identity=scoring_identity,
     )
     log.info(f"Evaluation complete, test result: {result.metric_value}")
 
@@ -226,9 +155,11 @@ def eval_procedure(
             "hyperparams": dump_hyperparams(result.hyperparams),
             "library_hash": model_version_hash,
             "missing_labels": missing_labels,
+            "scoring_identity": scoring_identity,
             "cv_metric_name": dataset_info.metric,
             "cv_metric": result.cv_metric_value,
             "test_metric_name": result.metric_name,
             "test_metric": result.metric_value,
         },
+        replace_existing=True,
     )

@@ -4,9 +4,11 @@ from typing import cast
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models import score
 from modernmolbert.eval.benchmarking_molecular_models.common.types import EmbeddedDataset
+from modernmolbert.eval.benchmarking_molecular_models.praski_export import append_result_row
 
 
 def make_dataset_info(name: str, metric: str = "roc_auc"):
@@ -145,7 +147,6 @@ def test_run_eval_returns_true_on_success(monkeypatch, tmp_path) -> None:
         dataset_info=make_dataset_info("AMES"),
         model_head="rf",
         output_csv=tmp_path / "results.csv",
-        override=False,
     )
 
     assert ok is True
@@ -176,7 +177,6 @@ def test_run_eval_returns_false_on_failure_in_safe_mode(monkeypatch, tmp_path) -
         dataset_info=make_dataset_info("AMES"),
         model_head="rf",
         output_csv=tmp_path / "results.csv",
-        override=False,
     )
 
     assert ok is False
@@ -193,33 +193,122 @@ def test_get_disabled_reason_disables_knn_for_hiv_and_muv() -> None:
     assert score.get_disabled_reason(hiv_info, "rf") is None
 
 
-def test_head_checkpoint_success_requires_matching_version(tmp_path) -> None:
-    score.write_head_checkpoint(tmp_path, "AMES", "emb", "rf", status="success", version_hash="v1")
+def test_scoring_identity_changes_with_cohort_or_label_policy() -> None:
+    def identity(embedding: str = "a" * 64, mode: str = "as-negative", version: str = "v1"):
+        return score.scoring_identity(
+            dataset="AMES",
+            embedder="emb",
+            head="rf",
+            embedding_sha256=embedding,
+            prepared_sha256="b" * 64,
+            missing_labels=mode,
+            version_hash=version,
+            code_revision={"commit": "c" * 40, "dirty": False},
+        )
 
-    assert score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v1")
-    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v2")
-    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "ridge", "v1")
+    original = identity()
+    assert identity(embedding="d" * 64) != original
+    assert identity(mode="observed") != original
+    assert identity(version="v2") != original
 
 
-def test_head_checkpoint_failed_or_corrupt_is_not_success(tmp_path) -> None:
-    score.write_head_checkpoint(tmp_path, "AMES", "emb", "rf", status="failed", version_hash="v1")
-    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v1")
+def test_results_row_is_only_resume_state(tmp_path) -> None:
+    output = tmp_path / "results.csv"
+    prediction = tmp_path / "rf.npz"
+    pd.DataFrame(
+        [{"dataset": "AMES", "embedder": "emb", "model": "rf", "scoring_identity": "id-1"}]
+    ).to_csv(output, index=False)
+    np.savez(prediction, scoring_identity=np.asarray("id-1"))
+    assert score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
+    prediction.unlink()
+    assert not score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
+    np.savez(prediction, scoring_identity=np.asarray("other"))
+    assert not score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
 
-    path = score.head_checkpoint_path(tmp_path, "AMES", "emb", "rf")
-    path.write_text("{not json", encoding="utf-8")
-    assert score.read_head_checkpoint(tmp_path, "AMES", "emb", "rf") is None
-    assert not score.head_checkpoint_is_success(tmp_path, "AMES", "emb", "rf", "v1")
+    import pytest
+
+    with pytest.raises(ValueError, match="different or duplicate"):
+        score.score_row_is_complete(output, "AMES", "emb", "rf", "id-2", prediction)
+    rows = pd.read_csv(output)
+    pd.concat([rows, rows]).to_csv(output, index=False)
+    with pytest.raises(ValueError, match="different or duplicate"):
+        score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
 
 
-def test_dataset_is_complete_needs_every_head_success_or_disabled(tmp_path) -> None:
-    heads = ["rf", "ridge", "knn"]
-    score.write_head_checkpoint(tmp_path, "HIV", "emb", "rf", status="success", version_hash="v1")
-    score.write_head_checkpoint(
-        tmp_path, "HIV", "emb", "ridge", status="success", version_hash="v1"
+def test_scoring_main_resumes_only_matching_result_and_prediction(monkeypatch, tmp_path) -> None:
+    embedded_dir = tmp_path / "embedded"
+    predictions_dir = tmp_path / "predictions"
+    source = embedded_dir / "toy" / "emb.joblib"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"frozen embedding")
+    output_csv = tmp_path / "results.csv"
+    args = argparse.Namespace(
+        config_dir="config",
+        model_name="emb",
+        overrides=[],
+        datasets=["toy"],
+        skip_datasets=None,
+        subsample_size=None,
+        subsample_scope=None,
+        subsample_seed=42,
+        heads=["rf"],
+        output_csv=output_csv,
+        resume=True,
+        safe=False,
+        missing_labels="as-negative",
+        n_jobs=1,
     )
-    assert not score.dataset_is_complete(tmp_path, "HIV", "emb", heads, "v1")
+    monkeypatch.setattr(score, "parse_args", lambda: args)
+    monkeypatch.setattr(score, "load_yaml_config", lambda path: {})
+    monkeypatch.setattr(
+        score,
+        "load_embedding_config",
+        lambda path: {
+            "raw_directory": str(tmp_path / "raw"),
+            "embedded_directory": str(embedded_dir),
+            "predictions_directory": str(predictions_dir),
+            "prepared_directory": str(tmp_path / "prepared"),
+            "max_invalid_embeddings": 0,
+        },
+    )
+    monkeypatch.setattr(
+        score,
+        "load_dataset_items",
+        lambda **kwargs: [score.DatasetItem("clf_toy", "toy", make_dataset_info("toy"))],
+    )
+    embedded = make_embedded_dataset()
+    embedded.metadata["prepared_data_sha256"] = "a" * 64
+    monkeypatch.setattr(score, "load_embedded_dataset", lambda **kwargs: embedded)
+    monkeypatch.setattr(score, "get_model_version_hash", lambda: "grid-v1")
+    monkeypatch.setattr(score, "get_git_revision", lambda: {"commit": "b" * 40, "dirty": False})
 
-    score.write_head_checkpoint(tmp_path, "HIV", "emb", "knn", status="disabled", version_hash="v1")
-    assert score.dataset_is_complete(tmp_path, "HIV", "emb", heads, "v1")
-    assert not score.dataset_is_complete(tmp_path, "HIV", "emb", heads, "v2")
-    assert not score.dataset_is_complete(None, "HIV", "emb", heads, "v1")
+    calls: list[str] = []
+
+    def fake_run_eval(**kwargs) -> bool:
+        identity = kwargs["scoring_identity_value"]
+        calls.append(identity)
+        append_result_row(
+            output_csv,
+            {
+                "dataset": "toy",
+                "embedder": "emb",
+                "model": "rf",
+                "scoring_identity": identity,
+                "cv_metric_name": "roc_auc",
+            },
+            replace_existing=True,
+        )
+        prediction = predictions_dir / "toy" / "emb" / "rf.npz"
+        prediction.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(prediction, scoring_identity=np.asarray(identity))
+        return True
+
+    monkeypatch.setattr(score, "run_eval", fake_run_eval)
+    assert score.main() == 0
+    assert score.main() == 0
+    assert len(calls) == 1
+    assert len(pd.read_csv(output_csv)) == 1
+
+    args.missing_labels = "observed"
+    with pytest.raises(ValueError, match="different or duplicate identity"):
+        score.main()

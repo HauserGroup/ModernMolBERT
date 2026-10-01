@@ -95,6 +95,16 @@ for HIV and MUV. Results go under
 and prediction archive carry the current scoring identity. A conflicting
 cohort or policy raises an error.
 
+On Helios, run `bash scripts/run_revision_final_scoring.sh` in a persistent
+`tmux` session after reviewing the final evaluation manifest. The wrapper
+checks that all 25 tasks have all five models, scores smaller tasks first on
+CPU with four workers by default, and writes
+`outputs/revision_factorial_v1/final_scoring_queue.status` plus one log per
+task/model under `outputs/revision_factorial_v1/logs/final_scoring/`. It stops
+at a failed pair. Re-running it resumes only heads whose saved result row and
+prediction archive match the same scoring identity. Set `N_JOBS` to change
+the per-pair CPU worker count.
+
 ## 5. Tables, figures, and upload
 
 Use [`revision_run.md`](revision_run.md) for the CV head-selection and paper

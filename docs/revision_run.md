@@ -41,6 +41,35 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --output-csv outputs/eval/<run>/results.csv
 ```
 
+For the five-model campaign, collect all 125 per-pair result CSVs and pin the
+internal cohort and labels explicitly:
+
+```bash
+uv run --locked python scripts/paper/audit_split_overlap.py \
+  --summary-output outputs/audit/revision_factorial_v1/split_overlap_summary.csv \
+  --row-output outputs/audit/revision_factorial_v1/split_overlap_test_rows.csv
+
+uv run --locked python scripts/paper/build_common_row_benchmark.py \
+  --results outputs/eval/revision_factorial_v1/common_rows/*/*.csv \
+  --evaluation-manifest outputs/revision_factorial_v1/evaluation_manifest.json \
+  --embedders REVISION_COMMON_small_ape_selfies REVISION_COMMON_small_ape_smiles \
+              REVISION_COMMON_small_bpe_selfies REVISION_COMMON_small_bpe_smiles \
+              REVISION_COMMON_base_ape_selfies \
+  --table-results data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv \
+  --table-embedders ECFP ChemBERTa-77M-MLM MoLFormer-XL-both-10pct SELFormer \
+  --matrix-labels \
+    REVISION_COMMON_small_ape_selfies=MMB-small-APE-SELFIES \
+    REVISION_COMMON_small_ape_smiles=MMB-small-APE-SMILES \
+    REVISION_COMMON_small_bpe_selfies=MMB-small-BPE-SELFIES \
+    REVISION_COMMON_small_bpe_smiles=MMB-small-BPE-SMILES \
+    REVISION_COMMON_base_ape_selfies=MMB-base-APE-SELFIES \
+    ECFP=ECFP4 ChemBERTa-77M-MLM=ChemBERTa-2 \
+    MoLFormer-XL-both-10pct=MoLFormer \
+  --split-overlap-rows outputs/audit/revision_factorial_v1/split_overlap_test_rows.csv \
+  --paired-reference REVISION_COMMON_small_ape_selfies \
+  --output-dir outputs/eval/revision_factorial_v1/selected_common_rows
+```
+
 - **Prepared data.** `download.py` reuses cached prepared datasets; freeze and verify those
   splits rather than replacing them. The 25 entries in
   `src/modernmolbert/eval/benchmarking_molecular_models/config/datasets.yaml` define the
@@ -120,8 +149,9 @@ Outputs:
 - `manifest.json`: input hashes, code revision, arguments and the definition of each matrix.
 
 Use `common_task_matrix.csv` for internal comparisons and `task_matrix.csv` for the external
-context. The common-row export does not verify shared supervised training rows or CV folds
-(G7.1, audit finding R114). Archives from before commit `112efc5` have no source-row indices
+context. For the five-model campaign, the schema-2 evaluation manifest verifies shared
+supervised rows, labels, split row IDs, and the five-fold CV rule before scoring; retain
+its SHA-256 alongside the score files. Archives from before commit `112efc5` have no source-row indices
 and are left out (`no_row_ids`). Repeated or conflicting runs for one head stop the script.
 
 For aggregate intervals, `scripts/paper/compute_bootstrap_cis.py` resamples tasks and, as
@@ -132,15 +162,18 @@ test-molecule overlap behind them.
 
 ## 3. Build the paper tables and figures
 
-Every result comes from one task matrix. Write outputs to a new directory and copy them into
-the manuscript after review; the default output paths of some generators hold the archived
-analysis.
+Write outputs to a new directory and copy them into the manuscript after review. The
+five-model path uses the matched matrix for internal scores and the native/table matrix
+only for descriptive external context. Label the five internal embedding columns
+`MMB-small-APE-SELFIES`, `MMB-small-APE-SMILES`, `MMB-small-BPE-SELFIES`,
+`MMB-small-BPE-SMILES`, and `MMB-base-APE-SELFIES` when building the matrices.
 
 ```bash
 OUT=outputs/eval/<run>/paper
 uv run python scripts/paper/build_paper_results.py \
   --task-matrix outputs/eval/<run>/common_rows/task_matrix.csv \
-  --reference <label> --out-dir $OUT
+  --common-task-matrix outputs/eval/<run>/common_rows/common_task_matrix.csv \
+  --reference MMB-small-APE-SELFIES --out-dir $OUT
 uv run python scripts/paper/make_appendix_table.py \
   --matrix $OUT/results_matrix_25task.csv --out $OUT/table_pertask.tex \
   --models ECFP4 ChemBERTa-2 SELFormer MoLFormer <label>
@@ -157,7 +190,7 @@ uv run python scripts/paper/make_loss_curves.py \
 | Output | Manuscript |
 |---|---|
 | `table2.tex`, `group_means.csv` | `tables/main_results_table.tex` (Table 2) |
-| `stats.txt` | win counts, Wilcoxon tests and means quoted in Results |
+| `stats.txt` | five internal task contrasts and descriptive external win counts/means; no paired test against table-only baselines |
 | `table_pertask.tex` | `tables/pertask_table.tex` (all 25 datasets) |
 | `table_bootstrap.tex`, `bootstrap_cis.csv` | `tables/table_bootstrap.tex`; `source_data/` |
 | `figures/bootstrap_ci_forest.pdf` | `figures/bootstrap_ci_forest.pdf` |
@@ -165,8 +198,7 @@ uv run python scripts/paper/make_loss_curves.py \
 | `figures/Fig_task_group_distributions.pdf`, `source_data/Fig_task_group_distributions.csv` | `figures/Fig5_task_group_distributions.pdf`; `source_data/` |
 | `figures/Supplementary_2.pdf` | `figures/Supplementary_2.pdf` (loss panel only; the trainer does not log masked-token accuracy) |
 
-`Fig_2` needs the released small, base and span columns and is not written. The generators
-still assume the historical column set and up to seven bars; the known gaps for five internal
-models (R10–R13, R42, R66, R67, R78) are listed in
-[code_audit_2026-09-29.md](code_audit_2026-09-29.md). The tokenizer table and the embedders
-table's parameter counts are filled by hand from the audit outputs.
+`Fig_2` now uses the five prespecified internal contrasts when all five revision labels
+are present. The task-group figure accepts explicitly supplied models with incomplete
+task coverage and plots available values without rounding its source data. The tokenizer
+table and the embedders table's parameter counts still need the final audit outputs.

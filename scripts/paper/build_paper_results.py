@@ -2,13 +2,14 @@
 """
 build_paper_results.py
 
-Derive all paper-facing benchmark numbers from one dataset x model score matrix.
+Derive paper-facing benchmark numbers from the native and matched score matrices.
 
 Two inputs are supported:
 - ``--task-matrix``: ``task_matrix.csv`` from ``build_common_row_benchmark.py``
   (CV-selected heads; baselines from the imported table, columns already
-  labelled). This is the revision path for a newly trained model; pass the
-  paper model's label with ``--reference``.
+  labelled). For the five-model revision also pass ``--common-task-matrix``
+  so internal scores use matched test rows; external table baselines remain
+  descriptive scores on their own unverified molecule sets.
 - default: the archived ``outputs/eval/best_metric_by_dataset_embedder.csv``
   (one row per dataset x embedder) with the released checkpoints' labels.
 
@@ -29,6 +30,7 @@ of group means, Table 2 and all stats unless --include-hetero-span is passed.
 """
 
 import argparse
+import json
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +51,12 @@ parser.add_argument(
     help="task_matrix.csv from build_common_row_benchmark.py (columns are model labels).",
 )
 parser.add_argument(
+    "--common-task-matrix",
+    type=Path,
+    default=None,
+    help="Matched internal scores from common_task_matrix.csv; requires --task-matrix.",
+)
+parser.add_argument(
     "--reference",
     default=None,
     help="Headline ModernMolBERT label for the stats (required with --task-matrix).",
@@ -57,6 +65,8 @@ parser.add_argument("--out-dir", type=Path, default=None, help="Output directory
 ARGS = parser.parse_args()
 if ARGS.task_matrix is not None and ARGS.reference is None:
     parser.error("--reference is required with --task-matrix")
+if ARGS.common_task_matrix is not None and ARGS.task_matrix is None:
+    parser.error("--common-task-matrix requires --task-matrix")
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "outputs/eval/best_metric_by_dataset_embedder.csv"
@@ -102,6 +112,13 @@ GROUPS = {
 TASKS_MAIN = TDC_ADME + TDC_TOX + TDC_HTS + MOLNET
 BASELINES = ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer"]
 N_TASKS_MAIN = len(TASKS_MAIN)
+REVISION_INTERNAL = [
+    "MMB-small-APE-SELFIES",
+    "MMB-small-APE-SMILES",
+    "MMB-small-BPE-SELFIES",
+    "MMB-small-BPE-SMILES",
+    "MMB-base-APE-SELFIES",
+]
 
 # ---- Model name map: paper label -> embedder key in source CSV ----
 MODELS = {
@@ -128,6 +145,15 @@ if ARGS.task_matrix is not None:
     if extra := sorted(set(source.index) - set(TASKS_MAIN)):
         raise ValueError(f"{ARGS.task_matrix} has datasets outside the benchmark: {extra}")
     ordered = [*BASELINES, *[c for c in source.columns if c not in BASELINES]]
+    internal = [c for c in ordered if c not in BASELINES]
+    if len(internal) > 1 and ARGS.common_task_matrix is None:
+        raise ValueError("Multiple internal models require --common-task-matrix")
+    if ARGS.common_task_matrix is not None:
+        common = pd.read_csv(ARGS.common_task_matrix, index_col=0)
+        if set(common.index) != set(source.index) or set(common.columns) != set(internal):
+            raise ValueError("Common matrix must contain the same tasks and all internal models")
+        source = source.copy()
+        source.loc[:, internal] = common.loc[source.index, internal].to_numpy(dtype=float)
     MODELS = {label: label for label in ordered}
     SUPPLEMENTARY_MODELS = {}
     matrix = pd.DataFrame(index=TASKS_MAIN)
@@ -155,6 +181,29 @@ else:
         matrix[label] = pivot[key].reindex(TASKS_MAIN) if key in pivot.columns else np.nan
 matrix.insert(0, "group", [GROUPS[t] for t in TASKS_MAIN])
 matrix.to_csv(OUT / "results_matrix_25task.csv")
+if ARGS.task_matrix is not None:
+    (OUT / "results_matrix_provenance.json").write_text(
+        json.dumps(
+            {
+                "external_baselines": {
+                    "columns": BASELINES,
+                    "source": str(ARGS.task_matrix),
+                    "population": "table-only baseline test rows; molecule identities unverified",
+                },
+                "internal_models": {
+                    "columns": [m for m in MODELS if m not in BASELINES],
+                    "source": str(ARGS.common_task_matrix or ARGS.task_matrix),
+                    "population": (
+                        "five-model common test rows"
+                        if ARGS.common_task_matrix is not None
+                        else "native verified test rows"
+                    ),
+                },
+            },
+            indent=2,
+        )
+        + "\n"
+    )
 
 # ---- Missing cells ----
 missing = {
@@ -210,8 +259,9 @@ def fmt(label, c):
     v = scalar_float(gm.loc[label, c])
     if pd.isna(v):
         return "--"
-    s = f"{v * 100:.1f}"
-    if abs(v - best[c]) < 1e-9:
+    n = scalar_int(gm.loc[label, c + "_n"])
+    s = rf"{v * 100:.1f}\,({n})"
+    if ARGS.common_task_matrix is None and abs(v - best[c]) < 1e-9:
         s = r"\textbf{" + s + "}"
     return s
 
@@ -243,8 +293,14 @@ lines += [
     r"\citet{praskiBenchmarkingPretrainedMolecular2025}, broken down by task",
     r"    group. Each entry averages per-task ROC-AUC using the best "
     r"cross-validated downstream head (logistic regression / random forest / $k$NN) per task.",
-    rf"    \emph{{Overall}} is the unweighted mean across all {N_TASKS_MAIN} tasks. "
-    r"\textbf{Bold} marks the best value per column.",
+    r"    \emph{Overall} is the unweighted mean across available tasks; "
+    r"parentheses give the number of scored tasks for each cell. "
+    + (
+        r"Internal models use five-model common test rows; external table baselines use "
+        r"their own unverified test molecules. Cross-group differences are descriptive."
+        if ARGS.common_task_matrix is not None
+        else r"\textbf{Bold} marks the best value per column."
+    ),
     r"  }%",
     r"  \label{tab:main-results}",
     r"\end{table}",
@@ -286,12 +342,17 @@ for comp in ["ECFP4", "SELFormer"]:
     a, b, idx = paired(hl, comp)
     diff = a - b
     nz = diff[diff != 0]
-    stat, p = wilcoxon(a, b) if len(nz) else (np.nan, np.nan)
+    stat, p = wilcoxon(a, b) if len(nz) and ARGS.common_task_matrix is None else (np.nan, np.nan)
     wins = int((diff > 0).sum())
     out.append(
         f"\n{hl} vs {comp} (n={len(idx)} common tasks): "
         f"{hl} wins {wins}, ties {(diff == 0).sum()}, losses {(diff < 0).sum()}; "
-        f"Wilcoxon W={stat}, p={p:.4g}; mean diff={diff.mean() * 100:.2f}\n"
+        + (
+            f"Wilcoxon W={stat}, p={p:.4g}; "
+            if ARGS.common_task_matrix is None
+            else "descriptive task-level comparison, unmatched test molecules; "
+        )
+        + f"mean diff={diff.mean() * 100:.2f}\n"
     )
     big = [i for i, d in zip(idx, diff, strict=False) if d > 0.02]
     out.append(f"  tasks where {hl} exceeds {comp} by >0.02: {len(big)} -> {big}\n")
@@ -305,8 +366,18 @@ out.append(
 )
 
 # internal comparisons (size and masking variants) on common tasks
-internal_pairs = [("MMB-small", "MMB-base"), ("MMB-small", "MMB-small-span")]
-if ARGS.include_hetero_span:
+internal_pairs = (
+    [
+        ("MMB-small-APE-SELFIES", "MMB-small-BPE-SELFIES"),
+        ("MMB-small-APE-SMILES", "MMB-small-BPE-SMILES"),
+        ("MMB-small-APE-SELFIES", "MMB-small-APE-SMILES"),
+        ("MMB-small-BPE-SELFIES", "MMB-small-BPE-SMILES"),
+        ("MMB-small-APE-SELFIES", "MMB-base-APE-SELFIES"),
+    ]
+    if set(REVISION_INTERNAL) <= set(matrix.columns)
+    else [("MMB-small", "MMB-base"), ("MMB-small", "MMB-small-span")]
+)
+if ARGS.include_hetero_span and ARGS.common_task_matrix is None:
     internal_pairs.append(("MMB-small", "MMB-small-hetero"))
 out.append("\nInternal comparisons (mean ROC-AUC over common tasks):\n")
 for pair in internal_pairs:

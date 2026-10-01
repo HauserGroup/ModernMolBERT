@@ -11,6 +11,7 @@ from build_common_row_benchmark import (
     paired_task_differences,
     rank_roc_auc,
     score_rows,
+    verify_evaluation_manifest,
 )
 from modernmolbert.eval.benchmarking_molecular_models.common.types import Dataset
 from modernmolbert.utils import file_sha256
@@ -22,6 +23,54 @@ SCORES = {
     ("A", "rf"): {4: 0.95, 5: 0.9, 6: 0.6, 7: 0.7},
     ("B", "ridge"): {5: 0.8, 6: 0.3, 7: 0.4},
 }
+
+
+def test_verify_final_evaluation_manifest_binds_all_five_embeddings(tmp_path):
+    run_ids = [f"model_{i}" for i in range(5)]
+    prepared = tmp_path / "prepared"
+    embedded = tmp_path / "embedded" / "toy"
+    prepared.mkdir()
+    embedded.mkdir(parents=True)
+    (prepared / "toy.json").write_text("frozen", encoding="utf-8")
+    models = {}
+    for run_id in run_ids:
+        path = embedded / f"COMMON_{run_id}.joblib"
+        path.write_text(run_id, encoding="utf-8")
+        models[run_id] = {"common_embedding_sha256": file_sha256(path)}
+    manifest = {
+        "schema": 2,
+        "run_ids": run_ids,
+        "common_prefix": "COMMON_",
+        "cv": {"folds": 5, "shuffle": True, "seed": 0},
+        "tasks": {
+            "toy": {
+                "prepared_sha256": file_sha256(prepared / "toy.json"),
+                "common_supervised_rows": 8,
+                "splits": {"train": 4, "valid": 0, "test": 4},
+                "models": models,
+            }
+        },
+    }
+    path = tmp_path / "evaluation_manifest.json"
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    cohort = [f"COMMON_{run_id}" for run_id in run_ids]
+    evidence = verify_evaluation_manifest(
+        path,
+        prepared_dir=prepared,
+        embedded_dir=tmp_path / "embedded",
+        cohort=cohort,
+        datasets=["toy"],
+    )
+    assert evidence["evaluation_manifest_sha256"] == file_sha256(path)
+    (embedded / "COMMON_model_4.joblib").write_text("changed", encoding="utf-8")
+    with pytest.raises(ValueError, match="Common embedding differs"):
+        verify_evaluation_manifest(
+            path,
+            prepared_dir=prepared,
+            embedded_dir=tmp_path / "embedded",
+            cohort=cohort,
+            datasets=["toy"],
+        )
 
 
 def _write_inputs(tmp_path, *, overrides=None, drop_row_ids=()):

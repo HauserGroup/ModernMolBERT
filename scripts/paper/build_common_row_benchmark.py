@@ -22,7 +22,11 @@ rescore models on shared rows.
 4. For each dataset and pair of verified models, the ROC-AUC difference on
    those common rows gets a paired bootstrap interval: the same resampled test
    molecules score both models. A per-task win counts only when the interval
-   excludes zero; a small test set can otherwise turn noise into a win.
+    excludes zero; a small test set can otherwise turn noise into a win.
+
+With ``--evaluation-manifest``, additionally verify all five common embeddings
+against their frozen hashes, prepared task hashes, shared supervised row counts,
+and the deterministic five-fold CV policy before marking cohort provenance valid.
 
 Archives without ``test_source_row_indices`` (all pre-``112efc5`` runs) or
 without a matching ``prepared_data_sha256`` are reported but excluded from the
@@ -123,6 +127,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--predictions-dir", type=Path, default=Path("data/predictions"))
     parser.add_argument("--prepared-dir", type=Path, default=Path("data/prepared"))
+    parser.add_argument("--embedded-dir", type=Path, default=Path("data/embedded"))
+    parser.add_argument(
+        "--evaluation-manifest",
+        type=Path,
+        help="Verify the frozen common training/test rows and embedding hashes for this cohort.",
+    )
     parser.add_argument(
         "--embedders",
         nargs="+",
@@ -266,6 +276,46 @@ def load_prepared_test(path: Path) -> tuple[np.ndarray, np.ndarray]:
     test_rows = np.asarray(dataset.splits.get("test", []), dtype=np.int64)
     labels = dataset.labels.to_numpy(dtype=float)
     return test_rows, labels
+
+
+def verify_evaluation_manifest(
+    path: Path,
+    *,
+    prepared_dir: Path,
+    embedded_dir: Path,
+    cohort: list[str],
+    datasets: list[str],
+) -> dict[str, object]:
+    """Tie every scored embedding to the frozen five-model supervised cohort."""
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    run_ids = manifest.get("run_ids", [])
+    prefix = manifest.get("common_prefix")
+    if manifest.get("schema") != 2 or len(run_ids) != 5 or not isinstance(prefix, str):
+        raise ValueError("Expected a schema-2 five-model evaluation manifest")
+    if set(cohort) != {f"{prefix}{run_id}" for run_id in run_ids}:
+        raise ValueError("Scored embedder cohort differs from the evaluation manifest")
+    if set(datasets) != set(manifest.get("tasks", {})):
+        raise ValueError("Scored task set differs from the evaluation manifest")
+    if manifest.get("cv") != {"folds": 5, "shuffle": True, "seed": 0}:
+        raise ValueError("Evaluation manifest does not declare the fixed five-fold CV policy")
+    for dataset in datasets:
+        task = manifest["tasks"][dataset]
+        if file_sha256(prepared_dir / f"{dataset}.json") != task["prepared_sha256"]:
+            raise ValueError(f"Prepared task differs from the evaluation manifest: {dataset}")
+        if set(task["models"]) != set(run_ids):
+            raise ValueError(f"Incomplete five-model cohort in evaluation manifest: {dataset}")
+        if sum(task["splits"].values()) != task["common_supervised_rows"]:
+            raise ValueError(f"Common split counts differ from retained rows: {dataset}")
+        for run_id in run_ids:
+            embedder = f"{prefix}{run_id}"
+            embedding = embedded_dir / dataset / f"{embedder}.joblib"
+            if file_sha256(embedding) != task["models"][run_id]["common_embedding_sha256"]:
+                raise ValueError(f"Common embedding differs from evaluation manifest: {embedding}")
+    return {
+        "evaluation_manifest_sha256": file_sha256(path),
+        "cv": manifest["cv"],
+        "supervised_rows_and_folds": "verified by schema-2 common cohort and fixed scorer CV policy",
+    }
 
 
 def _as_label_matrix(values: np.ndarray) -> np.ndarray:
@@ -621,6 +671,19 @@ def main(argv: list[str] | None = None) -> None:
         raise ValueError("No archive-backed head results left after filtering")
     cohort = sorted(set(args.embedders or local["embedder"].unique().tolist()))
     datasets = sorted(local["dataset"].unique().tolist())
+    evaluation_evidence = None
+    if args.evaluation_manifest is not None:
+        expected_pairs = {(dataset, embedder) for dataset in datasets for embedder in cohort}
+        scored_pairs = set(local[["dataset", "embedder"]].itertuples(index=False, name=None))
+        if scored_pairs != expected_pairs:
+            raise ValueError("Head results omit a task/model pair from the fixed evaluation cohort")
+        evaluation_evidence = verify_evaluation_manifest(
+            args.evaluation_manifest,
+            prepared_dir=args.prepared_dir,
+            embedded_dir=args.embedded_dir,
+            cohort=cohort,
+            datasets=datasets,
+        )
     common_matrix, common_status = common_task_matrix(common, datasets, cohort, labels)
     sensitivity_matrix = (
         common_task_matrix(sensitivity, datasets, cohort, labels)
@@ -666,7 +729,7 @@ def main(argv: list[str] | None = None) -> None:
                 "incomplete_cohort_policy": "all scores missing for that dataset",
                 "status_file": "common_task_matrix_status.csv",
                 "status_counts": common_status["status"].value_counts().to_dict(),
-                "training_rows_and_cv_folds_verified": False,
+                "training_rows_and_cv_folds_verified": evaluation_evidence is not None,
             },
         },
         "selection_rule": (
@@ -677,6 +740,7 @@ def main(argv: list[str] | None = None) -> None:
             dataset: sorted(models) for dataset, models in common_heads.items()
         },
         "archive_status_counts": selected["archive_status"].value_counts().to_dict(),
+        "evaluation_evidence": evaluation_evidence,
         "paired_task_bootstrap": {
             "resamples": args.n_boot,
             "seed": args.seed,
@@ -693,7 +757,7 @@ def main(argv: list[str] | None = None) -> None:
             "incomplete_cohort_policy": "all scores missing for that dataset",
             "status_file": "common_task_matrix_no_split_overlap_status.csv",
             "status_counts": sensitivity_matrix[1]["status"].value_counts().to_dict(),
-            "training_rows_and_cv_folds_verified": False,
+            "training_rows_and_cv_folds_verified": evaluation_evidence is not None,
         }
         manifest["split_overlap_sensitivity"] = {
             "audit_path": str(args.split_overlap_rows),

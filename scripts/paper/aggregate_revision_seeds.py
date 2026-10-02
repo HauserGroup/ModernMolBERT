@@ -62,11 +62,19 @@ def seed_paths(values: list[str]) -> dict[int, Path]:
 
 def load_inputs(
     matrix_paths: dict[int, Path], evaluation_paths: dict[int, Path]
-) -> tuple[dict[int, pd.DataFrame], dict[str, object]]:
+) -> tuple[dict[int, pd.DataFrame], dict[int, pd.DataFrame], dict[str, object]]:
     matrices = {}
+    sensitivity_matrices = {}
     references = None
     tasks = None
-    provenance = {"matrices": {}, "evaluation_manifests": {}, "selection_manifests": {}}
+    overlap_audit_hash = None
+    sensitivity_rows = None
+    provenance = {
+        "matrices": {},
+        "sensitivity_matrices": {},
+        "evaluation_manifests": {},
+        "selection_manifests": {},
+    }
     for seed in SEEDS:
         evaluation_path = evaluation_paths[seed]
         evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
@@ -113,6 +121,50 @@ def load_inputs(
         if not np.isfinite(values).all() or ((values < 0) | (values > 1)).any():
             raise ValueError(f"Undefined or invalid ROC-AUC for seed {seed}")
         matrices[seed] = matrix
+        sensitivity_path = matrix_path.parent / "common_task_matrix_no_split_overlap.csv"
+        status_path = matrix_path.parent / "common_task_matrix_no_split_overlap_status.csv"
+        output_hashes = selection.get("output_sha256", {})
+        for path in (sensitivity_path, status_path):
+            if output_hashes.get(path.name) != file_sha256(path):
+                raise ValueError(f"Overlap sensitivity hash differs from manifest for seed {seed}")
+        sensitivity_info = selection["task_matrices"][sensitivity_path.name]
+        if sensitivity_info.get("training_rows_and_cv_folds_verified") is not True:
+            raise ValueError(f"Unverified overlap sensitivity for seed {seed}")
+        overlap = selection["split_overlap_sensitivity"]
+        if overlap_audit_hash is None:
+            overlap_audit_hash = overlap["audit_sha256"]
+        elif overlap["audit_sha256"] != overlap_audit_hash:
+            raise ValueError("Seeds used different split-overlap audits")
+        status = pd.read_csv(status_path).set_index("dataset")
+        if (
+            len(status) != 25
+            or set(status.index) != set(tasks or [])
+            or status.index.has_duplicates
+            or not status["status"].eq("ok").all()
+        ):
+            raise ValueError(f"Incomplete overlap sensitivity status for seed {seed}")
+        row_counts = status.loc[tasks, "n_common_test_rows"].to_dict()
+        if sensitivity_rows is None:
+            sensitivity_rows = row_counts
+        elif row_counts != sensitivity_rows:
+            raise ValueError("Seeds used different overlap-excluded test cohorts")
+        sensitivity = pd.read_csv(sensitivity_path, index_col=0)
+        if (
+            len(sensitivity) != 25
+            or set(sensitivity.index) != set(tasks or [])
+            or set(sensitivity.columns) != set(MODELS)
+            or sensitivity.index.has_duplicates
+            or sensitivity.columns.has_duplicates
+        ):
+            raise ValueError(f"Wrong overlap sensitivity matrix for seed {seed}")
+        sensitivity = sensitivity.loc[tasks, list(MODELS)].astype(float)
+        sensitivity_values = sensitivity.to_numpy(dtype=float)
+        if (
+            not np.isfinite(sensitivity_values).all()
+            or ((sensitivity_values < 0) | (sensitivity_values > 1)).any()
+        ):
+            raise ValueError(f"Undefined or invalid overlap sensitivity ROC-AUC for seed {seed}")
+        sensitivity_matrices[seed] = sensitivity
         provenance["matrices"][seed] = {
             "path": str(matrix_path),
             "sha256": file_sha256(matrix_path),
@@ -125,7 +177,15 @@ def load_inputs(
             "path": str(selection_path),
             "sha256": file_sha256(selection_path),
         }
-    return matrices, provenance
+        provenance["sensitivity_matrices"][seed] = {
+            "path": str(sensitivity_path),
+            "sha256": file_sha256(sensitivity_path),
+            "status_path": str(status_path),
+            "status_sha256": file_sha256(status_path),
+        }
+    provenance["split_overlap_audit_sha256"] = overlap_audit_hash
+    provenance["sensitivity_common_test_rows"] = sensitivity_rows
+    return matrices, sensitivity_matrices, provenance
 
 
 def aggregate(matrices: dict[int, pd.DataFrame]) -> dict[str, pd.DataFrame]:
@@ -192,6 +252,54 @@ def aggregate(matrices: dict[int, pd.DataFrame]) -> dict[str, pd.DataFrame]:
     }
 
 
+def aggregate_sensitivity(
+    matrices: dict[int, pd.DataFrame], sensitivity_matrices: dict[int, pd.DataFrame]
+) -> dict[str, pd.DataFrame]:
+    frames = []
+    for seed in SEEDS:
+        primary = matrices[seed].stack().rename("roc_auc_primary")
+        excluded = sensitivity_matrices[seed].stack().rename("roc_auc_no_split_overlap")
+        frame = pd.concat([primary, excluded], axis=1).reset_index()
+        frame.columns = ["dataset", "model", "roc_auc_primary", "roc_auc_no_split_overlap"]
+        frame["seed"] = seed
+        frame["difference"] = frame["roc_auc_no_split_overlap"] - frame["roc_auc_primary"]
+        frames.append(frame)
+    long = pd.concat(frames, ignore_index=True)
+    task_summary = (
+        long.groupby(["dataset", "model"], sort=True)[
+            ["roc_auc_primary", "roc_auc_no_split_overlap", "difference"]
+        ]
+        .agg(["mean", "std"])
+        .reset_index()
+    )
+    task_summary.columns = [
+        "dataset",
+        "model",
+        "primary_mean",
+        "primary_sd_across_seeds",
+        "excluded_mean",
+        "excluded_sd_across_seeds",
+        "difference_mean",
+        "difference_sd_across_seeds",
+    ]
+    overall_by_seed = (
+        long.groupby(["seed", "model"], sort=True)[
+            ["roc_auc_primary", "roc_auc_no_split_overlap", "difference"]
+        ]
+        .mean()
+        .reset_index()
+    )
+    overall_by_seed["n_tasks"] = len(next(iter(matrices.values())))
+    mean_matrix = task_summary.pivot(index="dataset", columns="model", values="excluded_mean")
+    mean_matrix = mean_matrix.loc[next(iter(matrices.values())).index, list(MODELS)]
+    return {
+        "sensitivity_seed_scores.csv": long,
+        "sensitivity_task_summary.csv": task_summary,
+        "sensitivity_seed_overall_models.csv": overall_by_seed,
+        "mean_sensitivity_task_matrix.csv": mean_matrix,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed-matrix", action="append", required=True, metavar="SEED=PATH")
@@ -202,11 +310,15 @@ def main() -> None:
     args = parser.parse_args()
     matrix_paths = seed_paths(args.seed_matrix)
     evaluation_paths = seed_paths(args.evaluation_manifest)
-    matrices, provenance = load_inputs(matrix_paths, evaluation_paths)
-    outputs = aggregate(matrices)
+    matrices, sensitivity_matrices, provenance = load_inputs(matrix_paths, evaluation_paths)
+    outputs = aggregate(matrices) | aggregate_sensitivity(matrices, sensitivity_matrices)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for filename, frame in outputs.items():
-        frame.to_csv(args.output_dir / filename, index=filename != "mean_common_task_matrix.csv")
+        frame.to_csv(
+            args.output_dir / filename,
+            index=filename
+            not in ("mean_common_task_matrix.csv", "mean_sensitivity_task_matrix.csv"),
+        )
     (args.output_dir / "manifest.json").write_text(
         json.dumps(
             {
@@ -218,6 +330,12 @@ def main() -> None:
                 "summary_policy": (
                     "Arithmetic task means within each seed; then mean, sample SD, min and max "
                     "across five seeds. No molecule/task pseudoreplication for seed variation."
+                ),
+                "sensitivity_policy": (
+                    "Exclude the same test rows flagged by the frozen supervised-split overlap "
+                    "audit for every model and seed. Keep all 25 eligible tasks, average task "
+                    "scores within each seed, and report seed-level change from the primary "
+                    "common-row score; this is descriptive, not a new head selection."
                 ),
                 "output_sha256": {name: file_sha256(args.output_dir / name) for name in outputs},
             },

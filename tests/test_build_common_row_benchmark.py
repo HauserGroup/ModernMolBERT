@@ -258,6 +258,16 @@ def test_split_overlap_sensitivity_excludes_same_rows_for_every_model(tmp_path):
     status = pd.read_csv(out / "common_task_matrix_no_split_overlap_status.csv")
     assert status["status"].item() == "ok"
     assert status["n_common_test_rows"].item() == 2
+    output_hashes = json.loads((out / "manifest.json").read_text())["output_sha256"]
+    for filename in (
+        "head_candidates.csv",
+        "common_row_scores.csv",
+        "paired_task_differences.csv",
+        "common_row_scores_no_split_overlap.csv",
+        "common_task_matrix_no_split_overlap.csv",
+        "common_task_matrix_no_split_overlap_status.csv",
+    ):
+        assert output_hashes[filename] == file_sha256(out / filename)
 
     bad_audit = pd.read_csv(audit)
     bad_audit.loc[0, "prepared_sha256"] = "0" * 64

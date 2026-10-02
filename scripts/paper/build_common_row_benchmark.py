@@ -747,7 +747,10 @@ def main(argv: list[str] | None = None) -> None:
         "output_sha256": {
             name: file_sha256(args.output_dir / name)
             for name in (
+                "head_candidates.csv",
                 "selected_heads.csv",
+                "common_row_scores.csv",
+                "paired_task_differences.csv",
                 "task_matrix.csv",
                 "common_task_matrix.csv",
                 "common_task_matrix_status.csv",
@@ -762,6 +765,16 @@ def main(argv: list[str] | None = None) -> None:
     }
     if excluded is not None:
         assert sensitivity_matrix is not None
+        manifest["output_sha256"].update(
+            {
+                name: file_sha256(args.output_dir / name)
+                for name in (
+                    "common_row_scores_no_split_overlap.csv",
+                    "common_task_matrix_no_split_overlap.csv",
+                    "common_task_matrix_no_split_overlap_status.csv",
+                )
+            }
+        )
         manifest["task_matrices"]["common_task_matrix_no_split_overlap.csv"] = {
             "population": "common test rows after the split-overlap exclusion",
             "metric": "roc_auc_common",

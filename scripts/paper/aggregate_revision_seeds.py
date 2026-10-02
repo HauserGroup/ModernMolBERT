@@ -8,6 +8,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
+    PRODUCTION_CV_POLICY,
+)
 from modernmolbert.utils import file_sha256, get_git_revision
 
 SEEDS = (42, 43, 44, 45, 46)
@@ -71,7 +74,7 @@ def load_inputs(
             raise ValueError(f"Wrong seed or schema in {evaluation_path}")
         if len(evaluation.get("run_ids", [])) != 5 or len(evaluation.get("tasks", {})) != 25:
             raise ValueError(f"Incomplete evaluation manifest for seed {seed}")
-        if evaluation.get("cv") != {"folds": 5, "shuffle": True, "seed": 0}:
+        if evaluation.get("cv") != PRODUCTION_CV_POLICY:
             raise ValueError(f"CV policy differs for seed {seed}")
         cohort = {
             task: {key: record[key] for key in COHORT_KEYS}
@@ -94,6 +97,8 @@ def load_inputs(
             "evaluation_manifest_sha256"
         ) != file_sha256(evaluation_path):
             raise ValueError(f"Unverified selected-head matrix for seed {seed}")
+        if selection.get("output_sha256", {}).get(matrix_path.name) != file_sha256(matrix_path):
+            raise ValueError(f"Selected-head matrix hash differs from manifest for seed {seed}")
         matrix = pd.read_csv(matrix_path, index_col=0)
         if (
             len(matrix) != 25

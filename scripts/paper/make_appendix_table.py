@@ -29,7 +29,14 @@ parser.add_argument("--out", type=Path, default=ROOT / "outputs/eval/paper/table
 parser.add_argument(
     "--models", nargs="+", default=None, help="Matrix columns to show, in order (new-model runs)."
 )
+parser.add_argument(
+    "--five-seed-mean",
+    action="store_true",
+    help="Label internal columns as verified five-seed means (requires --models).",
+)
 ARGS = parser.parse_args()
+if ARGS.five_seed_mean and ARGS.models is None:
+    parser.error("--five-seed-mean requires --models")
 
 MATRIX = ARGS.matrix
 OUT = ARGS.out
@@ -124,8 +131,17 @@ lines = [
     r"{\footnotesize\setlength{\tabcolsep}{3.5pt}",
     r"\begin{longtable}{l " + "r " * len(COLS) + "}",
     r"  \caption{Per-task test ROC-AUC ($\times100$) for all models on the "
-    r"25-task benchmark. " + LEGEND + r". ``--'' marks evaluations not "
-    r"yet run.}\label{tab:pertask}\\",
+    r"25-task benchmark. " + LEGEND + r". ``--'' marks an unavailable score; "
+    r"only endpoints with defined test ROC-AUC enter multi-endpoint task means. "
+    + (
+        r"Internal entries average five seeds on verified common test rows; "
+        r"imported baselines use table-only test rows with unverified molecule identities."
+        if ARGS.five_seed_mean
+        else r"Internal and external test-row populations differ; see evaluation Methods."
+        if ARGS.models is not None
+        else r"Historical entries follow the archived evaluation protocol."
+    )
+    + r"}\label{tab:pertask}\\",
     r"  \toprule",
     r"  \textbf{Task} & " + " & ".join(r"\textbf{" + h + "}" for h in HEAD) + r" \\",
     r"  \midrule",

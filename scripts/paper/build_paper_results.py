@@ -30,6 +30,7 @@ of group means, Table 2 and all stats unless --include-hetero-span is passed.
 """
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,12 @@ parser.add_argument(
     help="Matched internal scores from common_task_matrix.csv; requires --task-matrix.",
 )
 parser.add_argument(
+    "--seed-aggregate-manifest",
+    type=Path,
+    default=None,
+    help="Verify that --common-task-matrix is the recorded five-seed mean matrix.",
+)
+parser.add_argument(
     "--reference",
     default=None,
     help="Headline ModernMolBERT label for the stats (required with --task-matrix).",
@@ -67,6 +74,17 @@ if ARGS.task_matrix is not None and ARGS.reference is None:
     parser.error("--reference is required with --task-matrix")
 if ARGS.common_task_matrix is not None and ARGS.task_matrix is None:
     parser.error("--common-task-matrix requires --task-matrix")
+if ARGS.seed_aggregate_manifest is not None and ARGS.common_task_matrix is None:
+    parser.error("--seed-aggregate-manifest requires --common-task-matrix")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "outputs/eval/best_metric_by_dataset_embedder.csv"
@@ -119,6 +137,18 @@ REVISION_INTERNAL = [
     "MMB-small-BPE-SMILES",
     "MMB-base-APE-SELFIES",
 ]
+aggregate_provenance = None
+if ARGS.seed_aggregate_manifest is not None:
+    aggregate_provenance = json.loads(ARGS.seed_aggregate_manifest.read_text(encoding="utf-8"))
+    expected_hash = aggregate_provenance.get("output_sha256", {}).get("mean_common_task_matrix.csv")
+    if (
+        ARGS.common_task_matrix.name != "mean_common_task_matrix.csv"
+        or aggregate_provenance.get("seeds") != [42, 43, 44, 45, 46]
+        or aggregate_provenance.get("models") != REVISION_INTERNAL
+        or aggregate_provenance.get("task_count") != 25
+        or expected_hash != file_sha256(ARGS.common_task_matrix)
+    ):
+        raise ValueError("Common matrix does not match the verified five-seed aggregate")
 
 # ---- Model name map: paper label -> embedder key in source CSV ----
 MODELS = {
@@ -194,9 +224,21 @@ if ARGS.task_matrix is not None:
                     "columns": [m for m in MODELS if m not in BASELINES],
                     "source": str(ARGS.common_task_matrix or ARGS.task_matrix),
                     "population": (
-                        "five-model common test rows"
+                        "five-seed mean of five-model common test-row scores"
+                        if aggregate_provenance is not None
+                        else "five-model common test rows"
                         if ARGS.common_task_matrix is not None
                         else "native verified test rows"
+                    ),
+                    "aggregate_manifest": (
+                        str(ARGS.seed_aggregate_manifest)
+                        if ARGS.seed_aggregate_manifest is not None
+                        else None
+                    ),
+                    "aggregate_manifest_sha256": (
+                        file_sha256(ARGS.seed_aggregate_manifest)
+                        if ARGS.seed_aggregate_manifest is not None
+                        else None
                     ),
                 },
             },
@@ -296,8 +338,14 @@ lines += [
     r"    \emph{Overall} is the unweighted mean across available tasks; "
     r"parentheses give the number of scored tasks for each cell. "
     + (
-        r"Internal models use five-model common test rows; external table baselines use "
-        r"their own unverified test molecules. Cross-group differences are descriptive."
+        r"Internal models use five-model common test rows."
+        + (
+            r" Scores are means across five training seeds."
+            if aggregate_provenance is not None
+            else ""
+        )
+        + r" External table baselines use their own unverified test molecules. "
+        r"Cross-group differences are descriptive."
         if ARGS.common_task_matrix is not None
         else r"\textbf{Bold} marks the best value per column."
     ),

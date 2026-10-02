@@ -121,6 +121,29 @@ PY
       echo "Five-seed aggregate or seed-42 selected-head matrix is missing" >&2
       exit 1
     }
+    "$uv_bin" run --locked python - "$aggregate/manifest.json" "$seed42" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+def digest(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+aggregate = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+seed42_dir = Path(sys.argv[2])
+for seed in range(42, 47):
+    for kind in ("evaluation_manifests", "selection_manifests"):
+        record = aggregate["provenance"][kind][str(seed)]
+        if digest(record["path"]) != record["sha256"]:
+            raise ValueError(f"Five-seed aggregate has stale {kind} for seed {seed}")
+selection = json.loads((seed42_dir / "manifest.json").read_text(encoding="utf-8"))
+if digest(seed42_dir / "task_matrix.csv") != selection["output_sha256"]["task_matrix.csv"]:
+    raise ValueError("Seed-42 table-only baseline matrix differs from selection manifest")
+print("Verified current evaluation/selection manifests and seed-42 table matrix")
+PY
     mkdir -p "$paper"
     "$uv_bin" run --locked python scripts/paper/compute_revision_contrast_intervals.py \
       --mean-matrix "$aggregate/mean_common_task_matrix.csv" \
@@ -129,10 +152,11 @@ PY
     "$uv_bin" run --locked python scripts/paper/build_paper_results.py \
       --task-matrix "$seed42/task_matrix.csv" \
       --common-task-matrix "$aggregate/mean_common_task_matrix.csv" \
+      --seed-aggregate-manifest "$aggregate/manifest.json" \
       --reference MMB-small-APE-SELFIES --out-dir "$paper"
     "$uv_bin" run --locked python scripts/paper/make_appendix_table.py \
       --matrix "$paper/results_matrix_25task.csv" --out "$paper/table_pertask.tex" \
-      --models "${baseline_labels[@]}" "${labels[@]}"
+      --models "${baseline_labels[@]}" "${labels[@]}" --five-seed-mean
     "$uv_bin" run --locked python scripts/paper/make_paper_figures.py \
       --matrix "$paper/results_matrix_25task.csv" --reference MMB-small-APE-SELFIES \
       --figure-dir "$paper/figures" --source-data-dir "$paper/source_data"

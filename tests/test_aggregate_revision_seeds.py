@@ -29,7 +29,7 @@ def test_aggregate_five_seed_matrices_requires_same_cohort(tmp_path):
             "schema": 2,
             "seed": seed,
             "run_ids": [f"run{i}" for i in range(5)],
-            "cv": {"folds": 5, "shuffle": True, "seed": 0},
+            "cv": {"folds": 5, "shuffle": False, "seed": None},
             "tasks": {task: cohort for task in tasks},
         }
         evaluation_path = seed_dir / "evaluation.json"
@@ -49,6 +49,7 @@ def test_aggregate_five_seed_matrices_requires_same_cohort(tmp_path):
                 "common_task_matrix.csv": {"training_rows_and_cv_folds_verified": True}
             },
             "evaluation_evidence": {"evaluation_manifest_sha256": file_sha256(evaluation_path)},
+            "output_sha256": {"common_task_matrix.csv": file_sha256(matrix_path)},
         }
         (seed_dir / "manifest.json").write_text(json.dumps(selection), encoding="utf-8")
         matrix_paths[seed] = matrix_path
@@ -70,4 +71,16 @@ def test_aggregate_five_seed_matrices_requires_same_cohort(tmp_path):
     changed["tasks"]["task_00"]["labels_sha256"] = "0" * 64
     evaluation_paths[46].write_text(json.dumps(changed), encoding="utf-8")
     with pytest.raises(ValueError, match="does not share the frozen supervised cohort"):
+        load_inputs(matrix_paths, evaluation_paths)
+
+    changed["tasks"]["task_00"]["labels_sha256"] = "c" * 64
+    evaluation_paths[46].write_text(json.dumps(changed), encoding="utf-8")
+    selection_path = matrix_paths[46].parent / "manifest.json"
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    selection["evaluation_evidence"]["evaluation_manifest_sha256"] = file_sha256(
+        evaluation_paths[46]
+    )
+    selection_path.write_text(json.dumps(selection), encoding="utf-8")
+    matrix_paths[46].write_text(matrix_paths[46].read_text() + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="matrix hash differs"):
         load_inputs(matrix_paths, evaluation_paths)

@@ -41,7 +41,7 @@ def test_verify_final_evaluation_manifest_binds_all_five_embeddings(tmp_path):
         "schema": 2,
         "run_ids": run_ids,
         "common_prefix": "COMMON_",
-        "cv": {"folds": 5, "shuffle": True, "seed": 0},
+        "cv": {"folds": 5, "shuffle": False, "seed": None},
         "tasks": {
             "toy": {
                 "prepared_sha256": file_sha256(prepared / "toy.json"),

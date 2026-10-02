@@ -15,6 +15,9 @@ from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     Dataset,
     EmbeddedDataset,
 )
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
+    PRODUCTION_CV_POLICY,
+)
 from modernmolbert.hf_upload import file_sha256
 
 
@@ -283,7 +286,7 @@ def main() -> None:
         "source_prefix": args.source_prefix,
         "common_prefix": args.common_prefix,
         "run_ids": RUN_IDS,
-        "cv": {"folds": 5, "shuffle": True, "seed": 0},
+        "cv": PRODUCTION_CV_POLICY,
         "missing_labels": "as-negative",
         "tasks": {
             name: materialize_task(

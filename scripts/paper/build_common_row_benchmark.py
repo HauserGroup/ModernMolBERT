@@ -73,6 +73,9 @@ from sklearn.metrics import average_precision_score
 
 from build_benchmark_results_frames import collapse_best_head
 from modernmolbert.eval.benchmarking_molecular_models.common.types import Dataset
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
+    PRODUCTION_CV_POLICY,
+)
 from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
     _normalize_auc_scores,
     get_skfp_roc_auc,
@@ -296,7 +299,7 @@ def verify_evaluation_manifest(
         raise ValueError("Scored embedder cohort differs from the evaluation manifest")
     if set(datasets) != set(manifest.get("tasks", {})):
         raise ValueError("Scored task set differs from the evaluation manifest")
-    if manifest.get("cv") != {"folds": 5, "shuffle": True, "seed": 0}:
+    if manifest.get("cv") != PRODUCTION_CV_POLICY:
         raise ValueError("Evaluation manifest does not declare the fixed five-fold CV policy")
     for dataset in datasets:
         task = manifest["tasks"][dataset]
@@ -741,6 +744,15 @@ def main(argv: list[str] | None = None) -> None:
         },
         "archive_status_counts": selected["archive_status"].value_counts().to_dict(),
         "evaluation_evidence": evaluation_evidence,
+        "output_sha256": {
+            name: file_sha256(args.output_dir / name)
+            for name in (
+                "selected_heads.csv",
+                "task_matrix.csv",
+                "common_task_matrix.csv",
+                "common_task_matrix_status.csv",
+            )
+        },
         "paired_task_bootstrap": {
             "resamples": args.n_boot,
             "seed": args.seed,

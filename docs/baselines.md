@@ -11,10 +11,16 @@ that code, with the same splits, heads, CV folds and hyperparameter grids.
 
 | Paper label | Table embedder | Representation used by the original wrapper |
 |---|---|---|
-| ECFP4 | `ECFP` | scikit-fingerprints ECFP defaults |
+| ECFP4 | `ECFP` | binary scikit-fingerprints ECFP, radius 2, 2,048 bits |
 | ChemBERTa-2 | `ChemBERTa-77M-MLM` | CLS token |
 | MoLFormer | `MoLFormer-XL-both-10pct` | `pooler_output` |
 | SELFormer | `SELFormer` | mean over tokens |
+
+The pinned upstream wrapper constructs `ECFPFingerprint(count=False)` without
+overriding its other defaults, and its requirements pin scikit-fingerprints
+1.16.0. The [scikit-fingerprints ECFP reference](https://scikit-fingerprints.readthedocs.io/stable/modules/generated/skfp.fingerprints.ECFPFingerprint.html)
+documents radius 2 and 2,048 output bits. These settings describe the
+imported table's wrapper; this project does not re-embed its ECFP rows.
 
 ## How they enter the comparison
 

@@ -8,6 +8,9 @@ from pathlib import Path
 import yaml
 
 from modernmolbert.utils import file_sha256
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
+    PRODUCTION_CV_POLICY,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "src/modernmolbert/eval/benchmarking_molecular_models/config/datasets.yaml"
@@ -32,6 +35,8 @@ def command_for(
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if manifest.get("schema") != 2 or set(manifest.get("run_ids", [])) != RUN_IDS:
         raise ValueError("Expected the frozen five-model common-row manifest")
+    if manifest.get("cv") != PRODUCTION_CV_POLICY:
+        raise ValueError("Evaluation manifest does not describe the production CV splitter")
     campaign = campaign_path or (CAMPAIGN if seed == 42 else MULTISEED_CAMPAIGN)
     if not campaign.is_file() or manifest.get("campaign_manifest_sha256") != file_sha256(campaign):
         raise ValueError("Evaluation and campaign manifests differ")

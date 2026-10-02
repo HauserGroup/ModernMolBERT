@@ -8,7 +8,7 @@ Generate paper figures from the 25-task results matrix. No new computation.
 Outputs (PDF) into the manuscript figures directory:
   Fig_2.pdf            internal comparison (five prespecified revision contrasts,
                        or the archived size/masking panels in legacy mode)
-  Fig_baselines.pdf    best model vs four baselines (paired scatter, 4 panels)
+  Fig_baselines.pdf    task-level score scatter against four table-only baselines
   Fig_groupbars.pdf    per-task-group mean ROC-AUC grouped bar chart
   Fig_task_group_distributions.pdf
                        per-task distributions from packaged source data
@@ -229,14 +229,22 @@ if all({x, y} <= set(df.columns) for x, y, _ in panels):
 else:
     print("Skipping Fig_2: required internal model columns are missing")
 
-# ---------- Figure baselines: reference model vs 4 baselines ----------
+# ---------- Figure baselines: task-level scores on unverified test molecules ----------
 BEST = ARGS.reference
 fig, axes = plt.subplots(1, 4, figsize=(15.5, 4.3))
 for ax, base in zip(axes, ["ECFP4", "ChemBERTa-2", "SELFormer", "MoLFormer"], strict=False):
     paired_panel(ax, base, BEST)
     ax.set_title(f"{BEST} vs {base}", fontsize=10)
 group_legend(fig)
-fig.tight_layout(rect=(0, 0.05, 1, 1))
+if revision_columns <= set(df.columns):
+    fig.text(
+        0.5,
+        0.025,
+        "Task-level ROC-AUC; imported baseline test molecules are unverified against internal rows.",
+        ha="center",
+        fontsize=8,
+    )
+fig.tight_layout(rect=(0, 0.09, 1, 1))
 fig.savefig(FIGDIR / "Fig_baselines.pdf", bbox_inches="tight")
 plt.close(fig)
 written.append("Fig_baselines.pdf")

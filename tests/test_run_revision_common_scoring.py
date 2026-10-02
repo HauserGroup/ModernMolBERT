@@ -28,6 +28,7 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
                 "schema": 2,
                 "campaign_manifest_sha256": file_sha256(campaign),
                 "run_ids": sorted(scoring.RUN_IDS),
+                "cv": {"folds": 5, "shuffle": False, "seed": None},
                 "common_prefix": "REVISION_COMMON_",
                 "tasks": {
                     "example": {
@@ -55,6 +56,14 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
     assert command[-1].endswith("scores/small_ape_selfies/example.csv")
     assert "--resume" in command
     assert command[command.index("--missing-labels") + 1] == "as-negative"
+
+    wrong_cv = json.loads(manifest.read_text(encoding="utf-8"))
+    wrong_cv["cv"] = {"folds": 5, "shuffle": True, "seed": 0}
+    manifest.write_text(json.dumps(wrong_cv), encoding="utf-8")
+    with pytest.raises(ValueError, match="production CV splitter"):
+        run_cmd()
+    wrong_cv["cv"] = {"folds": 5, "shuffle": False, "seed": None}
+    manifest.write_text(json.dumps(wrong_cv), encoding="utf-8")
 
     embedding.write_bytes(b"changed")
     with pytest.raises(ValueError, match="missing or changed"):

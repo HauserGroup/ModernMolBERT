@@ -1,6 +1,7 @@
 """The paper matrix must preserve matched internal and descriptive external cohorts."""
 
 import json
+import hashlib
 import subprocess
 import sys
 from pathlib import Path
@@ -26,6 +27,25 @@ def test_revision_paper_results_use_common_internal_rows(tmp_path: Path) -> None
     out = tmp_path / "paper"
     native.to_csv(native_path)
     common.to_csv(common_path)
+    aggregate_manifest = tmp_path / "manifest.json"
+    aggregate_manifest.write_text(
+        json.dumps(
+            {
+                "seeds": [42, 43, 44, 45, 46],
+                "models": internal,
+                "task_count": 25,
+                "output_sha256": {
+                    "mean_common_task_matrix.csv": hashlib.sha256(
+                        common_path.read_bytes()
+                    ).hexdigest()
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    mean_path = tmp_path / "mean_common_task_matrix.csv"
+    common_path.rename(mean_path)
+    common_path = mean_path
 
     script = Path(__file__).resolve().parents[1] / "scripts/paper/build_paper_results.py"
     result = subprocess.run(
@@ -36,6 +56,8 @@ def test_revision_paper_results_use_common_internal_rows(tmp_path: Path) -> None
             str(native_path),
             "--common-task-matrix",
             str(common_path),
+            "--seed-aggregate-manifest",
+            str(aggregate_manifest),
             "--reference",
             internal[0],
             "--out-dir",
@@ -49,7 +71,10 @@ def test_revision_paper_results_use_common_internal_rows(tmp_path: Path) -> None
     assert matrix.loc["AMES", internal[0]] == 0.7
     assert matrix.loc["AMES", "ECFP4"] == 0.8
     provenance = json.loads((out / "results_matrix_provenance.json").read_text())
-    assert provenance["internal_models"]["population"] == "five-model common test rows"
+    assert provenance["internal_models"]["population"] == (
+        "five-seed mean of five-model common test-row scores"
+    )
+    assert "means across five training seeds" in (out / "table2.tex").read_text()
     assert "unmatched test molecules" in result.stdout
     assert "Wilcoxon W=" not in result.stdout
     assert "MMB-small-BPE-SELFIES" in result.stdout
@@ -74,3 +99,25 @@ def test_revision_paper_results_use_common_internal_rows(tmp_path: Path) -> None
     )
     assert (figures / "Fig_2.pdf").is_file()
     assert (figures / "Fig_groupbars.pdf").is_file()
+
+    common_path.write_text(common_path.read_text() + "\n", encoding="utf-8")
+    rejected = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--task-matrix",
+            str(native_path),
+            "--common-task-matrix",
+            str(common_path),
+            "--seed-aggregate-manifest",
+            str(aggregate_manifest),
+            "--reference",
+            internal[0],
+            "--out-dir",
+            str(tmp_path / "rejected"),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert rejected.returncode != 0
+    assert "does not match the verified five-seed aggregate" in rejected.stderr

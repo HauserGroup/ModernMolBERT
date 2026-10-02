@@ -74,7 +74,10 @@ def test_revision_paper_results_use_common_internal_rows(tmp_path: Path) -> None
     assert provenance["internal_models"]["population"] == (
         "five-seed mean of five-model common test-row scores"
     )
-    assert "means across five training seeds" in (out / "table2.tex").read_text()
+    table_text = (out / "table2.tex").read_text()
+    assert "means across five training seeds" in table_text
+    assert "training-side cross-validation" in table_text
+    assert "selected among head families using test scores" in table_text
     assert "unmatched test molecules" in result.stdout
     assert "Wilcoxon W=" not in result.stdout
     assert "MMB-small-BPE-SELFIES" in result.stdout

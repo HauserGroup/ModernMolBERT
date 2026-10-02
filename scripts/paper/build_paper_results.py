@@ -333,8 +333,14 @@ lines += [
     r"  \caption{%",
     rf"    Mean ROC-AUC ($\times100$) on the {N_TASKS_MAIN}-task benchmark of "
     r"\citet{praskiBenchmarkingPretrainedMolecular2025}, broken down by task",
-    r"    group. Each entry averages per-task ROC-AUC using the best "
-    r"cross-validated downstream head (logistic regression / random forest / $k$NN) per task.",
+    r"    group. Each entry averages per-task ROC-AUC. "
+    + (
+        r"Internal downstream heads (logistic regression, random forest or $k$NN) "
+        r"are selected by training-side cross-validation. The imported baseline "
+        r"table selected among head families using test scores."
+        if ARGS.common_task_matrix is not None
+        else r"Downstream heads are selected by the archived analysis protocol."
+    ),
     r"    \emph{Overall} is the unweighted mean across available tasks; "
     r"parentheses give the number of scored tasks for each cell. "
     + (

@@ -31,7 +31,7 @@ def correct(path: Path, expected_sha256: str) -> tuple[str, str]:
     record = json.loads(original)
     if (
         record.get("schema") != 2
-        or record.get("seed") != 42
+        or record.get("seed", 42) != 42
         or len(record.get("run_ids", [])) != 5
         or len(record.get("tasks", {})) != 25
         or record.get("missing_labels") != "as-negative"

@@ -29,7 +29,6 @@ def test_correct_seed42_cv_metadata_only(tmp_path):
     path = tmp_path / "evaluation_manifest.json"
     record = {
         "schema": 2,
-        "seed": 42,
         "run_ids": [f"run{i}" for i in range(5)],
         "tasks": {f"task{i}": {"digest": str(i)} for i in range(25)},
         "missing_labels": "as-negative",

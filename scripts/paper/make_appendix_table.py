@@ -97,6 +97,11 @@ SHORT = {
     "MMB-small": "MMB-s",
     "MMB-base": "MMB-b",
     "MMB-small-span": "MMB-sp",
+    "MMB-small-APE-SELFIES": "s-A/SF",
+    "MMB-small-APE-SMILES": "s-A/SM",
+    "MMB-small-BPE-SELFIES": "s-B/SF",
+    "MMB-small-BPE-SMILES": "s-B/SM",
+    "MMB-base-APE-SELFIES": "b-A/SF",
 }
 if ARGS.models is not None:
     COLS = [str(c) for c in ARGS.models]

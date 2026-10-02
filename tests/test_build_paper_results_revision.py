@@ -100,6 +100,29 @@ def test_revision_paper_results_use_common_internal_rows(tmp_path: Path) -> None
     assert (figures / "Fig_2.pdf").is_file()
     assert (figures / "Fig_groupbars.pdf").is_file()
 
+    appendix = out / "table_pertask.tex"
+    subprocess.run(
+        [
+            sys.executable,
+            str(script.with_name("make_appendix_table.py")),
+            "--matrix",
+            str(out / "results_matrix_25task.csv"),
+            "--out",
+            str(appendix),
+            "--models",
+            *baselines,
+            *internal,
+            "--five-seed-mean",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    appendix_text = appendix.read_text(encoding="utf-8")
+    assert r"\textbf{s-A/SF}" in appendix_text
+    assert r"\textbf{b-A/SF}" in appendix_text
+    assert "Internal entries average five seeds" in appendix_text
+
     common_path.write_text(common_path.read_text() + "\n", encoding="utf-8")
     rejected = subprocess.run(
         [

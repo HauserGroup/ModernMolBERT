@@ -38,7 +38,7 @@ MASKING_DEFAULTS: dict[str, dict[str, Any]] = {
     },
     "hetero_span": {
         "masking_strategy": "hetero_span",
-        "mlm_probability": 0.20,
+        "mlm_probability": 0.15,
         "span_p_geom": 0.4,
         "span_max_length": 6,
         "heteroatom_start_weight": 2.0,

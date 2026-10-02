@@ -154,6 +154,10 @@ def test_upload_dataset_to_hub_dry_run_stages_files(tmp_path: Path) -> None:
         "train.parquet",
         "valid.parquet",
     ]
+    card = (tmp_path / "staging" / "README.md").read_text()
+    assert "10.6019/CHEMBL.database.36" in card
+    assert "https://www.ebi.ac.uk/chembl/" in card
+    assert "CC BY-SA 3.0" in card
 
 
 def test_upload_dataset_to_hub_uses_injected_api(tmp_path: Path) -> None:

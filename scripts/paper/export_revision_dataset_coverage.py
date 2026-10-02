@@ -40,13 +40,21 @@ def seed_paths(values: list[str]) -> dict[int, Path]:
 
 
 def export(
-    summary_path: Path, training_path: Path, evaluation_paths: dict[int, Path]
-) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    summary_path: Path,
+    endpoint_path: Path,
+    training_path: Path,
+    evaluation_paths: dict[int, Path],
+) -> tuple[list[dict[str, object]], list[dict[str, object]], list[dict[str, object]]]:
     with summary_path.open(newline="", encoding="utf-8") as handle:
         summary_rows = list(csv.DictReader(handle))
     summary = {row["dataset"]: row for row in summary_rows}
     if len(summary) != 25 or len(summary_rows) != 25:
         raise ValueError("Expected exactly 25 distinct dataset summary rows")
+    with endpoint_path.open(newline="", encoding="utf-8") as handle:
+        endpoint_rows = list(csv.DictReader(handle))
+    raw_endpoints = {(row["dataset"], row["endpoint"]): row for row in endpoint_rows}
+    if len(raw_endpoints) != len(endpoint_rows):
+        raise ValueError("Duplicate prepared test endpoint")
     with training_path.open(newline="", encoding="utf-8") as handle:
         training_rows = list(csv.DictReader(handle))
     training_weights = {
@@ -80,6 +88,7 @@ def export(
                 raise ValueError(f"Supervised cohort differs for {task} seed {seed}")
 
     datasets = []
+    endpoints = []
     for task in sorted(summary):
         raw = summary[task]
         accepted = reference["tasks"][task]
@@ -96,6 +105,42 @@ def export(
         scored = [record for record in viable.values() if record["roc_auc_defined"]]
         if len(viable) != int(raw["n_endpoints"]) or not scored:
             raise ValueError(f"Endpoint count or viability disagrees for {task}")
+        for endpoint, record in sorted(viable.items()):
+            key = (task, endpoint)
+            if key not in raw_endpoints:
+                raise ValueError(f"Missing prepared test endpoint {key}")
+            original = raw_endpoints[key]
+            prepared_test = int(original["n_test_rows"])
+            observed = record["observed_test_rows"]
+            positive = record["positive_test_rows"]
+            negative = record["negative_test_rows"]
+            if (
+                prepared_test != raw_splits["test"]
+                or observed > retained["test"]
+                or positive + negative != observed
+                or int(original["n_test_labelled"]) + int(original["n_test_missing"])
+                != prepared_test
+                or int(original["n_test_positive"]) + int(original["n_test_negative"])
+                != int(original["n_test_labelled"])
+            ):
+                raise ValueError(f"Raw and common endpoint counts disagree for {key}")
+            endpoints.append(
+                {
+                    "dataset": task,
+                    "endpoint": endpoint,
+                    "prepared_test_rows": prepared_test,
+                    "prepared_test_labelled": int(original["n_test_labelled"]),
+                    "prepared_test_positive": int(original["n_test_positive"]),
+                    "prepared_test_negative": int(original["n_test_negative"]),
+                    "prepared_test_missing": int(original["n_test_missing"]),
+                    "common_test_rows": retained["test"],
+                    "common_test_observed": observed,
+                    "common_test_positive": positive,
+                    "common_test_negative": negative,
+                    "common_test_missing": retained["test"] - observed,
+                    "roc_auc_defined": record["roc_auc_defined"],
+                }
+            )
         datasets.append(
             {
                 "dataset": task,
@@ -165,7 +210,9 @@ def export(
                 )
     if len(failures) != 625:
         raise ValueError("Expected 625 model/seed/task failure records")
-    return datasets, failures
+    if len(endpoints) != len(raw_endpoints):
+        raise ValueError("Prepared endpoint summary has extra rows")
+    return datasets, failures, endpoints
 
 
 def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
@@ -178,6 +225,7 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--summary", type=Path, required=True)
+    parser.add_argument("--endpoint-summary", type=Path, required=True)
     parser.add_argument("--training-manifest", type=Path, required=True)
     parser.add_argument(
         "--evaluation-manifest", action="append", required=True, metavar="SEED=PATH"
@@ -185,11 +233,14 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     evaluation_paths = seed_paths(args.evaluation_manifest)
-    datasets, failures = export(args.summary, args.training_manifest, evaluation_paths)
+    datasets, failures, endpoints = export(
+        args.summary, args.endpoint_summary, args.training_manifest, evaluation_paths
+    )
     args.output_dir.mkdir(parents=True, exist_ok=True)
     outputs = {
         "revision_dataset_coverage.csv": datasets,
         "revision_embedding_failures.csv": failures,
+        "revision_endpoint_coverage.csv": endpoints,
     }
     for name, rows in outputs.items():
         write_csv(args.output_dir / name, rows)
@@ -198,6 +249,7 @@ def main() -> None:
             {
                 "code": get_git_revision(),
                 "summary_sha256": file_sha256(args.summary),
+                "endpoint_summary_sha256": file_sha256(args.endpoint_summary),
                 "training_manifest_sha256": file_sha256(args.training_manifest),
                 "evaluation_manifest_sha256": {
                     str(seed): file_sha256(path) for seed, path in evaluation_paths.items()

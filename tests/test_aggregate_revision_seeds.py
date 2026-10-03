@@ -5,7 +5,14 @@ import json
 import pandas as pd
 import pytest
 
-from aggregate_revision_seeds import MODELS, SEEDS, aggregate, aggregate_sensitivity, load_inputs
+from aggregate_revision_seeds import (
+    MODELS,
+    SEEDS,
+    aggregate,
+    aggregate_sensitivity,
+    load_inputs,
+    write_outputs,
+)
 from modernmolbert.utils import file_sha256
 
 
@@ -87,6 +94,15 @@ def test_aggregate_five_seed_matrices_requires_same_cohort(tmp_path):
     assert overall.loc["base_minus_small_APE_SELFIES", "mean"] == pytest.approx(0.05)
     assert overall.loc["representation_by_tokenizer_interaction", "mean"] == pytest.approx(0)
     assert set(overall["n_seeds"].tolist()) == {5}
+
+    output_dir = tmp_path / "aggregate"
+    write_outputs(output_dir, outputs | sensitivity_outputs)
+    for name in ("mean_common_task_matrix.csv", "mean_sensitivity_task_matrix.csv"):
+        reloaded = pd.read_csv(output_dir / name, index_col=0)
+        assert reloaded.index.tolist() == tasks
+        assert reloaded.columns.tolist() == list(MODELS)
+    seed_summary = pd.read_csv(output_dir / "overall_contrast_summary.csv")
+    assert "Unnamed: 0" not in seed_summary
 
     changed = json.loads(evaluation_paths[46].read_text(encoding="utf-8"))
     changed["tasks"]["task_00"]["labels_sha256"] = "0" * 64

@@ -300,6 +300,14 @@ def aggregate_sensitivity(
     }
 
 
+def write_outputs(output_dir: Path, outputs: dict[str, pd.DataFrame]) -> None:
+    """Keep task identifiers in matrix CSVs and omit DataFrame indices elsewhere."""
+    matrix_names = {"mean_common_task_matrix.csv", "mean_sensitivity_task_matrix.csv"}
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for filename, frame in outputs.items():
+        frame.to_csv(output_dir / filename, index=filename in matrix_names)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed-matrix", action="append", required=True, metavar="SEED=PATH")
@@ -312,13 +320,7 @@ def main() -> None:
     evaluation_paths = seed_paths(args.evaluation_manifest)
     matrices, sensitivity_matrices, provenance = load_inputs(matrix_paths, evaluation_paths)
     outputs = aggregate(matrices) | aggregate_sensitivity(matrices, sensitivity_matrices)
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    for filename, frame in outputs.items():
-        frame.to_csv(
-            args.output_dir / filename,
-            index=filename
-            not in ("mean_common_task_matrix.csv", "mean_sensitivity_task_matrix.csv"),
-        )
+    write_outputs(args.output_dir, outputs)
     (args.output_dir / "manifest.json").write_text(
         json.dumps(
             {

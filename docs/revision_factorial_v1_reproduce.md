@@ -269,3 +269,19 @@ All 25 combinations of the five run IDs and seeds 42–46 passed this CPU
 staging validation on Helios. The repository names shown in the staging
 cards are proposals; confirm the final Hub layout before upload. The stage
 command performs no network publication.
+
+Package only the 625 selected native prediction archives for release, after
+building the byte-verified inventory:
+
+```bash
+uv run python scripts/paper/package_revision_predictions.py \
+  --manifest outputs/eval/revision_factorial_multiseed_v1/prediction_release_manifest.csv \
+  --repo-root . \
+  --output outputs/revision_release_staging/selected_predictions_625.tar
+```
+
+The package contains the inventory plus one archive per model/seed/task, in
+stable path order with normalized tar metadata. The current reviewed bundle
+on Helios has 626 members, 86,374,400 bytes and SHA-256
+`eadf1205f62d6815e899c5677d9d5280b631fcedea51abfb363e31637cb55bb2`.
+It is staged locally and has not been publicly uploaded.

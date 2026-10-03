@@ -129,7 +129,7 @@ run the upload command without `--dry_run`. The uploaded model card is derived
 from the final run record; historical pilot and audit files are diagnostic
 evidence, not additional launch requirements.
 
-The initial accepted campaign has one pretraining seed. Its tokenizer vocabularies have
+The initial seed-42 campaign has one pretraining seed; the completed expansion has five. Its tokenizer vocabularies have
 different realized sizes, so the factorial compares complete
 tokenizer/representation configurations. Report both facts with the results.
 
@@ -191,3 +191,43 @@ five independent seed-level effects. Run
 and overall contrast summary for separate task and fixed-family bootstrap
 intervals. These intervals condition on the five trained seeds; report the
 between-seed SD beside them, not as 125 independent training replicates.
+
+## 7. Accepted five-seed analysis and loss source data
+
+The accepted seed selections and aggregate were regenerated from the clean
+code commit `95b97ac` after all CPU scores completed. On the analysis
+checkout, run these stages in order after verifying the five evaluation
+manifests and 125 score files per seed:
+
+```bash
+for seed in 42 43 44 45 46; do
+  bash scripts/run_revision_multiseed_analysis.sh select-seed "$seed"
+done
+bash scripts/run_revision_multiseed_analysis.sh aggregate
+bash scripts/run_revision_multiseed_analysis.sh paper
+```
+
+Each selection manifest records input and output hashes. The aggregate
+manifest pins the five common-row matrices, five overlap-exclusion matrices,
+seeds, code commit and output hashes. The paper matrix combines five-seed
+internal means with four table-only imported baselines; external molecule
+rows and head-selection provenance are not matched. The six internal
+contrasts use the unchanged 18-family mapping, with task and family
+resampling conditional on the five seeds.
+
+For within-run MLM diagnostics, collect the top-level `trainer_state.json`
+from each of the five model directories and five `seed42`–`seed46`
+subdirectories under `runs/revision_factorial_v1/`, preserving their
+relative paths. Then run:
+
+```bash
+uv run python scripts/paper/make_revision_loss_curves.py \
+  --run-root runs/revision_factorial_v1 \
+  --figure outputs/eval/revision_factorial_multiseed_v1/paper/revision_loss_curves.pdf \
+  --source-data outputs/eval/revision_factorial_multiseed_v1/paper/loss_curves_25runs.csv
+```
+
+The script requires terminal step 30,000 and the expected 300 training and
+seven validation loss records for each run. The CSV records every plotted
+value and each trainer-history SHA-256. Compare curves within a run only;
+MLM targets differ across tokenizers.

@@ -251,3 +251,21 @@ tokenizer hashes needed to link published checkpoints. The existing
 `modernmolbert.upload_model` card and validation path is specific to
 APE–SELFIES and must be generalized or replaced before publishing SMILES or
 BPE variants; do not use its hard-coded description for those runs.
+
+For model publication, `modernmolbert.upload_model` remains limited to the
+historical APE–SELFIES format. Use the representation-aware staging command
+for each revision run instead; it verifies the terminal weight/tokenizer
+hashes, copies the deployable final model, writes an accurate variant card,
+reloads the tokenizer and masked-LM model on CPU, and hashes the staged files:
+
+```bash
+CUDA_VISIBLE_DEVICES="" uv run python scripts/stage_revision_model_release.py \
+  --run-dir runs/revision_factorial_v1/small_bpe_smiles/seed42 \
+  --output-dir outputs/revision_release_staging/small_bpe_smiles_seed42 \
+  --repo-id HauserGroup/ModernMolBERT-revision-small-bpe-smiles-seed42
+```
+
+All 25 combinations of the five run IDs and seeds 42–46 passed this CPU
+staging validation on Helios. The repository names shown in the staging
+cards are proposals; confirm the final Hub layout before upload. The stage
+command performs no network publication.

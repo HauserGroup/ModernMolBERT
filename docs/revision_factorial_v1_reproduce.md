@@ -231,3 +231,23 @@ The script requires terminal step 30,000 and the expected 300 training and
 seven validation loss records for each run. The CSV records every plotted
 value and each trainer-history SHA-256. Compare curves within a run only;
 MLM targets differ across tokenizers.
+
+To inventory the exact 625 CV-selected native prediction archives for release,
+run the manifest builder against the five selection directories and the
+25-row training identity table. Passing `--repo-root` recomputes every archive
+SHA-256 and byte count; omit it only when preparing an unverified draft.
+
+```bash
+uv run python scripts/paper/build_revision_release_manifest.py \
+  --selection-root outputs/eval/revision_factorial_multiseed_v1 \
+  --training-models path/to/revision_training_models.csv \
+  --repo-root . \
+  --output outputs/eval/revision_factorial_multiseed_v1/prediction_release_manifest.csv
+```
+
+This manifest describes only the selected head for each model, seed and task;
+other candidate archives are diagnostic. It also records the final weight and
+tokenizer hashes needed to link published checkpoints. The existing
+`modernmolbert.upload_model` card and validation path is specific to
+APE–SELFIES and must be generalized or replaced before publishing SMILES or
+BPE variants; do not use its hard-coded description for those runs.

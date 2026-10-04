@@ -4,8 +4,8 @@ This is an isolated experiment with one **small ModernMolBERT / SMIRK / SMILES**
 configuration trained at seeds 42–46. It uses the ChEMBL 36 corpus after
 excluding 68/2,390,314 training rows that SMIRK cannot represent losslessly
 or that exceed 384 tokens. The retained molecules preserve their original
-relative frozen row order. The validation IDs, 384-token context, 30,000-step optimizer
-recipe and 25 prepared benchmark tasks as the revision campaign. It is not
+relative frozen row order. It uses the same validation IDs, 384-token context,
+30,000-step optimizer recipe and 25 prepared benchmark tasks as the revision campaign. It is not
 part of the manuscript or its five-configuration aggregate.
 
 SMIRK 0.3.0 is the [upstream OpenSMILES tokenizer](https://eeg.engin.umich.edu/smirk/).
@@ -69,3 +69,20 @@ report the reduced intersection explicitly and re-evaluate comparison models
 on that intersection before treating scores as paired. Keep all pilot outputs
 under `outputs/experimental_smirk_v1/`; do not feed them to manuscript result
 generators until the pilot is reviewed.
+
+The separate Helios analysis checkout can evaluate all five models after the
+training queue completes. It checks the GPU before every embedding stage and
+scores on CPU. Its queue status and logs stay under
+`outputs/experimental_smirk_v1/` in that checkout:
+
+```bash
+# From /home/jakob/projects/ModernMolBERT-analysis after installing smirk==0.3.0:
+tmux new -s smirk-evaluation
+bash scripts/experiments/run_smirk_evaluation_queue.sh
+```
+
+For each task the evaluation manifest records the exact source-row intersection
+with the accepted five-model cohort. Existing comparator results can be used
+when the cohort is unchanged. For any task with lost rows, the queue writes
+separate matched comparator embeddings and scores all five on that reduced
+cohort. No accepted embedding, score, or manuscript file is overwritten.

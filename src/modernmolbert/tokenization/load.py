@@ -159,7 +159,16 @@ def load_checkpoint_tokenizer(path: str | Path) -> tuple["PreTrainedTokenizerBas
         if config_path.is_file():
             config = json.loads(config_path.read_text(encoding="utf-8"))
             if config.get("tokenizer_class") == "SmirkTokenizerFast":
-                import smirk  # noqa: F401 - registers its tokenizer with AutoTokenizer
+                from smirk import SmirkTokenizerFast
+
+                # Transformers 5's AutoTokenizer falls back to TokenizersBackend,
+                # which cannot deserialize SMIRK's custom pre-tokenizer. The
+                # package's own loader restores that component correctly.
+                tokenizer = SmirkTokenizerFast.from_pretrained(str(path))
+                representation = tokenizer.init_kwargs.get("representation")
+                if representation is None:
+                    raise ValueError(f"{config_path} does not record a representation")
+                return tokenizer, tokenizer_representation({"representation": representation})
 
         from transformers import AutoTokenizer
 

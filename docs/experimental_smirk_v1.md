@@ -86,3 +86,7 @@ with the accepted five-model cohort. Existing comparator results can be used
 when the cohort is unchanged. For any task with lost rows, the queue writes
 separate matched comparator embeddings and scores all five on that reduced
 cohort. No accepted embedding, score, or manuscript file is overwritten.
+After all five seeds score, the queue verifies every selected head's prediction
+row IDs and recomputes its test ROC-AUC. The pilot-only
+`comparison_summary.json`, `selected_heads.csv`, and `mean_task_matrix.csv`
+report the five-seed matched comparison.

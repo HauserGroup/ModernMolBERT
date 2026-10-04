@@ -73,4 +73,7 @@ PY
   printf 'scored seed%s %s\n' "$seed" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$status"
 done
 
+printf 'summarizing %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$status"
+"$uv_bin" run --locked --no-sync python scripts/experiments/summarize_smirk_pilot.py \
+  > "$pilot/logs/summary.log" 2>&1
 printf 'complete 5/5 %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$status"

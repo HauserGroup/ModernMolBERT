@@ -1265,7 +1265,7 @@ def main() -> None:
         mask_token_id=special_ids["mask_token"],
         vocab_size=vocab_size,
         mlm_probability=args.mlm_probability,
-        special_token_ids=list(special_ids.values()),
+        special_token_ids=sorted(set(special_ids.values()) | set(tokenizer.all_special_ids)),
         masking_strategy=args.masking_strategy,
         span_p_geom=args.span_p_geom,
         span_max_length=args.span_max_length,

@@ -300,14 +300,14 @@ def copy_tokenizer_artifacts(
     ``ape_tokenizer/``, because Transformers only runs remote tokenizer code
     from a directory without the ModernBERT model config.
     """
-    from modernmolbert.tokenization.load import BPE, load_tokenizer, tokenizer_algorithm
+    from modernmolbert.tokenization.load import BPE, SMIRK, load_tokenizer, tokenizer_algorithm
 
     output_dir.mkdir(parents=True, exist_ok=True)
     final_model_dir.mkdir(parents=True, exist_ok=True)
 
     metadata = load_tokenizer_metadata(metadata_path)
     tokenizer = load_tokenizer(vocab_path, metadata, model_max_length=model_max_length)
-    if tokenizer_algorithm(metadata) == BPE:
+    if tokenizer_algorithm(metadata) in {BPE, SMIRK}:
         tokenizer.save_pretrained(str(final_model_dir))
         for target_dir in [output_dir, final_model_dir]:
             shutil.copy2(metadata_path, target_dir / "tokenizer_metadata.json")
@@ -599,10 +599,17 @@ def tokenizer_vocab_size(tokenizer: "PreTrainedTokenizerBase") -> int:
 def resolve_special_ids(tokenizer: "PreTrainedTokenizerBase") -> dict[str, int]:
     """Each special token's ID in the tokenizer's vocabulary."""
     vocab = tokenizer.get_vocab()
-    missing = [token for token in SPECIAL_TOKENS.values() if token not in vocab]
+    tokens: dict[str, str] = {}
+    missing: list[str] = []
+    for name in SPECIAL_TOKENS:
+        token = getattr(tokenizer, name, None)
+        if not isinstance(token, str) or token not in vocab:
+            missing.append(name)
+        else:
+            tokens[name] = token
     if missing:
         raise ValueError(f"Tokenizer vocabulary lacks special tokens: {missing}")
-    return {name: int(vocab[token]) for name, token in SPECIAL_TOKENS.items()}
+    return {name: int(vocab[token]) for name, token in tokens.items()}
 
 
 def encode_sequence(
@@ -698,7 +705,7 @@ def compute_tokenization_stats(
         raise ValueError("Cannot compute tokenization stats on an empty sequence list.")
 
     unk_id = special_ids["unk_token"]
-    unk_token = SPECIAL_TOKENS["unk_token"]
+    unk_token = tokenizer.unk_token
 
     lengths: list[int] = []
     truncations = 0

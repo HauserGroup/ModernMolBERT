@@ -2,7 +2,7 @@
 """Train a ModernBERT masked-language model on SELFIES or SMILES molecular strings.
 
 Model training requires an existing, vetted tokenizer file and metadata. The
-metadata fixes the tokenizer algorithm (APE or BPE) and the representation the
+    metadata fixes the tokenizer algorithm (APE, BPE or SMIRK) and the representation the
 model reads. Tokenizer training is intentionally a separate command:
 
     python -m modernmolbert.train_tokenizer
@@ -35,6 +35,7 @@ from transformers import (
 from modernmolbert.collator import MolecularMLMCollator
 from modernmolbert.tokenization.load import (
     APE,
+    SMIRK,
     load_verified_tokenizer,
     tokenizer_algorithm,
     tokenizer_representation,
@@ -70,7 +71,7 @@ DATASET_NAME = PUBCHEM10M_DATASET
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train a molecular ModernBERT MLM with a vetted APE or BPE tokenizer.",
+        description="Train a molecular ModernBERT MLM with a vetted molecular tokenizer.",
     )
 
     # Paths
@@ -79,7 +80,7 @@ def parse_args() -> argparse.Namespace:
         "--tokenizer_vocab_path",
         type=str,
         required=True,
-        help="Tokenizer file: an APE vocabulary JSON or a BPE tokenizer.json.",
+        help="Tokenizer file: an APE vocabulary JSON or a BPE/SMIRK tokenizer.json.",
     )
     parser.add_argument(
         "--tokenizer_metadata_path",
@@ -762,7 +763,14 @@ def validate_tokenizer_for_training(
         raise ValueError(f"Suspiciously small tokenizer vocabulary: {vocab_size}")
 
     special_ids = resolve_special_ids(tokenizer)
-    assert_special_ids(special_ids)
+    if getattr(args, "tokenizer_algorithm", APE) == SMIRK:
+        expected_ids = metadata.get("special_ids")
+        if special_ids != expected_ids or len(set(special_ids.values())) != len(special_ids):
+            raise ValueError(
+                f"SMIRK special token IDs {special_ids} disagree with metadata {expected_ids}"
+            )
+    else:
+        assert_special_ids(special_ids)
 
     validation_sequences = _sample_train_partition_sequences(
         args, n=args.tokenizer_validation_samples

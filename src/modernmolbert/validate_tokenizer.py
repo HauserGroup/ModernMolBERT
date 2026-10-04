@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from tqdm.auto import tqdm
 
 from modernmolbert.tokenization.load import (
+    SMIRK,
     load_verified_tokenizer,
     tokenizer_algorithm,
     tokenizer_representation,
@@ -49,7 +50,7 @@ def parse_args() -> argparse.Namespace:
         "--tokenizer_vocab_path",
         type=str,
         required=True,
-        help="Tokenizer file: an APE vocabulary JSON or a BPE tokenizer.json.",
+        help="Tokenizer file: an APE vocabulary JSON or a BPE/SMIRK tokenizer.json.",
     )
     parser.add_argument(
         "--tokenizer_metadata_path",
@@ -217,7 +218,7 @@ def main() -> None:
 
     warning_count = 0
 
-    if special_ids != EXPECTED_SPECIAL_IDS:
+    if tokenizer_algorithm(metadata) != SMIRK and special_ids != EXPECTED_SPECIAL_IDS:
         warning_count += int(
             _fail_or_warn(
                 args,
@@ -226,6 +227,8 @@ def main() -> None:
             )
         )
     metadata_special_ids = metadata.get("special_ids")
+    if tokenizer_algorithm(metadata) == SMIRK and not isinstance(metadata_special_ids, dict):
+        warning_count += int(_fail_or_warn(args, "SMIRK metadata must pin its special token IDs."))
     if metadata_special_ids is not None and metadata_special_ids != special_ids:
         warning_count += int(
             _fail_or_warn(

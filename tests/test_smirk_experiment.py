@@ -3,7 +3,9 @@
 from pathlib import Path
 
 import pytest
+import torch
 
+from modernmolbert.eval.featurizers.modernmolbert_selfies import ModernMolBERTSelfiesFeaturizer
 from modernmolbert.tokenization.load import load_checkpoint_tokenizer, load_verified_tokenizer
 from modernmolbert.utils import (
     compute_tokenization_stats,
@@ -44,3 +46,19 @@ def test_smirk_bundle_and_checkpoint_reload(tmp_path: Path) -> None:
     assert representation == "SMILES"
     for smiles in EXAMPLES:
         assert reloaded(smiles)["input_ids"] == tokenizer(smiles)["input_ids"]
+
+
+def test_smirk_featurizer_batches_single_string_encodings() -> None:
+    tokenizer, _, _, _ = load_verified_tokenizer(TOKENIZER)
+    featurizer = object.__new__(ModernMolBERTSelfiesFeaturizer)
+    featurizer.tokenizer = tokenizer
+    inputs = ["CCO", "ClC"]
+
+    batch = featurizer._tokenize_batch(inputs)
+
+    for row, smiles in enumerate(inputs):
+        expected = tokenizer(smiles)["input_ids"]
+        assert batch["input_ids"][row, : len(expected)].tolist() == expected
+        assert batch["attention_mask"][row, : len(expected)].tolist() == [1] * len(expected)
+        assert torch.all(batch["input_ids"][row, len(expected) :] == tokenizer.pad_token_id)
+        assert torch.all(batch["attention_mask"][row, len(expected) :] == 0)

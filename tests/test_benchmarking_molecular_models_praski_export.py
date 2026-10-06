@@ -1,10 +1,11 @@
+from pathlib import Path
+
 import pandas as pd
+import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
     PRASKI_COLUMNS,
     append_result_row,
-    count_result_rows,
-    delete_result_rows,
     read_results_csv,
     to_praski_schema,
 )
@@ -68,7 +69,7 @@ def test_to_praski_schema_regression_row() -> None:
     assert out.loc[0, "test_metric_name"] == "rmse"
 
 
-def test_csv_result_store_appends_counts_and_deletes_rows(tmp_path) -> None:
+def test_csv_result_store_appends_and_replaces_rows(tmp_path) -> None:
     output_csv = tmp_path / "benchmark_results.csv"
     row = {
         "dataset": "bbbp",
@@ -86,6 +87,7 @@ def test_csv_result_store_appends_counts_and_deletes_rows(tmp_path) -> None:
         "cv_metric": 0.75,
         "test_metric_name": "roc_auc",
         "test_metric": 0.80,
+        "prepared_data_sha256": "feedface" * 8,
     }
 
     frame = append_result_row(output_csv, row)
@@ -97,26 +99,25 @@ def test_csv_result_store_appends_counts_and_deletes_rows(tmp_path) -> None:
     assert frame.loc[0, "pooling"] == "mean"
     assert bool(frame.loc[0, "pooling_special_tokens_excluded"]) is True
     assert frame.loc[0, "embedding_max_seq_length"] == 256
-    assert (
-        count_result_rows(
-            output_csv,
-            dataset="bbbp",
-            embedder="modernmolbert",
-            cv_metric_name="roc_auc",
-            model="rf",
-        )
-        == 1
-    )
-
+    assert frame.loc[0, "prepared_data_sha256"] == "feedface" * 8
     append_result_row(output_csv, {**row, "model": "ridge"})
     assert len(read_results_csv(output_csv)) == 2
 
-    out = delete_result_rows(
-        output_csv,
-        dataset="bbbp",
-        embedder="modernmolbert",
-        cv_metric_name="roc_auc",
-        model="rf",
-    )
-    assert len(out) == 1
-    assert out.loc[out.index[0], "model"] == "ridge"
+    out = append_result_row(output_csv, {**row, "scoring_identity": "new"}, replace_existing=True)
+    assert len(out) == 2
+    assert out.loc[out["model"] == "rf", "scoring_identity"].item() == "new"
+    assert out.loc[out["model"] == "ridge", "model"].item() == "ridge"
+
+
+def test_read_results_csv_raises_on_corrupt_csv(tmp_path: Path) -> None:
+    corrupt_csv = tmp_path / "corrupt.csv"
+    # Write invalid / malformed CSV with unmatched quotes or parser errors
+    corrupt_csv.write_text('a,b,c\n1,"unterminated string\n2,3,4', encoding="utf-8")
+    with pytest.raises(pd.errors.ParserError):
+        read_results_csv(corrupt_csv)
+
+
+def test_read_results_csv_handles_empty_file(tmp_path: Path) -> None:
+    empty_csv = tmp_path / "empty.csv"
+    empty_csv.write_text("", encoding="utf-8")
+    assert read_results_csv(empty_csv).empty

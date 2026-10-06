@@ -11,6 +11,7 @@ EXAMPLES = [
     "[C][C][=C][C][Branch1][=N][N][N][=C][C][=Branch1][C][=O][NH1][C][Ring1][#Branch1][=O]",
     "[O][=C][Branch1][N][C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#Branch1]",
     "[C][S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C]",
+    "[C].[O]",
 ]
 
 
@@ -44,7 +45,7 @@ def main() -> None:
         type=Path,
         default=Path("tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"),
     )
-    parser.add_argument("--model-max-length", type=int, default=256)
+    parser.add_argument("--model-max-length", type=int, default=128)
     args = parser.parse_args()
 
     local_tok = load_local_tokenizer(args.local_vocab, args.model_max_length)

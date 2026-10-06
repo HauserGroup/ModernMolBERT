@@ -4,12 +4,17 @@ This document collects testing commands, readiness gates, and optional smoke tes
 
 ## Fast checks
 
-Run linting and the full test suite:
+These are the CI commands (`.github/workflows/ci.yml`):
 
 ```bash
 uv run ruff check .
-uv run pytest
+uv run ruff format --check .
+uv run pytest -q -m "not smoke and not model and not mps and not cuda and not network"
 ```
+
+Markers are strict. `model` tests need a trained checkpoint: point
+`MODERNMOLBERT_TEST_MODEL_DIR` at a `final_model` directory (or leave a debug run under
+`runs/debug_selfies/`), then run `uv run pytest -m model`. `network` tests need the Hub.
 
 Run fast evaluation tests:
 
@@ -95,38 +100,19 @@ MODERNMOLBERT_RUN_SMOKE=1 MODERNMOLBERT_RUN_MPS=1 \
 
 Use `--num_workers 0` for MPS runs.
 
-## Optional external-baseline tests
-
-MoLFormer tests should be run in the separate MoLFormer-only environment described in `docs/baselines.md`.
-
-```bash
-PYTHONPATH="$PWD/src" MODERNMOLBERT_RUN_MOLFORMER_TESTS=1 \
-  python -m pytest tests/test_eval_molformer.py -q -s
-```
-
 ## What the eval tests cover
 
 The evaluation tests should cover:
 
 - the `ModernMolBERTSelfiesFeaturizer` and `FeatureBatch` contract,
 - the benchmark download/embed/score pipeline,
-- per-dataset checkpoint resume and output schema,
+- result-row and prediction-archive resume identity and output schema,
 - prediction export and result aggregation.
 
 ## When to run what
 
-For ordinary development:
-
-```bash
-uv run pytest tests/test_eval_*.py -q
-```
-
-Before a training run:
-
-```bash
-uv run ruff check .
-uv run pytest
-```
+For ordinary development, run the touched test file. Before a training run, run the CI
+commands above and the readiness gate.
 
 Before treating benchmark numbers as meaningful, run the benchmark pipeline on a single dataset as a smoke test:
 

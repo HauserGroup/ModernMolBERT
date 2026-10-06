@@ -1,0 +1,8372 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [
+    {
+      "id": 0,
+      "content": "<s>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 1,
+      "content": "<pad>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 2,
+      "content": "</s>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 3,
+      "content": "<unk>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    },
+    {
+      "id": 4,
+      "content": "<mask>",
+      "single_word": false,
+      "lstrip": false,
+      "rstrip": false,
+      "normalized": false,
+      "special": true
+    }
+  ],
+  "normalizer": null,
+  "pre_tokenizer": null,
+  "post_processor": {
+    "type": "TemplateProcessing",
+    "single": [
+      {
+        "SpecialToken": {
+          "id": "<s>",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "</s>",
+          "type_id": 0
+        }
+      }
+    ],
+    "pair": [
+      {
+        "SpecialToken": {
+          "id": "<s>",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "A",
+          "type_id": 0
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "</s>",
+          "type_id": 0
+        }
+      },
+      {
+        "Sequence": {
+          "id": "B",
+          "type_id": 0
+        }
+      },
+      {
+        "SpecialToken": {
+          "id": "</s>",
+          "type_id": 0
+        }
+      }
+    ],
+    "special_tokens": {
+      "</s>": {
+        "id": "</s>",
+        "ids": [
+          2
+        ],
+        "tokens": [
+          "</s>"
+        ]
+      },
+      "<s>": {
+        "id": "<s>",
+        "ids": [
+          0
+        ],
+        "tokens": [
+          "<s>"
+        ]
+      }
+    }
+  },
+  "decoder": {
+    "type": "Fuse"
+  },
+  "model": {
+    "type": "BPE",
+    "dropout": null,
+    "unk_token": "<unk>",
+    "continuing_subword_prefix": null,
+    "end_of_word_suffix": null,
+    "fuse_unk": false,
+    "byte_fallback": false,
+    "ignore_merges": false,
+    "vocab": {
+      "<s>": 0,
+      "<pad>": 1,
+      "</s>": 2,
+      "<unk>": 3,
+      "<mask>": 4,
+      "#": 5,
+      "+": 6,
+      "-": 7,
+      ".": 8,
+      "/": 9,
+      "0": 10,
+      "1": 11,
+      "2": 12,
+      "3": 13,
+      "4": 14,
+      "5": 15,
+      "6": 16,
+      "7": 17,
+      "8": 18,
+      "9": 19,
+      "=": 20,
+      "@": 21,
+      "A": 22,
+      "B": 23,
+      "C": 24,
+      "F": 25,
+      "G": 26,
+      "H": 27,
+      "I": 28,
+      "K": 29,
+      "L": 30,
+      "M": 31,
+      "N": 32,
+      "O": 33,
+      "P": 34,
+      "R": 35,
+      "S": 36,
+      "T": 37,
+      "X": 38,
+      "Y": 39,
+      "Z": 40,
+      "[": 41,
+      "\\": 42,
+      "]": 43,
+      "a": 44,
+      "b": 45,
+      "c": 46,
+      "e": 47,
+      "g": 48,
+      "h": 49,
+      "i": 50,
+      "l": 51,
+      "n": 52,
+      "r": 53,
+      "s": 54,
+      "t": 55,
+      "][": 56,
+      "C][": 57,
+      "1][": 58,
+      "Br": 59,
+      "an": 60,
+      "ch": 61,
+      "Bran": 62,
+      "Branch": 63,
+      "C][=": 64,
+      "Branch1][": 65,
+      "Ri": 66,
+      "ng": 67,
+      "Ring": 68,
+      "C][=C][": 69,
+      "Ring1][": 70,
+      "N][": 71,
+      "C][C][": 72,
+      "2][": 73,
+      "O][": 74,
+      "C][=C][C][=C][": 75,
+      "Branch2][": 76,
+      "Ring1][=": 77,
+      "Ring2][": 78,
+      "Branch1][C][=": 79,
+      "Branch1][C][": 80,
+      "Branch1][C][=O][": 81,
+      "=C][": 82,
+      "Ring1][#": 83,
+      "C][=Branch1][C][=O][": 84,
+      "H1][": 85,
+      "C@": 86,
+      "Branch1][C][C][": 87,
+      "Branch1][=": 88,
+      "S][": 89,
+      "C][=C][Ring1][=": 90,
+      "Ring2][Ring1][": 91,
+      "F][": 92,
+      "C][=N][": 93,
+      "[C][": 94,
+      "C][=C][C][=C][C][=C][Ring1][=": 95,
+      "N][C][C][": 96,
+      "C@@": 97,
+      "N][=C][": 98,
+      "C][Branch1][C][": 99,
+      "C@H1][": 100,
+      "Branch2][Ring1][": 101,
+      "C@@H1][": 102,
+      "O][C][": 103,
+      "1]": 104,
+      "N][C][=Branch1][C][=O][": 105,
+      "=Branch1][C][=O][": 106,
+      "N][C][": 107,
+      "[C][C][": 108,
+      "Cl": 109,
+      "C][=C][Ring1][#": 110,
+      "Branch1][#": 111,
+      "Ring1][=Branch1][": 112,
+      "Branch1]": 113,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][": 114,
+      "O][=C][": 115,
+      "C][C][C][": 116,
+      "Branch1][=Branch2][": 117,
+      "Branch1][C][F][": 118,
+      "Cl][": 119,
+      "C][=C][C][": 120,
+      "Branch2][Ring2][": 121,
+      "N][C][=C][C][=C][": 122,
+      "O][C][C][": 123,
+      "Branch1][Ring1][": 124,
+      "C]": 125,
+      "P][": 126,
+      "O][C][=C][C][=C][": 127,
+      "2]": 128,
+      "Ring1][#Branch2][": 129,
+      "Ring2][Ring1][=": 130,
+      "N][=": 131,
+      "O]": 132,
+      "C][C][C][C][": 133,
+      "Branch1][C][C][C][": 134,
+      "Branch1][C][O][": 135,
+      "C][=C][Ring1][": 136,
+      "Branch1][C][=Branch1][C][=O][": 137,
+      "NH1][": 138,
+      "Branch2]": 139,
+      "C][Branch1][C][F][": 140,
+      "Ring1][#Branch1][": 141,
+      "[O][=C][": 142,
+      "C][=C][Ring2][Ring1][": 143,
+      "Ring1][=Branch2][": 144,
+      "S][=Branch1][C][=O][": 145,
+      "O][C][=Branch1][C][=O][": 146,
+      "Branch1][#Branch2][": 147,
+      "S][=Branch1][C][=O][=Branch1][C][=O][": 148,
+      "Ring2][Ring2][": 149,
+      "Branch1][C][Cl][": 150,
+      "N][C][=C][": 151,
+      "N][Ring1][": 152,
+      "C][=C][Ring1][#Branch1][": 153,
+      "N][C][=N][": 154,
+      "Ring2][Ring1][#": 155,
+      "Branch1][Ring2][": 156,
+      "N]": 157,
+      "N][C][C][C][": 158,
+      "Branch1][=C][": 159,
+      "C][Branch1][C][F][Branch1][C][F][": 160,
+      "C][=Branch1][C][=O][N][": 161,
+      "C][=C][C][=C][C][": 162,
+      "Branch2][Ring1][=": 163,
+      "[C][O][C][=C][C][=C][": 164,
+      "Ring1][Branch2][": 165,
+      "Branch1][=N][": 166,
+      "Branch1][S][": 167,
+      "Branch1][C][C][C][C][": 168,
+      "O][C][=C][": 169,
+      "/C][=C][": 170,
+      "N][C][C][N][": 171,
+      "Branch1][Branch2][": 172,
+      "C][Branch1][C][F][Branch1][C][F][F][": 173,
+      "Branch1][Ring1][C][": 174,
+      "+1][": 175,
+      "C@][": 176,
+      "C][Branch1][C][Cl][": 177,
+      "C][C][=C][C][=C][": 178,
+      "=N][": 179,
+      "C][C][=C][": 180,
+      "Ring1][Branch1][": 181,
+      "N+1][": 182,
+      "Branch1][P][": 183,
+      "C][=N][C][": 184,
+      "Branch1][O][": 185,
+      "Branch2][Ring1][Ring1][": 186,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][": 187,
+      "C][Branch1][C][Cl][=C][": 188,
+      "S][C][": 189,
+      "C@@][": 190,
+      "Branch2][Ring1][Ring2][": 191,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][": 192,
+      "O-": 193,
+      "N][Branch1][C][C][": 194,
+      "N][C][=Branch1][C][=O][C][": 195,
+      "Ring1][=Branch1][C][": 196,
+      "C][=Branch1][Ring2][": 197,
+      "[C][O][": 198,
+      "Branch1][C][C][Branch1][C][C][": 199,
+      "Branch1][N][C][=C][C][=C][": 200,
+      "Ring1][=Branch1][=C][": 201,
+      "O-1][": 202,
+      "O][=": 203,
+      "Branch2][Ring1][#": 204,
+      "N][=N][": 205,
+      "Branch1][C][O][C][": 206,
+      "C][=Branch1][Ring2][=C][": 207,
+      "O][C@@H1][": 208,
+      "O][C@H1][": 209,
+      "N][C][C][C][C][": 210,
+      "Ring1][S][": 211,
+      "[C][C][=C][C][=C][": 212,
+      "Ring1][P][": 213,
+      "C][C][=Branch1][C][=O][": 214,
+      "Br][": 215,
+      "C][N][": 216,
+      "Branch1][=Branch1][": 217,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][": 218,
+      "C][Branch1][C][F][=C][": 219,
+      "Cl]": 220,
+      "N][C][C][=C][C][=C][": 221,
+      "Branch2][Ring1][Branch2][": 222,
+      "C][=C][Ring1][#Branch2][": 223,
+      "N][N][=C][": 224,
+      "Branch1][#Branch2][C][": 225,
+      "Branch2][Ring2][=": 226,
+      "/C][=C][/": 227,
+      "S]": 228,
+      "Ring1][=Branch1]": 229,
+      ".[": 230,
+      "Ring1]": 231,
+      "Branch2][Ring2][#": 232,
+      "C][=N][C][=C][": 233,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1]": 234,
+      "Branch2][Ring1][=Branch2][": 235,
+      "N][C][=Branch1][C][=O][C][=C][C][=C][": 236,
+      "Ring1][=C][": 237,
+      "Ring2][Ring1][Ring2][": 238,
+      "Ring1][Ring1][": 239,
+      "P]": 240,
+      "[C][C][Branch1][C][C][": 241,
+      "C][=C][Ring1][Branch2][": 242,
+      "Branch2][Ring1][#Branch2][": 243,
+      "Branch1][N][": 244,
+      "Branch1][=Branch1][C][": 245,
+      "Ring2]": 246,
+      "N+1][=Branch1][C][=O][": 247,
+      "C][=C][Ring2][Ring1][=": 248,
+      "Branch1][=Branch1][C][=Branch1][C][=O][": 249,
+      "S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C][": 250,
+      "C][=C][N][=C][": 251,
+      "N][C][C][O][C][C][": 252,
+      "Ring2][Ring1][Ring1][": 253,
+      "Branch1][Ring1][C][#": 254,
+      "F]": 255,
+      "O][Ring1][": 256,
+      "Ring1][=N][": 257,
+      "Branch1][C][N][": 258,
+      "N+1][=Branch1][C][=O][O-1][": 259,
+      "Branch1][C][O][C@H1][": 260,
+      "Branch1][C][Cl][C][=C][Ring1][#Branch1][": 261,
+      "C][C@H1][": 262,
+      "[C][C][=C][": 263,
+      "[N][": 264,
+      "C][Branch1][C][O][=C][": 265,
+      "C][=C][Ring1][=Branch2][": 266,
+      "Ring1][O][": 267,
+      "Branch1][#C][": 268,
+      "Branch2][Ring1][=Branch1][": 269,
+      "Branch1][Ring1][O][": 270,
+      "NH1][C][": 271,
+      "=C][C][": 272,
+      "Ring1][=Branch1][C][C][": 273,
+      "Ring2][Ring1][#Branch1]": 274,
+      "C][C][C][N][": 275,
+      "N][=C][C][": 276,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Branch1][C][=O][": 277,
+      "Branch1][C][F][C][=C][Ring1][#Branch1][": 278,
+      "Branch1][C][C][=Branch1][C][=O][": 279,
+      "C][C][N][": 280,
+      "Branch1][C][=N][": 281,
+      "C][C@@H1][": 282,
+      "Branch1][C][C][Branch1][C][C][C][": 283,
+      "Branch1][C][Cl][C][=C][Ring1][#": 284,
+      "C][=Branch1][Ring2][=C][Ring1][=Branch1][": 285,
+      "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][": 286,
+      "=C][Ring2][Ring1][": 287,
+      "N][C][C][C][C][C][": 288,
+      "Branch1][=C][C][": 289,
+      "[C][O][C][=C][C][": 290,
+      "C][=Branch1][C][=O][N][C][=C][C][=C][": 291,
+      "/C][=": 292,
+      "Ring2][Ring1][#Branch2][": 293,
+      "Ring1][Branch1][C][": 294,
+      "C][=N][N][": 295,
+      "Branch1][Ring1][O][C][": 296,
+      "Branch1][C][Br][": 297,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][C][": 298,
+      "Ring2][Ring1][#Branch1][": 299,
+      "N][C@@H1][": 300,
+      "Ring2][Ring1][#Branch2]": 301,
+      "Branch1][C][F][C][=C][Ring1][#": 302,
+      "O][C]": 303,
+      "C][=C][Ring1][=Branch1][": 304,
+      "C][C][C][C][C][C][": 305,
+      "Ring2][Ring1][=Branch1][": 306,
+      "Branch2][Ring1][P][": 307,
+      "Ring1][#C][": 308,
+      "C][C][C@H1][": 309,
+      "[C][O][C][=Branch1][C][=O][": 310,
+      "Branch2][Ring2][Ring1][": 311,
+      "Branch2][Ring1][C][": 312,
+      "Branch2][=": 313,
+      "C][=Branch1][C][=O][C][": 314,
+      "Branch2][Ring1][#Branch1][": 315,
+      "Branch2][Ring2][Ring2][": 316,
+      "[C][C][C][": 317,
+      "C][=N][N][=C][": 318,
+      "[C][N][": 319,
+      "Ring1][#Branch1]": 320,
+      "[O][=": 321,
+      "Ring1][N][": 322,
+      "[C][C][O][C][=Branch1][C][=O][": 323,
+      "Ring2][Ring1][=Branch1]": 324,
+      "Ring1][Branch1][=C][": 325,
+      "N][C][=N][C][": 326,
+      "Branch2][Ring1][Branch1][": 327,
+      "C][=Branch1][C][=O][N][C][": 328,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][": 329,
+      "C][=C][N][": 330,
+      "Ring1][#Branch1][C][": 331,
+      "N][C][=N][C][=C][": 332,
+      "Branch1][C][O][C@@H1][": 333,
+      "Branch2][Ring1][S][": 334,
+      "Ring2][Ring1][=Branch2]": 335,
+      "C][Branch1][C][C][=": 336,
+      "Branch1][C][N][=": 337,
+      "C][Branch1][C][C][=C][": 338,
+      "C][=C][C][=C][N][=C][": 339,
+      "Branch1][O][C][": 340,
+      "C][=C][C][=N][": 341,
+      "C][C][C][C][C][": 342,
+      "Ring2][Ring2][=": 343,
+      "O][C][=C][C][=C][C][=C][Ring1][=Branch1][": 344,
+      "O][C][C][C][": 345,
+      "[C][C][=Branch1][C][=O][": 346,
+      "Ring2][Ring1][=Branch2][": 347,
+      "Ring1][Branch1]": 348,
+      "/N][=C][": 349,
+      "Ring1][#Branch2]": 350,
+      "Branch1][C][C][C@H1][": 351,
+      "[N][#": 352,
+      "[C][=C][": 353,
+      "Ring2][Ring1][Branch2][": 354,
+      "C][=C][Ring1][S][": 355,
+      "Ring1][=N]": 356,
+      "=O]": 357,
+      "Ring1][#C]": 358,
+      "Ring2][Ring1][C][": 359,
+      "Ring2][Ring1][C]": 360,
+      "Branch1][=Branch2][C][": 361,
+      ".[Cl]": 362,
+      "N][C@H1][": 363,
+      "N][C][=Branch1][C][=O][C@H1][": 364,
+      "[O][=C][Branch1][C][O][": 365,
+      "N][C][=C][C][=C][C][": 366,
+      "Ring1][=Branch1][=N][": 367,
+      "Branch1][Ring1][O][C][=C][": 368,
+      "C][=C][Ring1][P][": 369,
+      "Ring1][=Branch1][C][=Branch1][C][=O][": 370,
+      "[C][C][=C][C][": 371,
+      "Ring1][=Branch1][=": 372,
+      "Ring2][Ring1][#C]": 373,
+      "Ring2][Ring1][Branch1]": 374,
+      "Ring2][Ring1][Ring1]": 375,
+      "Ring1][=C]": 376,
+      "Branch1][C][F][Branch1][C][F][": 377,
+      "Ring2][Ring1][Ring2]": 378,
+      "C][=C][Ring1][O][": 379,
+      "C][C][C@@H1][": 380,
+      "=O][": 381,
+      "Branch1][Ring2][C][": 382,
+      "Ring2][Ring1][Branch2]": 383,
+      "Branch2][Ring1][O][": 384,
+      "Ring1][=Branch2]": 385,
+      "C][=Branch1][C][=O][N][C][C][": 386,
+      "Branch1][C][C][C@@H1][": 387,
+      "C][=N][C][=C][C][=C][": 388,
+      "Branch2][Ring2][Branch2][": 389,
+      "Ring1][#Branch1][=C][": 390,
+      "Ring2][Ring1][=N]": 391,
+      "C][=C][Branch1][C][C][": 392,
+      "Branch1][O][C][C][": 393,
+      "N][Branch1][C][C][C][": 394,
+      "P][=Branch1][C][=O][": 395,
+      "[C][C][C][C][": 396,
+      "C][=C][NH1][": 397,
+      "N][C][=Branch1][C][=O][C@@H1][": 398,
+      "Ring2][Ring2][#": 399,
+      "Branch1][Ring1][O][C][C][": 400,
+      "C][=Branch1][C][=": 401,
+      "C][=Branch1][C][=O][O][C][": 402,
+      "O][C][O][": 403,
+      "Branch1][C][O][C][C][": 404,
+      "[C][C][N][": 405,
+      "N][C][=C][N][=C][": 406,
+      "Ring2][Ring1][=C]": 407,
+      "Branch2][Ring2][=Branch2][": 408,
+      "/C][=C][\\": 409,
+      "C][=Branch1][C][=O][C][=C][C][=C][": 410,
+      "Ring1][=Branch2][C][": 411,
+      "N][Ring1][Branch1][": 412,
+      "Branch1][#Branch1][": 413,
+      "N][C][=Branch1][C][=O][N][": 414,
+      "Branch1][#Branch2][C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 415,
+      "Ring2][Ring1][O]": 416,
+      "S][Branch1][C][C][=Branch1][C][=O][": 417,
+      "Branch2][Ring2][#Branch2][": 418,
+      "C][=Ring1][": 419,
+      "Branch1][=N][C][=C][C][=C][": 420,
+      "Ring2][Ring1][Branch1][": 421,
+      "Ring1][Ring2][": 422,
+      "Branch2][Ring1][N][": 423,
+      "S][Ring1][": 424,
+      "[C][O][C][=C][C][=C][C][": 425,
+      "C][Branch1][C][Br][": 426,
+      "C][=Branch1][C][=S][": 427,
+      "O][C][=C][C][": 428,
+      "Ring2][Ring1][N]": 429,
+      "N][C][=Branch1][C][=O][C][=C][": 430,
+      "Branch1][=N][C][": 431,
+      "Branch1][C][O-1][": 432,
+      "Branch1][#C][C][": 433,
+      "O][C][C@H1][": 434,
+      "C][=C][C][=C][Ring1][#Branch1][": 435,
+      "[C][C@@H1][": 436,
+      "N][C][=Branch1][C][=O][C][C][": 437,
+      "Branch2][Ring1][=N][": 438,
+      "Branch1][=N][C][C][=C][C][=C][": 439,
+      "[C][C][Branch1][C][C][C][": 440,
+      "[C][C@H1][": 441,
+      "C][=C][Ring2][Ring1][Ring1][": 442,
+      "C][Branch1][C][F][Branch1][C][F][F]": 443,
+      "Branch1][=Branch1][C][Branch1][C][N][=": 444,
+      "C][=Branch1][C][=O][N][C@@H1][": 445,
+      "Branch1][C][C][N][": 446,
+      "Branch2][Ring1][=C][": 447,
+      "N][C][C][O][C][C][Ring1][=Branch1][": 448,
+      "C][=C][Ring2][Ring2][": 449,
+      "[C][C][Branch1][C][C][Branch1][C][C][": 450,
+      "C][=C][Ring1][N][": 451,
+      "Branch1][C][O][C][=C][C][=C][": 452,
+      "Ring1][P]": 453,
+      "Branch1][=Branch1][C][C][C][": 454,
+      "N][C][C@H1][": 455,
+      "Branch2][Ring1][#C][": 456,
+      "[C][O][C][=C][": 457,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=": 458,
+      "O][C][C][=C][C][=C][": 459,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][N][": 460,
+      "[C][C][C][C][C][C][": 461,
+      "C][=Branch1][C][=O][N][C][C][C][": 462,
+      "Branch1][#Branch1][O][": 463,
+      "[C][N][Branch1][C][C][": 464,
+      "Ring1][S]": 465,
+      "/C][=C][/C][=C][C][=C][": 466,
+      "N][C][C@@H1][": 467,
+      "S][C][=C][": 468,
+      "C][=C][Ring1][#C][": 469,
+      "C][Branch1][C][Br][=C][": 470,
+      "Ring1][=Branch1][=C][Ring1][#Branch2][": 471,
+      "/C][": 472,
+      "Branch1][Ring1][C][#N][=C][": 473,
+      "Branch1][C][C][C]": 474,
+      "Branch1][=Branch1][C][=Branch1][C][=O][O][": 475,
+      "C][Branch1][C][N][=": 476,
+      "C][=C][Ring2][Ring1][Ring2][": 477,
+      "N][C][C][=C][": 478,
+      "C][=Branch1][C][=O][O][": 479,
+      "C][=C][Ring1][=C][": 480,
+      "Ring1][N]": 481,
+      "C][=C][Ring2][Ring1][C][": 482,
+      "Branch1][=N][C][=Branch1][C][=O][": 483,
+      "Branch1][Ring1][C][O][": 484,
+      "Ring1][Branch2]": 485,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][C][=C][Ring1][#Branch2][": 486,
+      ".[O][=C][Branch1][C][O][": 487,
+      "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][=C][": 488,
+      "Branch1][C][F][Branch1][C][F][F][": 489,
+      "O][C][C@@H1][": 490,
+      "Branch1][Ring1][C][C][": 491,
+      "N][C][C][C][C][C][C][": 492,
+      "Branch2][Ring2][C][": 493,
+      "Branch1][Branch2][C][=C][C][=C][": 494,
+      "Branch1][Ring1][C][#N][": 495,
+      "N][=C][Ring1][=Branch1][": 496,
+      "C][=Branch1][C][=O][C][=C][": 497,
+      "Ring2][Ring1][S]": 498,
+      "Branch1][C][C][C][C][C][": 499,
+      "C][=C][C][=C][C][=N][": 500,
+      "C][=O]": 501,
+      "[C][C][=C][C][=C][C][": 502,
+      "N][C][=C][C][=C][C][=C][Ring1][=Branch1][": 503,
+      "C][=C][C][=C][Ring1][=Branch1][": 504,
+      "Ring1][Branch2][C][": 505,
+      "C][=Branch1][C][=O][O]": 506,
+      "Branch1][#C][C][=C][C][=C][": 507,
+      "C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][": 508,
+      "Branch1][Branch1][C][C][": 509,
+      "C][Branch1][C][N][=C][": 510,
+      "[C][O][C][C][": 511,
+      "Ring1][#Branch2][C][": 512,
+      "O][=C][C][": 513,
+      "Branch1][#Branch2][O][": 514,
+      "Ring1][=C][C][": 515,
+      "O][C][=C][C][=C][C][": 516,
+      "Ring1][#Branch1][C][C][": 517,
+      "Branch1][C][O][C][=C][Ring1][#Branch1][": 518,
+      "Ring1][=N][=C][": 519,
+      "Branch1][C][N][N][=C][": 520,
+      "Branch1][#Branch1][C][=Branch1][C][=O][": 521,
+      "N][C][C][C][N][": 522,
+      "[C][C][=N][": 523,
+      "S][C][=N][": 524,
+      "Branch2][Ring1][Ring1][C][=C][C][=C][": 525,
+      "S][C][=": 526,
+      "C][C][C@][": 527,
+      "Branch1][=Branch1][C][=Branch1][C][=O][O][=C][": 528,
+      "Branch1][C][F][C][": 529,
+      "Branch2][Ring2][Branch1][": 530,
+      "C][=C][C][Branch1][C][Cl][=C][": 531,
+      "Branch1][#Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][": 532,
+      "Branch1][Ring2][C][C][": 533,
+      "C][=C][Ring1][=N][": 534,
+      "N][Ring1][P][": 535,
+      "S][C][=C][C][=C][": 536,
+      "/C][=C][C][=C][": 537,
+      "Ring1][=Branch2][=C][": 538,
+      "C][=Branch1][C][=O][N][C@H1][": 539,
+      "Ring2][Ring1][P]": 540,
+      "Branch1][#Branch1][O][C][Branch1][C][C][=": 541,
+      "Branch1][C][N][C][": 542,
+      "Ring2][Ring2][C]": 543,
+      "Branch1][=O]": 544,
+      "N][Ring1][Branch2][": 545,
+      "N][Ring1][Branch1][C][": 546,
+      "N][C][=C][C][": 547,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][=C][": 548,
+      "P][=Branch1][C][=O][Branch1][C][O][": 549,
+      "Branch1][C][Cl][C][Branch1][C][Cl][=C][": 550,
+      "[C][=C][C][": 551,
+      "C][Branch1][C][Cl][=C][Ring1][#Branch1][": 552,
+      "Branch2][Ring2][=Branch1][": 553,
+      "C][=C][Ring1][#Branch1][C][": 554,
+      "O][C][C][C][C][": 555,
+      "C@@][Branch1][C][C][": 556,
+      "C][=C][Ring2][Ring1][Branch2]": 557,
+      "N][C][=Branch1][C][=O][O][C][": 558,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][": 559,
+      "[F][": 560,
+      "O][C][=": 561,
+      "Ring1][=Branch2][=": 562,
+      "Branch2][Ring1][C][C][": 563,
+      "C][=C][C][=N][C][=C][Ring1][=": 564,
+      "O][C][=Branch1][C][=O][C][": 565,
+      "C][C][C][C][C][C][C][": 566,
+      "Ring1][#Branch2][=C][": 567,
+      "Ring2][Ring1][P][": 568,
+      "Branch2][Ring1][=Branch1][C][": 569,
+      "Ring1][Branch2][=C][": 570,
+      "N][Ring1][S][": 571,
+      "N][C][=Branch1][C][=O][C][=C][C][": 572,
+      "Ring1][=N][C][": 573,
+      "-1]": 574,
+      "Branch1][Ring1][O][C][C][=C][Ring1][Branch2][": 575,
+      "Branch1][#Branch1][C][C][=Branch1][C][=O][": 576,
+      "N][C][=N][C][=N][": 577,
+      "Branch1][C][Cl][C][": 578,
+      "N][C][=C][C][=N][": 579,
+      "C][=C][Ring2][Ring1][Branch2][": 580,
+      "Ring1][O]": 581,
+      "N][S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C][": 582,
+      "/C][=N][": 583,
+      "C@][Branch1][C][C][": 584,
+      "Ring1][#C][C][": 585,
+      "C][Branch1][C][C][=N][": 586,
+      "Branch1][C][Cl][=C][": 587,
+      "Branch2][Ring1][#Branch1][C][": 588,
+      "O][Ring1][Branch1][": 589,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=": 590,
+      "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][C][=C][Ring1][=Branch2][": 591,
+      "C][=N][NH1][": 592,
+      "S][Ring1][Branch1][": 593,
+      "Branch2][Ring2][#Branch1][": 594,
+      "Branch1][C][Cl][C][=C][Ring1][#Branch1]": 595,
+      "C][=C][C][Branch1][Ring1][O][C][=C][": 596,
+      "C][=C][Ring2][Ring1][Branch1]": 597,
+      "Ring2][Ring2][Ring1]": 598,
+      "Branch2][Branch1][": 599,
+      "Branch2][Ring2][P][": 600,
+      "Ring1][#Branch1][=": 601,
+      "Branch1][N][C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#Branch1][": 602,
+      ".[O][=C][Branch1][C][O][C][Branch1][C][F][Branch1][C][F][F]": 603,
+      "Ring1][N][=C][": 604,
+      "Branch1][Ring1][O][C][C][Branch1][Ring1][O][": 605,
+      "F][=C][": 606,
+      "N][C][=N][N][=C][": 607,
+      "Branch2][Ring1][=Branch1][C][=Branch1][C][=O][": 608,
+      "Ring1][O][=": 609,
+      "N][C][=Branch1][C][=O][N][C][=C][C][=C][": 610,
+      "Branch1][C][C][C][N][": 611,
+      "=O][=C][": 612,
+      "Branch1][=Branch1][C][C][C][Ring1][Ring1][": 613,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][=C][": 614,
+      "Branch1][S][S][=Branch1][C][=O][=Branch1][C][=O][": 615,
+      "Branch1][C][F][=C][": 616,
+      "Branch1][C][C][Branch1][C][C][C][C][": 617,
+      "Branch1][S][C][": 618,
+      "C][=Branch1][C][=N][": 619,
+      "C][=C][Branch1][C][O][": 620,
+      "C][Branch1][C][N][=N][": 621,
+      "N][=C][N][=C][": 622,
+      "Branch2][Ring2][=C][": 623,
+      "N][C][C][C][C][Ring1][": 624,
+      "Ring2][Ring1][#C][": 625,
+      "N][S][=Branch1][C][=O][=Branch1][C][=O][": 626,
+      "Ring1][=N][=": 627,
+      "C][=C][Ring1][#Branch1]": 628,
+      "N][C][=Branch1][C][=O][N][C][": 629,
+      "C][=C][Ring2][Ring1][O]": 630,
+      "O][C][=N][": 631,
+      "Ring1][=Branch1][C][=": 632,
+      "C][=C][C][=C][C][Ring1][=Branch1][=C][Ring1][#Branch2][": 633,
+      "Branch1][N][C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#Branch1][": 634,
+      "NH1][C][=C][": 635,
+      "N+1][Branch1][C][O-1][": 636,
+      "Branch2][Ring1][Branch1][C][": 637,
+      "Ring1][N][=": 638,
+      "Branch2][Ring1][Ring2][C][": 639,
+      "C][=C][C][=C][N][=C][Ring1][=Branch1][": 640,
+      "Ring2][Ring1][S][": 641,
+      "C][=C][NH1][C][=C][C][=C][C][=C][Ring1][=": 642,
+      "N][Branch1][C][C][C][=": 643,
+      "[C][C][O][C][=C][C][=C][": 644,
+      "[O][=S][=Branch1][C][=O][": 645,
+      "O][N][=": 646,
+      "O][N][=C][": 647,
+      "NH1][C][=C][C][": 648,
+      "Branch1][C][C][C][=C][C][=C][": 649,
+      "C][=C][C][Branch1][C][F][=C][": 650,
+      "C][=C][Ring2][Ring1][Ring1]": 651,
+      "N][=C][Branch1][C][N][": 652,
+      "Branch2][Ring1][C][C][=Branch1][C][=O][": 653,
+      "C][Branch1][C][O][": 654,
+      "C][=C][Ring2][Ring1][Ring2]": 655,
+      "Branch1][=Branch2][N][C][C][O][C][C][": 656,
+      "Branch1][#C][C][=Branch1][C][=O][": 657,
+      "C][=C][C][=N][C][": 658,
+      "O][C][C][O][": 659,
+      "Branch1][#Branch2][C][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Branch1][C][=O][": 660,
+      "C][=C][Ring2][Ring1][N]": 661,
+      "Ring1][#Branch1][=N][": 662,
+      "Branch1][Ring1][C][O][C@@H1][": 663,
+      "Ring1][#Branch2][C][C][": 664,
+      "C][=C][Ring2][Ring1][C]": 665,
+      "Branch1][C][Br][C][=C][Ring1][#Branch1][": 666,
+      "Branch1][C][C][C][=C][Ring1][#Branch1][": 667,
+      "C][=Branch1][Ring2][=C][Ring1][=Branch1][C][": 668,
+      "Branch1][C][F][C][Branch1][C][F][=C][": 669,
+      "S][C][C][": 670,
+      "N][C][C][N][Branch1][C][C][C][C][": 671,
+      "Ring2][Ring2][Ring2]": 672,
+      "Branch1][C][N][=Branch1][C][=O][": 673,
+      "Ring2][Ring1][=C][": 674,
+      "Branch1][N][C][": 675,
+      "C][C][C][C][N][": 676,
+      "O][C][C][=C][": 677,
+      "N][=C][N][": 678,
+      "Branch1][S][C][=C][C][=C][": 679,
+      "/C][=N][/": 680,
+      "Ring1][=Branch1][C][=C][C][=C][": 681,
+      "C][=C][C][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][": 682,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][C][": 683,
+      "Ring1][#Branch1][C][=Branch1][C][=O][": 684,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][S][": 685,
+      "[C][C][C][C][C][": 686,
+      "[Cl]": 687,
+      "Branch1][#Branch2][O][C][Branch1][C][F][Branch1][C][F][F][": 688,
+      "Ring1][O][=C][": 689,
+      "Branch1][N][C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#": 690,
+      "=N][C][": 691,
+      "Branch1][Branch2][C][C][": 692,
+      "NH1][C][=C][C][=C][": 693,
+      "Branch1][C][\\": 694,
+      "N][=C][Ring1][#Branch1][": 695,
+      "[C][=C][C][=C][": 696,
+      "Branch1][Branch2][C][": 697,
+      "F][C][": 698,
+      "[C][O][C][=C][C][=C][C][=C][Ring1][=Branch1][": 699,
+      "NH1][N][=": 700,
+      "Ring1][=Branch2][C][C][": 701,
+      "Branch1][C][F][C][=C][Ring1][#Branch1]": 702,
+      "Branch2][Ring1][Ring1][C][": 703,
+      "Branch1][C][C][C][=C][": 704,
+      "Branch1][C][C][=": 705,
+      "O][C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 706,
+      "Branch2][Ring1][Branch1][C][=Branch1][C][=O][": 707,
+      "Ring2][Ring1][=N][": 708,
+      "S][Branch1][C][N][=Branch1][C][=O][": 709,
+      "Branch1][N][C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#": 710,
+      "[C][C][C][=C][": 711,
+      "C][Branch1][C][F][=C][C][": 712,
+      "C][C][C][C][C][C][C][C][": 713,
+      "C@@H1][O][C@H1][": 714,
+      "[C][N][C][=C][": 715,
+      "[C][N][C][C][N][": 716,
+      "Branch1][=N][C][=C][": 717,
+      "C][Branch1][C][Cl][=C][C][": 718,
+      "Ring2][Ring1][O][": 719,
+      "+1]": 720,
+      "Branch1][C][C][O][": 721,
+      "O][C][C][N][": 722,
+      "Branch1][#Branch1][C][C][C][C][": 723,
+      "[C][S][=Branch1][C][=O][=Branch1][C][=O][": 724,
+      "N][C][C][C][C][Ring1][Branch1][": 725,
+      "Branch1][#Branch1][C][C][Branch1][C][C][C][": 726,
+      "C][C][C][=C][": 727,
+      "Branch2][Ring2][S][": 728,
+      "O-1]": 729,
+      "Ring1][Branch1][C][=Branch1][C][=O][": 730,
+      "I][": 731,
+      "C][=Branch1][": 732,
+      "C][=Branch1][C][=O][N][C][C][N][": 733,
+      "N][C][=Branch1][C][=O][C][C][C][": 734,
+      "Branch1][C][F][C][=C][C][=C][Ring1][#Branch1][": 735,
+      "Branch1][C][O][=C][": 736,
+      "Branch1][=Branch2][S][Branch1][C][C][=Branch1][C][=O][": 737,
+      "N][C][=Branch1][C][=O][C][=C][C][=C][C][=C][Ring1][=Branch1][": 738,
+      "Branch1][=Branch1][C][Branch1][C][C][C][": 739,
+      "\\C][=C][C][=C][": 740,
+      "C][=C][Branch1][C][Cl][": 741,
+      "N][C][C][N][C][C][": 742,
+      "[Cl][": 743,
+      "C][Branch1][C][Cl][=C][C][=C][Ring1][#Branch1][": 744,
+      "N][Ring1][Branch1][C][=Branch1][C][=O][": 745,
+      "N][C][=N][C][=C][C][": 746,
+      "Branch1][C][O][C@H1][Branch1][C][O][C@H1][": 747,
+      "Branch2][Ring2][O][": 748,
+      "C][=C][Ring2][Ring1][=Branch1]": 749,
+      "Branch2][Ring1][#Branch1][C][=Branch1][C][=O][": 750,
+      "Ring2][Ring1][Ring1][=": 751,
+      "Branch1][P][C][": 752,
+      "C][=C][Ring2][Ring1][=Branch2]": 753,
+      "Ring1][N][C][": 754,
+      "Branch1][=N][N][C][=C][C][=C][": 755,
+      "Branch1][=Branch2][C][=C][C][=C][C][=N][": 756,
+      "C][=C][Ring2][Ring1][Branch1][": 757,
+      "C@H1][Branch1][C][O][C][": 758,
+      "Ring1][Branch1][C][C][": 759,
+      "N][C][C][C][C][C][Ring1][=Branch1][": 760,
+      "Branch1][Ring1][C][#N][C][=C][Ring1][Branch2][": 761,
+      "Branch1][#Branch2][N][": 762,
+      "Ring2][Ring1][C][C][": 763,
+      "N][C][C][C][C@H1][": 764,
+      "Ring2][Ring1][N][": 765,
+      "N][C][=Branch1][C][=O][C][=C][C][=C][C][": 766,
+      "S][C][=N][N][=C][": 767,
+      "Br]": 768,
+      "C][=N][C][=N][C][": 769,
+      "Ring2][Ring2][Ring2][": 770,
+      "Branch1][C][C][C][=Branch1][C][=O][": 771,
+      "Branch1][C][C][=C][": 772,
+      "[N][#C][": 773,
+      "Ring2][Ring2][Branch1]": 774,
+      "Ring2][Ring2][=Branch1]": 775,
+      "C][=C][Ring1][#Branch2][Ring1][=": 776,
+      "Branch1][#Branch2][C][C][=C][C][=C][C][=C][Ring1][=Branch1][C][": 777,
+      "Branch1][C][Cl][C][=C][Ring1][#Branch1][Cl][": 778,
+      "C][=Branch1][=": 779,
+      "[C][C][C@H1][": 780,
+      "C][Branch1][C][F][=C][Ring1][#Branch1][": 781,
+      "Branch1][C][Cl][C][Branch1][C][Cl][=C][Ring1][Branch2][": 782,
+      "Branch2][Ring1][O][C][": 783,
+      "#C][C][": 784,
+      "C][=Branch1][C][=O][C][C][": 785,
+      "C][=Branch1][Ring2][=C][Ring1][=Branch1][O][C][O][": 786,
+      "Ring1][Ring1]": 787,
+      "C][=Ring1][Branch1][": 788,
+      "Branch1][Branch2][C][C][=C][": 789,
+      ".[N": 790,
+      "[O][=C][Branch1][C][O][C][": 791,
+      "a+1]": 792,
+      "C][=N][C][=C][C][": 793,
+      ".[Na+1]": 794,
+      "Branch2][Ring1][Branch2][C][": 795,
+      "C][=C][Ring2][Ring1][#Branch2]": 796,
+      "N][Ring1][=": 797,
+      "C@@H1][Branch1][C][O][C][": 798,
+      "C@H1][Branch1][C][O][C@@H1][": 799,
+      "S][=Branch1][C][=O][=Branch1][C][=O][C][": 800,
+      "Branch2][Ring2][=N][": 801,
+      "Branch1][=Branch2][C][Branch1][C][C][Branch1][C][C][": 802,
+      "C][=C][Ring1][P]": 803,
+      "N][=C][Ring1][": 804,
+      "O][=N][": 805,
+      "Branch2][Branch1][Ring2][": 806,
+      "N][/N][=C][": 807,
+      "Branch1][=Branch1][C][Branch1][C][C][=": 808,
+      "N][C][=Branch1][C][=S][": 809,
+      "C][C][=C][N][=C][": 810,
+      "[N][#C][C][=C][C][=C][": 811,
+      "F][C][C][": 812,
+      "NH1][N][=C][": 813,
+      "Branch2][Ring1][N][C][": 814,
+      "C][=C][Ring1][=Branch1][C][": 815,
+      "C][=C][Ring2][Ring1][#Branch1]": 816,
+      "N][=N][Ring1][": 817,
+      "Branch1][#Branch2][O][C][=C][C][=C][C][=C][Ring1][=Branch1][": 818,
+      "[C][C][=N][C][": 819,
+      "Branch1][C][O][C][Branch1][C][O][=C][": 820,
+      "O][Ring1][Branch1]": 821,
+      "C@@H1][C][": 822,
+      "Branch2][#": 823,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][Ring1][#Branch2][": 824,
+      "Branch1][Ring1][O][C][=C][Ring1][Branch2][": 825,
+      "C][=C][Ring1][#Branch2]": 826,
+      "Branch2][Branch1][Ring1][": 827,
+      "Branch1][=Branch2][S][Branch1][C][N][=Branch1][C][=O][": 828,
+      "Branch2][Ring1][Ring2][C][=C][C][=C][": 829,
+      "Ring1][S][=C][": 830,
+      "Branch2][Ring1][=Branch2][C][": 831,
+      "C][=C][Ring2][Ring1][#Branch1][": 832,
+      "Branch1][#Branch2][C][C][=C][C][=C][C][=C][Ring1][=Branch1][C][C][": 833,
+      "N][Branch1][C][C][C][=Branch1][C][=O][": 834,
+      "[C][C][C][N][": 835,
+      "C][=C][Ring2][Ring1][=N]": 836,
+      "C][=C][Ring2][Ring1][=Branch2][": 837,
+      "Branch1][=Branch2][N][C][C][O][C][C][Ring1][=Branch1][": 838,
+      "N][C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 839,
+      "Branch1][=Branch2][C][C][C][C][C][C][": 840,
+      "[C][C][O][C][=Branch1][C][=O][C][": 841,
+      "Branch1][C][=N][C][": 842,
+      "O][O][": 843,
+      "N+1][=C][": 844,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][=N][": 845,
+      "C][=N][Ring1][=Branch1][": 846,
+      "C][=C][Ring2][Ring1][=Branch1][": 847,
+      "N][Ring1][#Branch2][": 848,
+      "Cl][=C][": 849,
+      "Branch1][Branch1][": 850,
+      "O][C][C][C][C][C][": 851,
+      "N][C][C][O][C][C][Ring1][=Branch1]": 852,
+      "C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#Branch1][": 853,
+      "N][C][C][C][=C][": 854,
+      "C@@][Branch1][C][C][C][C][": 855,
+      "Branch2][Ring1][#Branch2][C][": 856,
+      "C][=Branch1][Ring2][=N][": 857,
+      "Ring1][Ring1][=C][": 858,
+      "C][=Branch1][C][=O][N][C][=C][C][=C][C][": 859,
+      "C][=C][C][=N][C][=C][Ring1][=Branch1][": 860,
+      "C][=N][N][Branch1][C][C][C][=": 861,
+      "[C][N][C][": 862,
+      "C@H1][C][": 863,
+      "C][=C][Ring1][#Branch1][C][=Branch1][C][=O][": 864,
+      "C][=C][Ring2][Ring1][O][": 865,
+      "O][C][=Branch1][C][=O][C][=C][C][=C][": 866,
+      "Branch1][=Branch2][C][Branch1][C][C][Branch1][C][C][C][": 867,
+      "[C][C][N][Branch1][Ring1][": 868,
+      "C][=C][Ring2][Ring1][#Branch2][": 869,
+      "O][C][=Branch1][C][=O][N][": 870,
+      "[O][=N+1][Branch1][C][O-1][": 871,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][=N][": 872,
+      "Branch2][Ring1][=C][C][": 873,
+      "Ring1][O][C][": 874,
+      "N][=C][Ring1][#Branch2][": 875,
+      "Branch1][Branch2][C][C][C][C][C][": 876,
+      "Branch2][Ring1][#C][C][": 877,
+      "C][=C][Ring2][Ring1][S]": 878,
+      "C][=C][Ring1][S]": 879,
+      "Ring1][Ring1][C][": 880,
+      "C][=C][Ring2][Ring1][N][": 881,
+      "Branch2][Ring2][N][": 882,
+      "Branch1][#Branch1][N][": 883,
+      "Ring2][Ring1][Ring1][=C][": 884,
+      "[O][=C][C][": 885,
+      "Ring2][Ring2][#Branch1]": 886,
+      "Ring1][#C][C][C][": 887,
+      "C][=Branch1][C][=O][N][C][C][=C][C][=C][": 888,
+      "C][=C][Ring2][Ring1][=C]": 889,
+      "[C][C][Branch1][C][C][C][C][": 890,
+      "N][C][=Branch1][C][=O][C][C][=C][": 891,
+      "Branch2][=O]": 892,
+      "C][=C][Ring1][=Branch2]": 893,
+      "Branch1][C][Cl][C][=C][Ring1][#Branch1][C][": 894,
+      "C][=Branch1][C][=O][N][C][=C][C][=C][C][=C][Ring1][=Branch1][": 895,
+      "Ring1][=C][=": 896,
+      "C][=Branch1][C][=O][NH1][C][": 897,
+      "[O][=C][Branch1][C][O][C][C][": 898,
+      "Branch1][#Branch2][C][C][": 899,
+      "Branch2][Ring1][S][C][": 900,
+      "Ring2][Branch1][": 901,
+      "O][C@][": 902,
+      "O][C][Branch1][C][C][Branch1][C][C][": 903,
+      "Ring2][Ring1][Branch1][=C][": 904,
+      "O][P][=Branch1][C][=O][Branch1][C][O][": 905,
+      "C][=N][C][=C][C][=C][C][=C][Ring1][=Branch1][": 906,
+      "Branch1][#Branch1][C][C][": 907,
+      "/C][=Branch1][": 908,
+      "Ring1][=N][C][C][": 909,
+      "C][=C][C][=C][C][Ring1][=Branch1][=N][": 910,
+      "[C][C][N][Branch1][Ring1][C][C][": 911,
+      "Branch2][Ring2][#C][": 912,
+      "[C][C][C][=C][C][=C][": 913,
+      "Branch1][S][C][C][=C][C][=C][": 914,
+      "[O][=C][Branch1][C][O][C][=C][C][=C][": 915,
+      "Cl][C][C][": 916,
+      "C][=Branch1][Ring2][=C][Ring1][=Branch1][C][C][": 917,
+      "C][Branch1][C][C][=C][Ring1][#Branch1][": 918,
+      "=O][C][=C][Ring1][#Branch2][": 919,
+      "O][C][Branch1][C][C][=": 920,
+      "[N][C][=N][": 921,
+      "C][=Branch1][C][=O][N][Branch1][C][C][": 922,
+      "Branch1][=Branch1][N][Branch1][C][C][C][": 923,
+      "C][C][C][C@@H1][": 924,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=C][Ring1][": 925,
+      "N][Ring2][Ring1][": 926,
+      "Branch1][C][C][C][C@H1][": 927,
+      "Branch1][Branch1][C][": 928,
+      "C][Branch1][C][O][C][": 929,
+      "N][C][C][C][=C][C][=C][": 930,
+      "C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][O][C][O][": 931,
+      "S][Ring1][Branch1]": 932,
+      "Branch1][Ring2][C][Ring1][=Branch1][C][": 933,
+      "Branch1][Ring1][C][#N][C][": 934,
+      "Branch1][P][C][=C][C][=C][": 935,
+      "C][Branch1][C][C][=C][C][": 936,
+      "Branch2][Ring1][=N][C][": 937,
+      "Branch1][=Branch2][C][=C][C][=N][C][=C][Ring1][=": 938,
+      "C][=Branch1][C][=O][N][C][=C][C][": 939,
+      "C@H1][C][C][C@H1][": 940,
+      "O][C][C][O][C][C][": 941,
+      "Ring1][=Branch1][=N][C][": 942,
+      "/C][Branch1][C][C][=C][": 943,
+      "Ring1][Branch1][=N][": 944,
+      "[C][O][C][": 945,
+      "Branch1][C][F][F][": 946,
+      "Cl][C][": 947,
+      "Ring1][=Branch2][=N][": 948,
+      "C][=N+1][": 949,
+      "C][=Branch1][C][=O][NH1][": 950,
+      "/C][=C][/C][=C][": 951,
+      "Ring2][Ring2][Ring1][": 952,
+      "C][=C][C][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][Ring1][#Branch2][": 953,
+      "Ring1][Branch2][C][C][": 954,
+      "[C][N][Branch1][C][C][C][C][": 955,
+      "[O][=C][C][=C][": 956,
+      "[C][O][C][=C][C][=C][Branch2][": 957,
+      "N][C][C][C@H1][": 958,
+      "Branch1][=Branch1][C][=Branch1][C][=O][O][C][=C][Ring1][=Branch2][": 959,
+      "Branch1][#Branch1][C][": 960,
+      "Branch1][C][F][C][=C][Ring1][#Branch1][C][": 961,
+      "[Cl].[": 962,
+      "Ring2][Ring1][=Branch1][=C][": 963,
+      "Ring1][=Branch1][=C][C][": 964,
+      "[C][C][O][": 965,
+      "Ring1][Branch1][=": 966,
+      "Ring2][Ring1][=Branch1][C][": 967,
+      "C][=C][Ring1][#C]": 968,
+      "[C][C][=N][C][=C][": 969,
+      "[C][C][C][C][N][": 970,
+      "N][C][=N][C][=C][C][=C][": 971,
+      "C][=Branch1][C][=O][O][C][C][": 972,
+      "#C][": 973,
+      "#C][C][=C][C][=C][": 974,
+      "Branch1][=Branch2][C][C][C][": 975,
+      "N][C][C][C@@H1][": 976,
+      "N][C][C][C][Branch1][Branch1][C][C][": 977,
+      "Ring1][S][C][": 978,
+      "C@H1][Branch1][C][C][": 979,
+      "Branch2][Ring2][C][C][": 980,
+      "[O][=C][Branch1][O][": 981,
+      "C][=N][O][C][": 982,
+      "C][=C][N][=C][C][": 983,
+      "C@@H1][Branch1][C][O][C@H1][": 984,
+      "Ring1][#C][C][=C][": 985,
+      "N][C][C][C][C@@H1][": 986,
+      "Ring2][Ring1][Ring1][C][": 987,
+      "S][=Branch1][C][=O][=Branch1][C][=O][N][C][=C][C][=C][": 988,
+      "C][Branch1][C][C][=C][Ring1][Branch2][": 989,
+      "[C][C][C][C][C][C][C][C][": 990,
+      "S+1][": 991,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=N][": 992,
+      "#N]": 993,
+      "Ring2][Ring1][#Branch1][C][": 994,
+      "S][=Branch1][C][=O][=Branch1][C][=O][N][": 995,
+      "[O][=C][Branch1][#Branch2][": 996,
+      "C][=C][Branch1][C][F][": 997,
+      "C][=C][Ring2][Ring1][#C]": 998,
+      "Ring2][Ring2][C][": 999,
+      "C][=C][C][Branch1][C][Cl][=C][C][=C][Ring1][#Branch1][": 1000,
+      "C][Branch1][C][O][=C][C][": 1001,
+      "C][=C][C][=C][C][=C][": 1002,
+      "O][C@@][": 1003,
+      "Ring1][#C][=": 1004,
+      "Ring1][#Branch2][=": 1005,
+      "C][=C][Ring2][Ring1][P]": 1006,
+      "Branch1][Ring1][C][=": 1007,
+      "N][=C][Branch1][C][": 1008,
+      "Ring1][=Branch1][N][": 1009,
+      "C][C][C@@][": 1010,
+      "/C][=C][Branch1][C][\\": 1011,
+      "C@@H1][Branch1][C][C][": 1012,
+      "Br-1]": 1013,
+      "N][C][C][O][C][C][Ring1][=Branch1][=C][": 1014,
+      "[C][S][": 1015,
+      "[C][C@][": 1016,
+      "N][C][=Branch1][C][=O][C][=C][N][=C][": 1017,
+      "C][=C][Ring1][=C]": 1018,
+      "Ring1][=N][C][=C][": 1019,
+      "C][=Branch1][C][=O][N][Branch1][C][C][C][": 1020,
+      "C][=Branch1][C][=O][C][=": 1021,
+      "C][=N][C][=N][": 1022,
+      "C][Branch1][C][F][=C][C][=C][Ring1][#Branch1][": 1023,
+      "C][=Branch1][=Branch1][=C][": 1024,
+      "N][C][C][C][Ring1][Ring1][": 1025,
+      "Ring1][=Branch1][C][C][C][": 1026,
+      "C][=C][C][=C][C][=C][Ring1][#Branch2][Ring1][=": 1027,
+      ".[Br-1]": 1028,
+      "Ring1][Branch1][=C][Ring1][=Branch2][": 1029,
+      "[C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1030,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][C][": 1031,
+      "C][=Branch1][C][=O][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1032,
+      "Ring1][O][C][C][": 1033,
+      "C][=C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1034,
+      "N+1][=Branch1][C][=O][O-1]": 1035,
+      "N][=N][N][": 1036,
+      "N][C][=Branch1][C][=O][N][C@@H1][": 1037,
+      "C][=N][C][=C][C][=C][Ring1][=Branch1][": 1038,
+      "C][=C][S][C][": 1039,
+      "Ring1][=C][C][=C][": 1040,
+      "NH1][C][=": 1041,
+      "Ring1][Branch2][=N][": 1042,
+      "Branch1][C][C][Branch1][C][C][C@@H1][": 1043,
+      "C][=C][C][Branch1][Ring1][O][C][=C][Branch1][Ring1][O][C][C][Branch1][Ring1][O][": 1044,
+      "Ring1][P][C][": 1045,
+      "Branch1][C][=N][N][": 1046,
+      "Ring1][#Branch2][=N][": 1047,
+      "Ring1][=C][C][C][": 1048,
+      "C][=Branch1][C][=O][N][C][C][C][C][": 1049,
+      "Branch1][C][C][Branch1][C][C][C]": 1050,
+      "Branch1][=Branch2][N][C][C][C][C][C][": 1051,
+      "N][Branch1][C][C][C][C][": 1052,
+      "Branch2][Branch1][C][": 1053,
+      "Branch1][Ring2][C][Ring1][=Branch1][C][Ring1][=Branch2][C][": 1054,
+      "Branch1][C][Cl][C][=C][C][=C][Ring1][#Branch1][": 1055,
+      "N][=O]": 1056,
+      "Branch1][C][O][C][=C][": 1057,
+      "Ring1][P][=C][": 1058,
+      "C][=Branch1][C][=O][N][C][=C][": 1059,
+      "Branch1][=Branch1][C][=": 1060,
+      "Ring1][#Branch1][C][=C][C][=C][": 1061,
+      "N][Ring1][=Branch2][": 1062,
+      "Branch1][=Branch1][C][Branch1][C][N][=O][=C][": 1063,
+      "C][=C][C][=C][C][=C][Ring1][#Branch2][": 1064,
+      "Ring2][Ring1][Ring2][C][": 1065,
+      "[O][=C][Branch2][Ring1][": 1066,
+      "Branch1][O][C][C][Branch1][Ring2][C][Ring1][=Branch1][C][Ring1][=Branch2][C][": 1067,
+      "C][C][C][N][Ring1][Branch1][C][=Branch1][C][=O][": 1068,
+      "Branch1][N][N][C][C][": 1069,
+      "Branch1][O][C][=Branch1][C][=O][": 1070,
+      "Branch1][C][F][Branch1][C][F][F]": 1071,
+      "Branch1][#C][C][C][=C][NH1][C][=C][C][=C][C][=C][Ring1][=": 1072,
+      "Branch1][C][O][C@H1][Branch1][C][O][C@H1][Ring1][#Branch2][": 1073,
+      "N][Ring1][O][": 1074,
+      "[N][C][": 1075,
+      "Branch1][Ring1][C][O][C][": 1076,
+      "C][=C][C][=C][C][Ring1][=Branch1][=C][": 1077,
+      "Ring2][Ring2][Branch2]": 1078,
+      "-1][": 1079,
+      "Ring2][Ring1][Branch1][C][": 1080,
+      "[C][O][C][=Branch1][C][=O][C][": 1081,
+      "#N][": 1082,
+      "S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1083,
+      "[F][C][=C][C][=C][": 1084,
+      "C][=C][Ring1][Branch2]": 1085,
+      "Ring2][Ring2][=Branch2]": 1086,
+      "Ring2][Ring1][C][=": 1087,
+      "N+1][=": 1088,
+      "Ring1][Branch1][C][=C][C][=C][": 1089,
+      "Branch1][=C][N][C][=Branch1][C][=O][": 1090,
+      "Ring1][#Branch1][N][": 1091,
+      "S][=Branch1][C][=O][=Branch1][C][=O][C][C][": 1092,
+      "Branch2][Branch1][=Branch2][": 1093,
+      "[C][N][C][=Branch1][C][=O][": 1094,
+      "[C][C][Branch1][C][C][Branch1][C][C][O][C][=Branch1][C][=O][": 1095,
+      "C][C][C][Ring1][Ring1][": 1096,
+      "Branch2][Ring1][C][C][=C][C][=C][": 1097,
+      "Ring1][N][C][C][": 1098,
+      "C@@H1][C][C@H1][": 1099,
+      "Branch1][C][N][N][=C][N][=C][Ring1][#Branch1][": 1100,
+      "Branch1][#Branch1][C][=C][Ring1][=Branch1][": 1101,
+      "C][Branch1][C][Cl][=C][C][Branch1][C][Cl][=C][": 1102,
+      "C][=C][C][Branch1][Ring1][O][": 1103,
+      "Branch1][=C][C][C][": 1104,
+      "C][=C][Ring2][Ring1][=N][": 1105,
+      "Branch1][#Branch1][N][C][Branch1][C][C][=": 1106,
+      "Branch2][Ring1][O][C][=Branch1][C][=O][": 1107,
+      "[C][/C][=": 1108,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][O][": 1109,
+      "C][=C][Ring1][#Branch2][C][": 1110,
+      "Branch1][C][C][C][=N][": 1111,
+      "Ring1][#Branch1][C][=": 1112,
+      "[N][#C][C][=C][": 1113,
+      "C][=C][C][=C][C][Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][=C][": 1114,
+      "N][Ring1][N][": 1115,
+      "Branch2][Branch1][Branch2][": 1116,
+      "C][=C][Ring1][=N]": 1117,
+      "N][=N][C][": 1118,
+      "Ring2][Ring1][O][=": 1119,
+      "O][C][C][C][C][C][C][": 1120,
+      "Branch1][=Branch2][C][=C][C][=C][N][=C][": 1121,
+      "Branch1][=Branch1][C][=Branch1][C][=O][O][C][": 1122,
+      "[C][C][=N][N][": 1123,
+      "Branch1][C][C][Branch1][C][C][C][C][C][": 1124,
+      "Branch2][Ring1][Ring1][C][=C][C][=C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][C][=C][Ring1][#Branch2][": 1125,
+      "Branch2][Ring1][=Branch1][C][=C][C][=C][": 1126,
+      "Branch1][#C][C][=C][": 1127,
+      "[C][O][C][=C][C][=C][Branch2][Ring2][": 1128,
+      "/N][=C][\\": 1129,
+      "Branch1][C][Cl][C][=N][": 1130,
+      "[Cl][C][=C][C][=C][": 1131,
+      "O][C][Branch1][C][": 1132,
+      "F][=N][": 1133,
+      "C][Branch1][C][F][=C][C][Branch1][C][F][=C][": 1134,
+      "Branch1][#Branch2][C][C][C][C][C][C][C][": 1135,
+      "N][Ring1][Branch1][C][C][": 1136,
+      "Branch1][N][C][C][": 1137,
+      "Ring1][=N][C][=C][C][=C][": 1138,
+      "N][C][=Branch1][C][=O][/C][=": 1139,
+      "C][C][C][C@H1][": 1140,
+      "/C][=C][/C][": 1141,
+      "Branch1][=Branch1][C][Branch1][C][N][=O][": 1142,
+      "Branch1][#Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][Cl][": 1143,
+      "C][=C][C][Branch1][C][O][=C][": 1144,
+      "=N][\\": 1145,
+      "Branch1][C][F][C][Branch1][C][Cl][=C][": 1146,
+      "[O][C][=C][C][=C][": 1147,
+      "N][C][=N][N][": 1148,
+      "Branch1][O][O][C][": 1149,
+      "Branch1][C][C][C][C][N][": 1150,
+      "Branch2][Ring1][Ring1][S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C][": 1151,
+      "Branch2][Ring1][P][C][": 1152,
+      "C][=Branch1][Ring2][=C][Ring1][=Branch1][C][=Branch1][C][=O][": 1153,
+      "S][C][=N][C][": 1154,
+      "C@@H1][Branch1][C][C][C][": 1155,
+      "C][C][C][=C][C][=C][": 1156,
+      "Branch1][C][=N][N][=C][": 1157,
+      "O][C][=Branch1][C][=O][C@H1][": 1158,
+      "C][=Branch1][C][=N][N][": 1159,
+      "O][C][=C][N][=C][": 1160,
+      "[N][C][=C][C][=C][": 1161,
+      "[C][C][=Branch1][C][=O][N][C][=C][C][=C][": 1162,
+      "Branch1][C][I][": 1163,
+      "Branch1][C][N][C][=Branch1][C][=O][": 1164,
+      "Branch2][Ring1][Branch1][O][": 1165,
+      "Branch2][Ring2][Ring2][C][": 1166,
+      "C@@][Branch1][C][O][": 1167,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=C][C][=C][": 1168,
+      "Branch1][N][C][=Branch1][C][=O][": 1169,
+      "Branch2][Ring1][C][C][=C][": 1170,
+      "Ring1][Branch2][=": 1171,
+      "O][C][=Branch1][C][=O][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1172,
+      "C][=Branch1][C][=O][C@H1][": 1173,
+      "C][=C][Ring1][#Branch1][C][C][": 1174,
+      "C][=Ring1][Branch1][C][=Branch1][C][=O][": 1175,
+      "[C][N][N][=C][": 1176,
+      "[C][C][Branch1][C][C][C][C@H1][": 1177,
+      "N][Ring1][S]": 1178,
+      "Branch1][N][N][C][C][N][Branch1][C][C][C][C][": 1179,
+      "[O][=C][Branch2][Ring1][Ring2][": 1180,
+      "C][Branch1][C][N][=N][C][": 1181,
+      "Branch1][Ring1][O][C][=C][C][=C][": 1182,
+      "Branch2][Ring1][#Branch1][C][=C][C][=C][": 1183,
+      "Ring1][=C][=N][": 1184,
+      "Branch1][O][O][C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1185,
+      "C][=C][Ring2][Ring1][=C][": 1186,
+      "N][=C][Ring2][Ring1][": 1187,
+      "O][Ring1][Branch1][C][": 1188,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Branch1][C][=O][N][": 1189,
+      "NH1][C][=N][": 1190,
+      "Branch1][C][F][C][=C][Ring1][#Branch1][C][C][": 1191,
+      "[O][=C][Branch1][=C][": 1192,
+      "C][=Branch1][Branch1][=C][": 1193,
+      "C][=N][N][=N][": 1194,
+      "C][=C][Branch1][C][C][N][": 1195,
+      "C][=Ring1][Branch1][C][": 1196,
+      "C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#Branch1][": 1197,
+      "Branch1][C][C][C][C@@H1][": 1198,
+      "C][=C][Ring2][Ring1][S][": 1199,
+      "[C][C][Branch1][C][C][C@H1][": 1200,
+      "C][=Branch1][C][=O][C@@H1][": 1201,
+      "Branch1][#Branch2][C][C][=C][C][=C][": 1202,
+      "O][C][=Branch1][C][=O][C][C][": 1203,
+      "O][=N][C][": 1204,
+      "N][Ring1][P]": 1205,
+      "C][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][C][": 1206,
+      "[C][O][C][=Branch1][C][=O][C][=C][C][=C][": 1207,
+      "Branch2][Ring1][Branch1][C][=C][C][=C][": 1208,
+      "Branch2][Ring1][=Branch1][C][C][": 1209,
+      "Branch2][Branch1][=Branch1][": 1210,
+      "Branch1][=N][O][C][=C][C][=C][": 1211,
+      "[C][C][N][=C][": 1212,
+      "Branch1][P][C][C][=C][C][=C][": 1213,
+      "C][=C][Ring1][Branch1][": 1214,
+      "Branch1][C][C][C][C][C@@H1][": 1215,
+      "C][=N][C][=C][C][Branch1][C][Cl][=C][": 1216,
+      "Branch2][Ring2][Ring1][C][": 1217,
+      "C][=C][Ring1][=Branch1][N][=C][": 1218,
+      "C@H1][C][C@@H1][": 1219,
+      "C][=C][Ring1][O]": 1220,
+      "S][=Branch1][C][=O][=Branch1][C][=O][N][C][C][": 1221,
+      "S][Branch1][C][C][=Branch1][C][=O][=O][": 1222,
+      "Branch1][O][C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1223,
+      "NH1][Ring1][=Branch2][": 1224,
+      "C@@H1][O][C@H1][Branch1][Ring1][C][O][C@@H1][": 1225,
+      "C][=Branch1][C][=O][N][C][C][C][C][C][": 1226,
+      "[N][=C][Branch1][C][N][": 1227,
+      "S][=Branch1][C][=O][=Branch1][C][=O][N][C][": 1228,
+      "C][=Branch1][C][=O][N][C][C][C][C][C][C][": 1229,
+      "Branch2][Ring1][=C][C][=Branch1][C][=O][": 1230,
+      "Branch1][C][C][C@][": 1231,
+      "[O][C][": 1232,
+      "N][C][=C][N][=C][Ring1][Branch1][": 1233,
+      "O][C][C@H1][O][C@@H1][": 1234,
+      "\\C][": 1235,
+      "O][C][=C][C][=C][C][=C][Ring1][=Branch1][C][": 1236,
+      "Ring1][P][=C][Ring2][Ring1][": 1237,
+      "Ring1][S][=": 1238,
+      "C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#Branch1]": 1239,
+      "Branch1][=Branch2][C][C][=C][C][=C][": 1240,
+      "Ring2][Ring1][Branch1][=": 1241,
+      "Branch2][Ring1][#C][C][=Branch1][C][=O][": 1242,
+      "NH1][C][=C][C][=C][C][=C][Ring1][=": 1243,
+      "S][Ring1][Branch1][=C][": 1244,
+      "Branch1][Branch1][C][C][C][": 1245,
+      "Ring1][#C][C][=C][C][=C][": 1246,
+      "C][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][": 1247,
+      "C][=Branch1][C][=O][O][=C][": 1248,
+      "C][=C][C][=C][Branch1][C][O][": 1249,
+      "[F][C][Branch1][C][F][Branch1][C][F][": 1250,
+      "NH1][N][=C][C][": 1251,
+      "Branch2][Ring2][Branch1][C][": 1252,
+      "O][N][": 1253,
+      "Branch1][=Branch1][C][=C][Ring1][=Branch1][": 1254,
+      "S][=Branch1][C][=O][=Branch1][C][=O][N][C][C][C][": 1255,
+      "Branch2][Branch1][#Branch2][": 1256,
+      "N][C][C][C][C][Ring1][Branch1]": 1257,
+      "Ring1][=N][=N][": 1258,
+      "Ring1][P][=": 1259,
+      "/N][=C][/C][=C][C][=C][": 1260,
+      "S][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1261,
+      "Branch1][N][C][=C][C][=C][C][Branch1][C][Cl][=C][": 1262,
+      "Branch2][Ring2][=Branch1][C][": 1263,
+      "Branch1][O][C][C][=N][N][Branch1][C][C][C][=": 1264,
+      "[C][C][=C][C][Branch1][C][C][=C][": 1265,
+      "Ring2][Ring1][Ring2][=C][": 1266,
+      "Branch1][=Branch1][C][=Branch1][C][=O][O][C][C][": 1267,
+      "Branch2][Ring1][Ring2][C][C][=C][C][=C][": 1268,
+      "Branch1][=Branch2][C][=C][C][=C][N][=C][Ring1][=Branch1][": 1269,
+      "C][=C][Ring1][N]": 1270,
+      "C][=C][Ring2][Ring1][P][": 1271,
+      "Branch1][O][O][C][C][": 1272,
+      "/C][=Branch1][=": 1273,
+      "Branch1][#Branch1][C][C][C][C][Ring1][Ring1][": 1274,
+      "O][C][C][C][N][": 1275,
+      "O][Ring1][Branch2][": 1276,
+      "[C][N][C][C][C][": 1277,
+      "Branch1][=Branch1][N][Branch1][C][C][": 1278,
+      "Cl-1]": 1279,
+      "O][C][=C][Ring1][#Branch2][": 1280,
+      "Branch2][Ring1][=Branch1]": 1281,
+      "/C][=Branch1][Ring1][=N][": 1282,
+      "C][=N][C][=C][C][=N][": 1283,
+      "[C][C][C][C][C][C][C][C][C][C][": 1284,
+      "Branch1][Ring1][O][C][C][Branch1][Ring1][O][C][=C][Ring1][#Branch2][": 1285,
+      "Ring2][Ring1][C][C][=C][": 1286,
+      "Branch1][=N][C][=C][C][=C][Branch1][Ring1][O][C][C][=C][Ring1][Branch2][": 1287,
+      "Branch1][=Branch2][N][C][C][N][C][C][": 1288,
+      "[O][=C][Branch1][P][": 1289,
+      "Ring2][Ring1][=Branch1][=": 1290,
+      "Branch1][=Branch1][C][Branch1][C][C][C][C][": 1291,
+      "NH1][C][=C][C][Ring1][=Branch2][=": 1292,
+      "C][Branch1][C][Cl][=C][Ring1][#Branch1]": 1293,
+      "/C][=C][\\C][": 1294,
+      "O][C@H1][Branch1][Ring1][C][O][C@@H1][": 1295,
+      "N][C][=Branch1][C][=O][C][C][C][C][": 1296,
+      "C@@H1][C][C][C@H1][": 1297,
+      ".[Cl].[Cl]": 1298,
+      "Ring1][=Branch1][N][=C][": 1299,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Ring1][=Branch2][": 1300,
+      "[C][N][C][C][": 1301,
+      "Branch2][Branch1][Branch1][": 1302,
+      ".[Cl-1]": 1303,
+      "Branch1][S][N][C][=C][C][=C][": 1304,
+      "C][=C][Ring1][N][C][": 1305,
+      "Branch1][=Branch2][N][C][C][O][C][C][Ring1][=Branch1][=C][": 1306,
+      "N][Branch1][C][C][C]": 1307,
+      "Branch1][Ring1][C][C][C][": 1308,
+      "Ring2][Ring2][#Branch2]": 1309,
+      "Ring1][=Branch1][C][=N][": 1310,
+      "O][C][C][=C][C][=C][C][=C][Ring1][=Branch1]": 1311,
+      "/N][=C][/": 1312,
+      "N][=N][NH1][N][=": 1313,
+      "C][=Branch1][C][=O][O][C@H1][": 1314,
+      "[C][C@@H1][C][N][": 1315,
+      "Cl][=N][": 1316,
+      "S][Ring1][Branch1][C][": 1317,
+      "N][C][=Branch1][C][=O][N][C][C][": 1318,
+      "C@H1][Branch1][C][O][C@H1][": 1319,
+      "Branch1][=Branch1][C][Branch1][C][N][=O][C][": 1320,
+      "Ring1][#C][=N][": 1321,
+      "C@H1][Ring1][#Branch2][": 1322,
+      "N][=C][C][=C][C][": 1323,
+      ".[I": 1324,
+      "C][Branch1][C][Br][=C][C][=C][Ring1][#Branch1][": 1325,
+      "[N][C][=N][C][": 1326,
+      "Branch1][C][Br][C][=C][Ring1][#Branch1]": 1327,
+      "N][=C][Ring1][=Branch1][C][": 1328,
+      "Branch1][N][C][C][C][": 1329,
+      "O][C][=N][C][": 1330,
+      "S][C][C][=C][C][=C][": 1331,
+      "[N][#C][C][": 1332,
+      "Branch1][Branch2][C][=C][C][=C][O][Ring1][Branch1][": 1333,
+      "Branch1][C][Cl][C][=C][Ring1][#Branch1][C][C][": 1334,
+      "C][Branch1][C][C][=N][C][": 1335,
+      "Branch1][S][C][C][": 1336,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][Branch1][C][F][Branch1][C][F][F][": 1337,
+      "Branch1][=Branch1][C][C][C][Ring1][": 1338,
+      "S][C][=Ring1][Branch1][": 1339,
+      "S+1][Branch1][C][O-1][": 1340,
+      "Branch1][=Branch2][S][Branch1][C][N][=Branch1][C][=O][=O][C][=C][Ring1][#Branch2][": 1341,
+      "Branch1][#Branch1][C][=Branch1][C][=O][N][": 1342,
+      "Branch1][=Branch2][S][=Branch1][C][=O][=Branch1][C][=O][": 1343,
+      "C][=C][C][=": 1344,
+      "[C][N][Branch1][C][C][C][=C][C][=C][": 1345,
+      "Branch1][Ring1][C][O][C@H1][": 1346,
+      "[C][C][N][C][": 1347,
+      "Ring1][Ring2][C][": 1348,
+      "Ring2][Ring1][=Branch2][=C][": 1349,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][N][": 1350,
+      "Branch1][S][C][=Branch1][C][=O][C][=C][C][=C][": 1351,
+      "O][Ring1][Branch1][=C][": 1352,
+      ".[O][=C][": 1353,
+      "[O][=C][C][C][": 1354,
+      "Ring1][=C][C][=C][C][=C][": 1355,
+      "Branch1][=Branch1][C][Branch1][C][F][F][": 1356,
+      "Ring2][Ring1][C][C][C][": 1357,
+      "N][=C][Ring1][O][": 1358,
+      "[N][C][=N][C][=C][": 1359,
+      "C][Branch1][C][S][": 1360,
+      "N][C][=Branch1][C][=O][C][C][=C][C][=C][": 1361,
+      "B][": 1362,
+      "[C][C][=C][N][=C][": 1363,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][O][C][": 1364,
+      "O][C][=Branch1][C][=O][O]": 1365,
+      "[C][C][C@@H1][": 1366,
+      "N][C][C][N][Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][C][": 1367,
+      "N][C][C][C][C][C][Ring1][=Branch1]": 1368,
+      "Branch1][C][F][C][Branch1][C][F][=C][Ring1][Branch2][": 1369,
+      "Branch1][N][C][=C][C][=C][Branch1][C][O][C][=C][Ring1][#Branch1][": 1370,
+      "N][=C][Ring1][S][": 1371,
+      "=C][\\": 1372,
+      "C][=C][S][": 1373,
+      "NH1][Ring1][Branch1][": 1374,
+      "=O][C][C][": 1375,
+      "C][=C][Ring1][=Branch1][C][=Branch1][C][=O][": 1376,
+      "C][=C][C][=C][Branch2][Ring1][Branch2][": 1377,
+      "=C][Ring2][Ring1][O]": 1378,
+      "C@@H1][C][C][": 1379,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][N][Ring1][=Branch2][": 1380,
+      "C][C][=C][N][": 1381,
+      "N][C][C][C][C][C][C][C][": 1382,
+      "[C][C][=Branch1][C][=O][N][C][": 1383,
+      "C][Branch1][C][O][=C][Ring1][#Branch1][": 1384,
+      "[C][N][C][=Branch1][C][=O][C][": 1385,
+      "/C][Branch1][C][C][=C][/": 1386,
+      ".[I-1]": 1387,
+      "C@@H1][C@@H1][": 1388,
+      "O][C][C][Ring1][=Branch1][C][": 1389,
+      "Branch1][S][C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][O][C][O][": 1390,
+      "O][P][=Branch1][C][=O][": 1391,
+      "Branch1][C][O][C][Branch1][C][O][=C][Ring1][Branch2][": 1392,
+      "N][C][C][C][C][Ring1][Branch1][=C][": 1393,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][C][Branch1][C][F][Branch1][C][F][F][": 1394,
+      "C@H1][C][C@H1][": 1395,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=N][": 1396,
+      "=C][Ring2][Ring1][Branch2]": 1397,
+      "C][=C][C][=C][Branch1][=C][": 1398,
+      "/C][=C][/C][=C][C][=C][C][=C][Ring1][=Branch1][": 1399,
+      "[C][O][C][=C][C][=C][Branch1][#Branch1][C][=C][Ring1][=Branch1][": 1400,
+      "Branch2][Ring2][#Branch1][C][": 1401,
+      "Branch1][N][O][C][C][": 1402,
+      "N][=C][Ring1][Branch2][": 1403,
+      "C][=C][C][=C][C][=C][Ring1][#Branch2][Ring1][=Branch1][": 1404,
+      "Ring1][P][=N][": 1405,
+      "[N][S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C][": 1406,
+      "C][=N][Ring1][=Branch1]": 1407,
+      "[C][O][C][=C][C][=C][C][=C][Ring1][=Branch1][C][": 1408,
+      "C@][Branch1][C][O][": 1409,
+      "[C][C][N][C][=C][": 1410,
+      "O][C][C][Branch1][C][O][C][": 1411,
+      "C][=C][Ring1][=C][C][": 1412,
+      "Ring1][S][=N][": 1413,
+      "N][=C][C][=C][": 1414,
+      "N][C][C][C][C][Ring1][Branch1][C][": 1415,
+      "C][=C][C][Branch1][P][": 1416,
+      "N][C][=N][C][=N][C][": 1417,
+      "Branch1][N][C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#Branch1][=C][": 1418,
+      "[C][C][C][C][C][C][C][": 1419,
+      "Ring2][Ring2][=Branch1][": 1420,
+      "=C][Ring2][Ring1][Ring2]": 1421,
+      "Branch2][Ring1][#Branch1][C][C][": 1422,
+      "Branch2][Ring2][Branch2][C][": 1423,
+      "C@H1][C@H1][": 1424,
+      "[C][C][Branch1][C][C][Branch1][C][C][C][=C][C][=C][": 1425,
+      "Branch1][=C][C][C][=C][C][=C][": 1426,
+      "[C][C][Branch1][C][C][C][=C][C][=C][": 1427,
+      "Ring1][#C][=O]": 1428,
+      "Branch1][C][Cl][C][=C][Ring1][#Branch1][C][=Branch1][C][=O][": 1429,
+      "[C][C][N][Branch1][Ring1][C][C][C][C][": 1430,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1431,
+      "C@@H1][Ring1][=Branch1][": 1432,
+      "Ring2][Ring1][#Branch1][=": 1433,
+      "[N][C][=N][C][=N][": 1434,
+      "Branch2][Ring1][C][N][": 1435,
+      "C][=C][C][Branch1][C][F][=C][C][=C][Ring1][#Branch1][": 1436,
+      "Branch1][Branch2][C][=C][C][=C][S][Ring1][Branch1][": 1437,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][Ring1][=Branch2][": 1438,
+      "Branch1][C][=N][C][=C][": 1439,
+      "C][=Branch1][C][=S][N][": 1440,
+      "N][C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][": 1441,
+      "C@H1][Branch1][C][C][C][": 1442,
+      "N][C][C][=C][C][=C][C][=C][Ring1][=Branch1][C][": 1443,
+      "S][Branch1][C][C][=Branch1][C][=O][=O][=C][": 1444,
+      "Branch1][#C][N][": 1445,
+      "N][C][=Branch1][C][=O][C][C][C][N][": 1446,
+      "C][=Branch1][C][=O][O][C@@H1][": 1447,
+      "C][C@@H1][Ring1][Ring1][": 1448,
+      "[C][C][O][C][=Branch1][C][=O][C][=C][": 1449,
+      "O][Ring1][Branch2]": 1450,
+      "C][=N][C][=C][C][Branch1][C][Cl][=C][C][=C][Ring1][O][": 1451,
+      "C][=C][Ring2][Ring1][#": 1452,
+      "Branch1][Ring1][N][": 1453,
+      "Ring1][S][C][C][": 1454,
+      "C][=C][C][Branch2][Ring1][Ring2][": 1455,
+      "Ring2][Ring2][=Branch2][": 1456,
+      "Ring1][O][=N][": 1457,
+      "Branch1][P][C][=Branch1][C][=O][N][C][=C][C][=C][": 1458,
+      "/C][=Branch2][Ring1][": 1459,
+      "[O][=C][Branch2][Ring1][Ring1][": 1460,
+      "Branch1][C][C][=N][": 1461,
+      "Branch2][Ring1][#Branch2][C][=C][C][=C][": 1462,
+      "Branch1][C][C][C][C][=C][C][=C][": 1463,
+      "C][=C][Ring2][Ring2][C]": 1464,
+      "Ring1][=Branch1][=N][Ring1][": 1465,
+      "[C][C][O][C][=C][C][": 1466,
+      "N][Branch1][=N][C][C][=C][C][=C][": 1467,
+      "Ring2][Ring1][Ring2][=O]": 1468,
+      "O][C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#Branch1][": 1469,
+      "Branch1][O][C]": 1470,
+      "C@][Branch1][C][C][C@H1][": 1471,
+      "C][Branch1][C][N][=O]": 1472,
+      "Branch1][#Branch1][O][C][": 1473,
+      "N][Ring1][Branch1][C][=C][C][=C][": 1474,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=": 1475,
+      "N][C][=Branch1][C][=O][C@H1][Branch1][#Branch2][C][C][=C][C][=C][C][=C][Ring1][=Branch1][": 1476,
+      "N][=C][Ring1][P][": 1477,
+      "C][=C][N][Branch1][C][C][": 1478,
+      "Branch1][=C][C][=N][": 1479,
+      "Branch2][Branch1][#Branch1][": 1480,
+      "Branch2][Ring1][Branch1][C][C][": 1481,
+      "Ring2][Ring2][Branch2][": 1482,
+      "Ring2][Ring1][#Branch1][=O]": 1483,
+      "N][C][=Branch1][C][=O][N][C][=C][": 1484,
+      "C][=Branch1][C][=O][C][=C][C][": 1485,
+      "N][Ring1][Branch1][C][C][C][": 1486,
+      "C][=C][Ring1][=Branch2][C][": 1487,
+      "Branch1][#Branch1][O][C][Branch1][C][F][": 1488,
+      "C][=C][C][=C][C][=C][Ring1][#Branch2][Ring1][=Branch1]": 1489,
+      "Ring2][Ring1][C][=O]": 1490,
+      "[C][C][=N][N][=C][": 1491,
+      "Branch1][O][C][C][C][": 1492,
+      "Ring2][Ring1][Branch1][=O]": 1493,
+      "C@][Ring1][#Branch1][": 1494,
+      "Ring2][Ring1][=Branch2][C][": 1495,
+      "Branch1][C][N][C][C][": 1496,
+      "Ring2][Ring1][Ring1][C][C][": 1497,
+      "C][=Ring1][=Branch2][": 1498,
+      "N][=C][Ring1][N][": 1499,
+      "Ring2][Ring2][Branch1][": 1500,
+      "O][Ring1][Branch1][C][C][": 1501,
+      "C][=C][C][Branch1][Ring1][O][C][=C][Branch1][Ring1][O][C][": 1502,
+      "Branch1][C][F][C][=N][": 1503,
+      "Branch1][Branch2][C][=C][C][=C][S][Ring1][": 1504,
+      "C][=C][Ring1][#C][C][": 1505,
+      "C][=C][C][Branch2][Ring1][Ring1][": 1506,
+      "N-1][": 1507,
+      "Branch2][Ring2][=Branch2][C][": 1508,
+      "Ring1][N][=N][": 1509,
+      "C@H1][C][N][": 1510,
+      "Ring1][=C][=O]": 1511,
+      "N][C][=Branch1][C][=O][C][N][": 1512,
+      "Ring1][=N][=O]": 1513,
+      "Branch1][=N][C][C][": 1514,
+      "Branch1][Ring1][C][O][=C][": 1515,
+      "N][C][=Branch1][C][=O][C][S][": 1516,
+      "N][C][=C][N][=C][C][": 1517,
+      "C][=C][Ring1][O][C][": 1518,
+      "Ring1][=Branch1][C][=C][": 1519,
+      "Branch2][Ring1][=Branch2][C][=C][C][=C][": 1520,
+      "C@@H1][Branch1][C][O][C@@H1][": 1521,
+      "N][C][=Branch1][C][=O][NH1][": 1522,
+      "Branch1][=Branch2][C][=C][N][=C][": 1523,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][C][C][C][": 1524,
+      "O][C][=C][C][=C][C][=C][Ring1][=Branch1]": 1525,
+      "N][C][=Branch1][C][=O][C][=C][C][=C][C][=C][Ring1][=Branch1][C][Ring1][#Branch2][": 1526,
+      "Ring1][O][=O]": 1527,
+      "=C][Ring2][Ring1][N]": 1528,
+      "C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#Branch1]": 1529,
+      "[C][C][=C][C][Branch1][C][C][=C][C][": 1530,
+      "O][C][=N][C][=C][": 1531,
+      "Branch1][=N][Ring1][": 1532,
+      "C@H1][Branch1][C][O][": 1533,
+      "[C][#C][C][": 1534,
+      "Ring2][Ring1][Branch2][=O]": 1535,
+      "Branch1][=N][C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#Branch1][Cl][": 1536,
+      "[C][N][C][=C][C][": 1537,
+      "Branch1][=Branch1][C][C][C][Ring1][Ring1][=C][": 1538,
+      "N][=C][Ring1][Branch1][": 1539,
+      "Branch2][Ring1][Ring2][N][C][=C][C][=C][": 1540,
+      "Branch1][C][O][C@H1][Ring1][Branch2][": 1541,
+      "Ring2][Ring1][#Branch2][C][": 1542,
+      "S][=Branch1][C][=O][=Branch1][C][=O][N][C][C][N][": 1543,
+      "Branch1][N][C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#Branch1][C][": 1544,
+      "Ring2][Ring1][Branch2][C][": 1545,
+      "Branch1][C][F][C][=C][Ring1][#Branch1][F][": 1546,
+      "Branch1][C][Br][C][=C][Ring1][#": 1547,
+      "N][C][C][O][C][C][Ring1][=Branch1][C][": 1548,
+      "[O][=N+1][Branch1][C][O-1][C][=C][C][=C][": 1549,
+      "C][C][C][N][C][": 1550,
+      "Ring2][Ring1][=Branch1][=O]": 1551,
+      "N][C][C][C][C][C][Ring1][=Branch1][=C][": 1552,
+      "C@H1][Ring1][=Branch1][": 1553,
+      "[C][O][C][=C][C][=C][Branch1][Ring1][O][C][C][": 1554,
+      "/C][=C][/C][=Branch1][C][=O][": 1555,
+      "Ring1][P][=O]": 1556,
+      "Ring1][=Branch1][=O][": 1557,
+      "Branch2][Ring2][#Branch2][C][": 1558,
+      "C][=C][C][Branch1][=C][": 1559,
+      "/N][=N][": 1560,
+      "Ring2][Ring1][C][=N][": 1561,
+      "Branch1][C][Cl][C][Branch1][C][Cl][=C][Ring1][Branch2]": 1562,
+      "Branch1][=N][C][=C][C][=C][C][": 1563,
+      "Branch1][#Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][F][": 1564,
+      "C][=Branch1][#": 1565,
+      "C][=Branch1][C][=O][C][C][C][": 1566,
+      "C][Branch1][C][F][=C][Ring1][#Branch1][C][": 1567,
+      "=C][/": 1568,
+      "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][C][=C][Ring1][=Branch2]": 1569,
+      "C][=C][Ring1][=N][C][": 1570,
+      "Branch1][C][C][C][=C][Ring1][#": 1571,
+      "Ring2][Ring1][Branch2][=": 1572,
+      "Branch1][#Branch2][O][C][Branch1][C][F][Branch1][C][F][F][=C][": 1573,
+      "C][=Ring1][O][": 1574,
+      "Branch2][Ring2][=Branch1][C][=Branch1][C][=O][": 1575,
+      "O][Ring1][N]": 1576,
+      "Ring2][Ring2][#Branch1][": 1577,
+      "Branch1][=Branch2][C][Branch1][C][C][Branch1][C][C][C][C][=C][Ring1][#Branch2][": 1578,
+      "Branch1][C][Br][=C][": 1579,
+      "C][C][O][C][": 1580,
+      "Branch1][C][N][=O]": 1581,
+      "Ring2][Ring1][#Branch1][=C][": 1582,
+      "C][C][=Branch1][C][=O][N][C][=C][C][=C][": 1583,
+      "Branch2][Ring2][#Branch1][C][=Branch1][C][=O][": 1584,
+      "Branch1][=Branch1][C][Branch1][C][C][": 1585,
+      "Branch1][P][N][C][=Branch1][C][=O][C][=C][C][=C][": 1586,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][Ring1][#Branch2][": 1587,
+      "Ring2][Ring1][Ring1][=O]": 1588,
+      "Branch1][#C][C][C][": 1589,
+      "[C][S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C][": 1590,
+      "Branch1][N][C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#Branch1][C][": 1591,
+      "C][C][C][C][C][C][C][C][C][": 1592,
+      "Branch1][=C][C][=Branch1][C][=O][O][C][": 1593,
+      "Ring1][#Branch1][C][=N][": 1594,
+      "C][=Branch1][C][=O][O][C][=C][": 1595,
+      "Ring1][N][C][=C][C][=C][": 1596,
+      "/C][=Branch1][#Branch2][": 1597,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][C][": 1598,
+      "S][C][=C][C][": 1599,
+      "Branch1][=Branch2][S][Branch1][C][C][=Branch1][C][=O][=O][C][=C][Ring1][#Branch2][": 1600,
+      "N][N][=C][C][=N][": 1601,
+      ".[O][=C][Branch1][C][O][C][=Branch1][C][=O][O]": 1602,
+      "Ring1][N][=O]": 1603,
+      "S][C][=Ring1][": 1604,
+      "[C][N][C][=N][C][": 1605,
+      "[C][C][Branch1][C][C][=C][": 1606,
+      "C][=N][C][=C][Ring1][=": 1607,
+      "Branch1][C][F][C][=C][C][=C][Ring1][#Branch1][F][": 1608,
+      "Ring1][S][=O]": 1609,
+      "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][=C][C][=C][C][=C][Ring1][=Branch1]": 1610,
+      "N][C][=Branch1][C][=O][N][C][C][C][": 1611,
+      "C][Branch1][C][C][=C][C][=C][Ring1][#Branch1][": 1612,
+      "Branch2][Ring1][P][C][=C][C][=C][": 1613,
+      "Ring2][Ring2][#Branch2][": 1614,
+      "Branch1][#Branch2][O][C][Branch1][C][F][Branch1][C][F][F][C][=C][Ring1][O][": 1615,
+      "[C][C][=Branch1][C][=O][N][": 1616,
+      "[C][C][N][C][C][N][": 1617,
+      "C][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][": 1618,
+      "Branch1][Ring2][N][=": 1619,
+      "Branch1][C][C][Branch1][C][C][O][": 1620,
+      "NH1][C][=Branch1][C][=O][N][": 1621,
+      "C][=C][C][Branch1][S][": 1622,
+      "C][=Branch1][C][=O][O][C][=C][C][=C][": 1623,
+      "C][Branch1][C][O][C][C][": 1624,
+      "[C][N+1][": 1625,
+      "C][=C][Ring2][Ring1][C][C][": 1626,
+      "N][=C][Ring1][=": 1627,
+      "C][=Branch1][C][=O][C][Branch1][=Branch1][C][=Branch1][C][=O][O][=C][": 1628,
+      "C][Branch1][C][I][": 1629,
+      "C][=C][C][=C][C][Ring1][=Branch1][=C][Ring1][#Branch2]": 1630,
+      "Branch1][#Branch1][O][C][Branch1][C][C][=O][C@H1][": 1631,
+      "Ring1][#Branch1][=C][C][": 1632,
+      "O][C][=Branch1][C][=O][C@@H1][": 1633,
+      "S][Branch1][C][C][=Branch1][C][=O][=O]": 1634,
+      "Ring1][N][C][=C][": 1635,
+      "/N][=C][Branch1][C][\\": 1636,
+      "C][Branch1][C][F][=C][Ring1][#Branch1]": 1637,
+      "Branch1][N][C][=Branch1][C][=O][C][=C][C][=C][": 1638,
+      "N][C][C][O][C][": 1639,
+      "N][C][C][Branch1][C][O][C][": 1640,
+      "[C][O][C][=Branch1][C][=O][C][=C][": 1641,
+      "Branch1][=C][C][=C][C][=C][": 1642,
+      "[C][C][=N][O][C][Branch1][C][": 1643,
+      "NH1][C][=N][C][": 1644,
+      "Branch1][=N][C][=C][C][=C][Branch1][Ring1][C][#N][C][=C][Ring1][Branch2][": 1645,
+      "Branch1][=C][N][C][=C][C][=C][": 1646,
+      "O][C][Branch1][C][C][=O]": 1647,
+      "O][C][=Branch1][C][=O][N][C@@H1][": 1648,
+      "[C][C][O][C][": 1649,
+      "N][C][=Branch1][C][=O][C][O][C][=C][C][=C][": 1650,
+      "C][C][C][=Branch1][C][=O][N][": 1651,
+      "C][=N][Ring1][=Branch1][C][": 1652,
+      "Branch1][S][C][=C][C][=C][Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][C][=C][Ring1][=Branch2][": 1653,
+      "[C][C][O][C][=C][": 1654,
+      "[O][=C][Branch1][=N][N][C][=C][C][=C][": 1655,
+      "[C][C][=C][N][": 1656,
+      "C][C][N][C][": 1657,
+      "O][C][C]": 1658,
+      "C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][O][C][C][O][": 1659,
+      "Branch1][C][C][C][C][C@H1][": 1660,
+      "N][C][=Branch1][C][=O][N][C@H1][": 1661,
+      "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][C][=N][": 1662,
+      "N][=C][Ring1][#C][": 1663,
+      "C][=C][C][Branch1][Ring1][O][C][=C][Branch1][Ring1][O][C][C][Branch1][Ring1][O][C][=C][Ring1][": 1664,
+      "Ring2][Branch1][=": 1665,
+      "Branch2][Ring2][C][C][=C][C][=C][": 1666,
+      "Branch1][=Branch2][C][=N][C][=C][C][=N][": 1667,
+      "N][C][C][C][C][N][": 1668,
+      "C][=Branch2][Ring1][": 1669,
+      "[O][=C][Branch2][Ring1][Branch2][": 1670,
+      "Branch1][O][N][C][=Branch1][C][=O][C][C][C][": 1671,
+      "N][Branch1][C][C][C][=C][C][=C][": 1672,
+      "Branch2][Ring1][O][C][=C][C][=C][": 1673,
+      "C][=C][Ring2][Ring1][#C][": 1674,
+      "C@][Branch1][C][C][C@@H1][": 1675,
+      "C][=C][Ring1][Branch2][C][": 1676,
+      "[N][C@@H1][": 1677,
+      "Branch2][Ring1][#C][C][=C][C][=C][": 1678,
+      "Ring2][Ring1][#Branch2][=C][": 1679,
+      "Branch1][C][Cl][C][=C][Ring1][#Branch1][=C][": 1680,
+      "N][N][=C][C][": 1681,
+      "N][C][=C][C][Branch1][C][Cl][=C][": 1682,
+      "Ring2][Ring1][=Branch2][=": 1683,
+      "N][=C][Ring1][=C][": 1684,
+      "S][Branch1][C][C][=Branch1][C][=O][=": 1685,
+      "C][=C][C][=C][C][=C][Ring1][=Branch1][S][Ring1][=Branch2][": 1686,
+      "Branch1][C][Cl][S][": 1687,
+      "[C][C][=Branch1][C][=O][N][C@@H1][": 1688,
+      "Ring1][=Branch1][O][": 1689
+    },
+    "merges": [
+      [
+        "]",
+        "["
+      ],
+      [
+        "C",
+        "]["
+      ],
+      [
+        "1",
+        "]["
+      ],
+      [
+        "B",
+        "r"
+      ],
+      [
+        "a",
+        "n"
+      ],
+      [
+        "c",
+        "h"
+      ],
+      [
+        "Br",
+        "an"
+      ],
+      [
+        "Bran",
+        "ch"
+      ],
+      [
+        "C][",
+        "="
+      ],
+      [
+        "Branch",
+        "1]["
+      ],
+      [
+        "R",
+        "i"
+      ],
+      [
+        "n",
+        "g"
+      ],
+      [
+        "Ri",
+        "ng"
+      ],
+      [
+        "C][=",
+        "C]["
+      ],
+      [
+        "Ring",
+        "1]["
+      ],
+      [
+        "N",
+        "]["
+      ],
+      [
+        "C][",
+        "C]["
+      ],
+      [
+        "2",
+        "]["
+      ],
+      [
+        "O",
+        "]["
+      ],
+      [
+        "C][=C][",
+        "C][=C]["
+      ],
+      [
+        "Branch",
+        "2]["
+      ],
+      [
+        "Ring1][",
+        "="
+      ],
+      [
+        "Ring",
+        "2]["
+      ],
+      [
+        "Branch1][",
+        "C][="
+      ],
+      [
+        "Branch1][",
+        "C]["
+      ],
+      [
+        "Branch1][C][=",
+        "O]["
+      ],
+      [
+        "=",
+        "C]["
+      ],
+      [
+        "Ring1][",
+        "#"
+      ],
+      [
+        "C][=",
+        "Branch1][C][=O]["
+      ],
+      [
+        "H",
+        "1]["
+      ],
+      [
+        "C",
+        "@"
+      ],
+      [
+        "Branch1][",
+        "C][C]["
+      ],
+      [
+        "Branch1][",
+        "="
+      ],
+      [
+        "S",
+        "]["
+      ],
+      [
+        "C][=C][",
+        "Ring1][="
+      ],
+      [
+        "Ring2][",
+        "Ring1]["
+      ],
+      [
+        "F",
+        "]["
+      ],
+      [
+        "C][=",
+        "N]["
+      ],
+      [
+        "[",
+        "C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C][=C][Ring1][="
+      ],
+      [
+        "N][",
+        "C][C]["
+      ],
+      [
+        "C@",
+        "@"
+      ],
+      [
+        "N][",
+        "=C]["
+      ],
+      [
+        "C][",
+        "Branch1][C]["
+      ],
+      [
+        "C@",
+        "H1]["
+      ],
+      [
+        "Branch2][",
+        "Ring1]["
+      ],
+      [
+        "C@@",
+        "H1]["
+      ],
+      [
+        "O][",
+        "C]["
+      ],
+      [
+        "1",
+        "]"
+      ],
+      [
+        "N][",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "=",
+        "Branch1][C][=O]["
+      ],
+      [
+        "N][",
+        "C]["
+      ],
+      [
+        "[",
+        "C][C]["
+      ],
+      [
+        "C",
+        "l"
+      ],
+      [
+        "C][=C][",
+        "Ring1][#"
+      ],
+      [
+        "Branch1][",
+        "#"
+      ],
+      [
+        "Ring1][=",
+        "Branch1]["
+      ],
+      [
+        "Branch",
+        "1]"
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1]["
+      ],
+      [
+        "O][",
+        "=C]["
+      ],
+      [
+        "C][C][",
+        "C]["
+      ],
+      [
+        "Branch1][=",
+        "Branch2]["
+      ],
+      [
+        "Branch1][C][",
+        "F]["
+      ],
+      [
+        "Cl",
+        "]["
+      ],
+      [
+        "C][=C][",
+        "C]["
+      ],
+      [
+        "Branch2][",
+        "Ring2]["
+      ],
+      [
+        "N][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "O][",
+        "C][C]["
+      ],
+      [
+        "Branch1][",
+        "Ring1]["
+      ],
+      [
+        "C",
+        "]"
+      ],
+      [
+        "P",
+        "]["
+      ],
+      [
+        "O][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "2",
+        "]"
+      ],
+      [
+        "Ring1][#",
+        "Branch2]["
+      ],
+      [
+        "Ring2][",
+        "Ring1][="
+      ],
+      [
+        "N][",
+        "="
+      ],
+      [
+        "O",
+        "]"
+      ],
+      [
+        "C][C][",
+        "C][C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C]["
+      ],
+      [
+        "Branch1][C][",
+        "O]["
+      ],
+      [
+        "C][=C][",
+        "Ring1]["
+      ],
+      [
+        "Branch1][C][=",
+        "Branch1][C][=O]["
+      ],
+      [
+        "N",
+        "H1]["
+      ],
+      [
+        "Branch",
+        "2]"
+      ],
+      [
+        "C][Branch1][C][",
+        "F]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1]["
+      ],
+      [
+        "[",
+        "O][=C]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1]["
+      ],
+      [
+        "Ring1][=",
+        "Branch2]["
+      ],
+      [
+        "S][",
+        "=Branch1][C][=O]["
+      ],
+      [
+        "O][",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][#",
+        "Branch2]["
+      ],
+      [
+        "S][=Branch1][C][=O][",
+        "=Branch1][C][=O]["
+      ],
+      [
+        "Ring2][",
+        "Ring2]["
+      ],
+      [
+        "Branch1][C][",
+        "Cl]["
+      ],
+      [
+        "N][",
+        "C][=C]["
+      ],
+      [
+        "N][",
+        "Ring1]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch1]["
+      ],
+      [
+        "N][",
+        "C][=N]["
+      ],
+      [
+        "Ring2][",
+        "Ring1][#"
+      ],
+      [
+        "Branch1][",
+        "Ring2]["
+      ],
+      [
+        "N",
+        "]"
+      ],
+      [
+        "N][C][C][",
+        "C]["
+      ],
+      [
+        "Branch1][",
+        "=C]["
+      ],
+      [
+        "C][Branch1][C][F][",
+        "Branch1][C][F]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C]["
+      ],
+      [
+        "Branch2][",
+        "Ring1][="
+      ],
+      [
+        "[C][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "Ring1][",
+        "Branch2]["
+      ],
+      [
+        "Branch1][=",
+        "N]["
+      ],
+      [
+        "Branch1][",
+        "S]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C][C]["
+      ],
+      [
+        "O][",
+        "C][=C]["
+      ],
+      [
+        "/",
+        "C][=C]["
+      ],
+      [
+        "N][C][C][",
+        "N]["
+      ],
+      [
+        "Branch1][",
+        "Branch2]["
+      ],
+      [
+        "C][Branch1][C][F][Branch1][C][F][",
+        "F]["
+      ],
+      [
+        "Branch1][Ring1][",
+        "C]["
+      ],
+      [
+        "+",
+        "1]["
+      ],
+      [
+        "C@",
+        "]["
+      ],
+      [
+        "C][Branch1][C][",
+        "Cl]["
+      ],
+      [
+        "C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "=",
+        "N]["
+      ],
+      [
+        "C][",
+        "C][=C]["
+      ],
+      [
+        "Ring1][",
+        "Branch1]["
+      ],
+      [
+        "N",
+        "+1]["
+      ],
+      [
+        "Branch1][",
+        "P]["
+      ],
+      [
+        "C][=N][",
+        "C]["
+      ],
+      [
+        "Branch1][",
+        "O]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Ring1]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][C]["
+      ],
+      [
+        "C][Branch1][C][Cl][",
+        "=C]["
+      ],
+      [
+        "S][",
+        "C]["
+      ],
+      [
+        "C@@",
+        "]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Ring2]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][Branch1][C][F][Branch1][C][F][F]["
+      ],
+      [
+        "O",
+        "-"
+      ],
+      [
+        "N][",
+        "Branch1][C][C]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][C]["
+      ],
+      [
+        "C][=",
+        "Branch1][Ring2]["
+      ],
+      [
+        "[C][",
+        "O]["
+      ],
+      [
+        "Branch1][C][C][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch1][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "Ring1][=Branch1][",
+        "=C]["
+      ],
+      [
+        "O-",
+        "1]["
+      ],
+      [
+        "O][",
+        "="
+      ],
+      [
+        "Branch2][",
+        "Ring1][#"
+      ],
+      [
+        "N][=",
+        "N]["
+      ],
+      [
+        "Branch1][C][",
+        "O][C]["
+      ],
+      [
+        "C][=Branch1][Ring2][",
+        "=C]["
+      ],
+      [
+        "O][",
+        "C@@H1]["
+      ],
+      [
+        "O][",
+        "C@H1]["
+      ],
+      [
+        "N][C][C][",
+        "C][C]["
+      ],
+      [
+        "Ring1][",
+        "S]["
+      ],
+      [
+        "[C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring1][",
+        "P]["
+      ],
+      [
+        "C][",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "Br",
+        "]["
+      ],
+      [
+        "C][",
+        "N]["
+      ],
+      [
+        "Branch1][=",
+        "Branch1]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C][Branch1][C][F][",
+        "=C]["
+      ],
+      [
+        "Cl",
+        "]"
+      ],
+      [
+        "N][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Branch2]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch2]["
+      ],
+      [
+        "N][",
+        "N][=C]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "="
+      ],
+      [
+        "/C][=C][",
+        "/"
+      ],
+      [
+        "S",
+        "]"
+      ],
+      [
+        "Ring1][=",
+        "Branch1]"
+      ],
+      [
+        ".",
+        "["
+      ],
+      [
+        "Ring",
+        "1]"
+      ],
+      [
+        "Branch2][Ring2][",
+        "#"
+      ],
+      [
+        "C][=N][",
+        "C][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1]"
+      ],
+      [
+        "Branch2][",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring1][=",
+        "C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Ring2]["
+      ],
+      [
+        "Ring1][",
+        "Ring1]["
+      ],
+      [
+        "P",
+        "]"
+      ],
+      [
+        "[C][C][",
+        "Branch1][C][C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "Branch2]["
+      ],
+      [
+        "Branch2][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "Branch1][",
+        "N]["
+      ],
+      [
+        "Branch1][=",
+        "Branch1][C]["
+      ],
+      [
+        "Ring",
+        "2]"
+      ],
+      [
+        "N+1][",
+        "=Branch1][C][=O]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][="
+      ],
+      [
+        "Branch1][=",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][",
+        "N][=C]["
+      ],
+      [
+        "N][C][C][",
+        "O][C][C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Ring1]["
+      ],
+      [
+        "Branch1][Ring1][C][",
+        "#"
+      ],
+      [
+        "F",
+        "]"
+      ],
+      [
+        "O][",
+        "Ring1]["
+      ],
+      [
+        "Ring1][=",
+        "N]["
+      ],
+      [
+        "Branch1][C][",
+        "N]["
+      ],
+      [
+        "N+1][=Branch1][C][=O][",
+        "O-1]["
+      ],
+      [
+        "Branch1][C][O][",
+        "C@H1]["
+      ],
+      [
+        "Branch1][C][Cl][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "C][",
+        "C@H1]["
+      ],
+      [
+        "[C][",
+        "C][=C]["
+      ],
+      [
+        "[",
+        "N]["
+      ],
+      [
+        "C][Branch1][C][",
+        "O][=C]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "Branch2]["
+      ],
+      [
+        "Ring1][",
+        "O]["
+      ],
+      [
+        "Branch1][#",
+        "C]["
+      ],
+      [
+        "Branch2][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][Ring1][",
+        "O]["
+      ],
+      [
+        "NH1][",
+        "C]["
+      ],
+      [
+        "=",
+        "C][C]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][C][C]["
+      ],
+      [
+        "Ring2][Ring1][#",
+        "Branch1]"
+      ],
+      [
+        "C][C][C][",
+        "N]["
+      ],
+      [
+        "N][=",
+        "C][C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][C][F][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][C][",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "C][C][",
+        "N]["
+      ],
+      [
+        "Branch1][C][=",
+        "N]["
+      ],
+      [
+        "C][",
+        "C@@H1]["
+      ],
+      [
+        "Branch1][C][C][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "Branch1][C][Cl][",
+        "C][=C][Ring1][#"
+      ],
+      [
+        "C][=Branch1][Ring2][=C][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][=Branch1][",
+        "N+1][=Branch1][C][=O][O-1]["
+      ],
+      [
+        "=C][",
+        "Ring2][Ring1]["
+      ],
+      [
+        "N][C][C][",
+        "C][C][C]["
+      ],
+      [
+        "Branch1][=",
+        "C][C]["
+      ],
+      [
+        "[C][O][",
+        "C][=C][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "/",
+        "C][="
+      ],
+      [
+        "Ring2][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "Ring1][",
+        "Branch1][C]["
+      ],
+      [
+        "C][=N][",
+        "N]["
+      ],
+      [
+        "Branch1][Ring1][",
+        "O][C]["
+      ],
+      [
+        "Branch1][C][",
+        "Br]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][C][C]["
+      ],
+      [
+        "Ring2][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "N][",
+        "C@@H1]["
+      ],
+      [
+        "Ring2][Ring1][#",
+        "Branch2]"
+      ],
+      [
+        "Branch1][C][F][",
+        "C][=C][Ring1][#"
+      ],
+      [
+        "O][",
+        "C]"
+      ],
+      [
+        "C][=C][Ring1][=",
+        "Branch1]["
+      ],
+      [
+        "C][C][C][C][",
+        "C][C]["
+      ],
+      [
+        "Ring2][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "P]["
+      ],
+      [
+        "Ring1][#",
+        "C]["
+      ],
+      [
+        "C][C][",
+        "C@H1]["
+      ],
+      [
+        "[C][",
+        "O][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch2][",
+        "Ring2][Ring1]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "C]["
+      ],
+      [
+        "Branch2][",
+        "="
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C]["
+      ],
+      [
+        "Branch2][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "Ring2]["
+      ],
+      [
+        "[C][C][",
+        "C]["
+      ],
+      [
+        "C][=N][",
+        "N][=C]["
+      ],
+      [
+        "[C][",
+        "N]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1]"
+      ],
+      [
+        "[",
+        "O][="
+      ],
+      [
+        "Ring1][",
+        "N]["
+      ],
+      [
+        "[C][C][",
+        "O][C][=Branch1][C][=O]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "Branch1]"
+      ],
+      [
+        "Ring1][",
+        "Branch1][=C]["
+      ],
+      [
+        "N][C][=N][",
+        "C]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Branch1]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][",
+        "=C]["
+      ],
+      [
+        "C][=C][",
+        "N]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "N][C][=N][",
+        "C][=C]["
+      ],
+      [
+        "Branch1][C][O][",
+        "C@@H1]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "S]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "Branch2]"
+      ],
+      [
+        "C][Branch1][C][",
+        "C][="
+      ],
+      [
+        "Branch1][C][",
+        "N][="
+      ],
+      [
+        "C][Branch1][C][",
+        "C][=C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "N][=C]["
+      ],
+      [
+        "Branch1][",
+        "O][C]["
+      ],
+      [
+        "C][=C][",
+        "C][=N]["
+      ],
+      [
+        "C][C][",
+        "C][C][C]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "="
+      ],
+      [
+        "O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "O][",
+        "C][C][C]["
+      ],
+      [
+        "[C][",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "Branch2]["
+      ],
+      [
+        "Ring1][",
+        "Branch1]"
+      ],
+      [
+        "/",
+        "N][=C]["
+      ],
+      [
+        "Ring1][#",
+        "Branch2]"
+      ],
+      [
+        "Branch1][C][C][",
+        "C@H1]["
+      ],
+      [
+        "[N][",
+        "#"
+      ],
+      [
+        "[",
+        "C][=C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch2]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "S]["
+      ],
+      [
+        "Ring1][=",
+        "N]"
+      ],
+      [
+        "=",
+        "O]"
+      ],
+      [
+        "Ring1][#",
+        "C]"
+      ],
+      [
+        "Ring2][Ring1][",
+        "C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "C]"
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C]["
+      ],
+      [
+        ".[",
+        "Cl]"
+      ],
+      [
+        "N][",
+        "C@H1]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C@H1]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][C][O]["
+      ],
+      [
+        "N][C][=C][C][=C][",
+        "C]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][=N]["
+      ],
+      [
+        "Branch1][Ring1][",
+        "O][C][=C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "P]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "[C][",
+        "C][=C][C]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][="
+      ],
+      [
+        "Ring2][Ring1][#",
+        "C]"
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch1]"
+      ],
+      [
+        "Ring2][Ring1][",
+        "Ring1]"
+      ],
+      [
+        "Ring1][=",
+        "C]"
+      ],
+      [
+        "Branch1][C][F][",
+        "Branch1][C][F]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Ring2]"
+      ],
+      [
+        "C][=C][Ring1][",
+        "O]["
+      ],
+      [
+        "C][C][",
+        "C@@H1]["
+      ],
+      [
+        "=",
+        "O]["
+      ],
+      [
+        "Branch1][Ring2][",
+        "C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch2]"
+      ],
+      [
+        "Branch2][Ring1][",
+        "O]["
+      ],
+      [
+        "Ring1][=",
+        "Branch2]"
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C@@H1]["
+      ],
+      [
+        "C][=N][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "Branch2]["
+      ],
+      [
+        "Ring1][#Branch1][",
+        "=C]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "N]"
+      ],
+      [
+        "C][=C][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch1][",
+        "O][C][C]["
+      ],
+      [
+        "N][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "P][",
+        "=Branch1][C][=O]["
+      ],
+      [
+        "[C][C][",
+        "C][C]["
+      ],
+      [
+        "C][=C][",
+        "NH1]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C@@H1]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "#"
+      ],
+      [
+        "Branch1][Ring1][",
+        "O][C][C]["
+      ],
+      [
+        "C][=",
+        "Branch1][C][="
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O][C]["
+      ],
+      [
+        "O][C][",
+        "O]["
+      ],
+      [
+        "Branch1][C][",
+        "O][C][C]["
+      ],
+      [
+        "[C][C][",
+        "N]["
+      ],
+      [
+        "N][C][=C][",
+        "N][=C]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "C]"
+      ],
+      [
+        "Branch2][Ring2][=",
+        "Branch2]["
+      ],
+      [
+        "/C][=C][",
+        "\\"
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring1][=Branch2][",
+        "C]["
+      ],
+      [
+        "N][Ring1][",
+        "Branch1]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N]["
+      ],
+      [
+        "Branch1][#Branch2][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "O]"
+      ],
+      [
+        "S][",
+        "Branch1][C][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch2][Ring2][#",
+        "Branch2]["
+      ],
+      [
+        "C][=",
+        "Ring1]["
+      ],
+      [
+        "Branch1][=",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch1]["
+      ],
+      [
+        "Ring1][",
+        "Ring2]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "N]["
+      ],
+      [
+        "S][",
+        "Ring1]["
+      ],
+      [
+        "[C][O][C][=C][C][=C][",
+        "C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "Br]["
+      ],
+      [
+        "C][=Branch1][C][=",
+        "S]["
+      ],
+      [
+        "O][",
+        "C][=C][C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "N]"
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][=C]["
+      ],
+      [
+        "Branch1][=",
+        "N][C]["
+      ],
+      [
+        "Branch1][C][",
+        "O-1]["
+      ],
+      [
+        "Branch1][#",
+        "C][C]["
+      ],
+      [
+        "O][C][",
+        "C@H1]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "[C][",
+        "C@@H1]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][C]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "N]["
+      ],
+      [
+        "Branch1][=",
+        "N][C][C][=C][C][=C]["
+      ],
+      [
+        "[C][C][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "[C][",
+        "C@H1]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Ring1]["
+      ],
+      [
+        "C][Branch1][C][F][Branch1][C][F][",
+        "F]"
+      ],
+      [
+        "Branch1][=Branch1][C][",
+        "Branch1][C][N][="
+      ],
+      [
+        "C][=Branch1][C][=O][N][",
+        "C@@H1]["
+      ],
+      [
+        "Branch1][C][C][",
+        "N]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "C]["
+      ],
+      [
+        "N][C][C][O][C][C][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring2]["
+      ],
+      [
+        "[C][C][",
+        "Branch1][C][C][Branch1][C][C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "N]["
+      ],
+      [
+        "Branch1][C][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "Ring1][",
+        "P]"
+      ],
+      [
+        "Branch1][=",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "N][C][",
+        "C@H1]["
+      ],
+      [
+        "Branch2][Ring1][#",
+        "C]["
+      ],
+      [
+        "[C][",
+        "O][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=C][C][=C][Ring1][="
+      ],
+      [
+        "O][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "N]["
+      ],
+      [
+        "[C][C][",
+        "C][C][C][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][C][C]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][O]["
+      ],
+      [
+        "[C][",
+        "N][Branch1][C][C]["
+      ],
+      [
+        "Ring1][",
+        "S]"
+      ],
+      [
+        "/C][=C][/",
+        "C][=C][C][=C]["
+      ],
+      [
+        "N][C][",
+        "C@@H1]["
+      ],
+      [
+        "S][",
+        "C][=C]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "C]["
+      ],
+      [
+        "C][Branch1][C][Br][",
+        "=C]["
+      ],
+      [
+        "Ring1][=Branch1][=C][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "/",
+        "C]["
+      ],
+      [
+        "Branch1][Ring1][C][#",
+        "N][=C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C]"
+      ],
+      [
+        "Branch1][=Branch1][C][=Branch1][C][=O][",
+        "O]["
+      ],
+      [
+        "C][Branch1][C][",
+        "N][="
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Ring2]["
+      ],
+      [
+        "N][C][",
+        "C][=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "C]["
+      ],
+      [
+        "Ring1][",
+        "N]"
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "C]["
+      ],
+      [
+        "Branch1][=",
+        "N][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][Ring1][C][",
+        "O]["
+      ],
+      [
+        "Ring1][",
+        "Branch2]"
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][",
+        "C][=C][Ring1][#Branch2]["
+      ],
+      [
+        ".",
+        "[O][=C][Branch1][C][O]["
+      ],
+      [
+        "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][",
+        "=C]["
+      ],
+      [
+        "Branch1][C][F][Branch1][C][F][",
+        "F]["
+      ],
+      [
+        "O][C][",
+        "C@@H1]["
+      ],
+      [
+        "Branch1][Ring1][",
+        "C][C]["
+      ],
+      [
+        "N][C][C][",
+        "C][C][C][C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "C]["
+      ],
+      [
+        "Branch1][Branch2][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][Ring1][C][#",
+        "N]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C][=C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "S]"
+      ],
+      [
+        "Branch1][C][C][",
+        "C][C][C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C][=N]["
+      ],
+      [
+        "C][=",
+        "O]"
+      ],
+      [
+        "[C][",
+        "C][=C][C][=C][C]["
+      ],
+      [
+        "N][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Ring1][Branch2][",
+        "C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O]"
+      ],
+      [
+        "Branch1][#",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C][=Branch1][Ring2][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][",
+        "Branch1][C][C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "N][=C]["
+      ],
+      [
+        "[C][",
+        "O][C][C]["
+      ],
+      [
+        "Ring1][#Branch2][",
+        "C]["
+      ],
+      [
+        "O][=",
+        "C][C]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "O]["
+      ],
+      [
+        "Ring1][=",
+        "C][C]["
+      ],
+      [
+        "O][C][=C][C][=C][",
+        "C]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch1][C][O][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Ring1][=",
+        "N][=C]["
+      ],
+      [
+        "Branch1][C][",
+        "N][N][=C]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "N][C][C][C][",
+        "N]["
+      ],
+      [
+        "[C][",
+        "C][=N]["
+      ],
+      [
+        "S][",
+        "C][=N]["
+      ],
+      [
+        "Branch2][Ring1][Ring1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "S][",
+        "C][="
+      ],
+      [
+        "C][C][",
+        "C@]["
+      ],
+      [
+        "Branch1][=Branch1][C][=Branch1][C][=O][",
+        "O][=C]["
+      ],
+      [
+        "Branch1][C][F][",
+        "C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "Branch1]["
+      ],
+      [
+        "C][=C][",
+        "C][Branch1][C][Cl][=C]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][Ring2][",
+        "C][C]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "N]["
+      ],
+      [
+        "N][Ring1][",
+        "P]["
+      ],
+      [
+        "S][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "/",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring1][=Branch2][",
+        "=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][N][",
+        "C@H1]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "P]"
+      ],
+      [
+        "Branch1][#Branch1][O][",
+        "C][Branch1][C][C][="
+      ],
+      [
+        "Branch1][C][",
+        "N][C]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "C]"
+      ],
+      [
+        "Branch1][=",
+        "O]"
+      ],
+      [
+        "N][Ring1][",
+        "Branch2]["
+      ],
+      [
+        "N][Ring1][",
+        "Branch1][C]["
+      ],
+      [
+        "N][",
+        "C][=C][C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "=C]["
+      ],
+      [
+        "P][=Branch1][C][=O][",
+        "Branch1][C][O]["
+      ],
+      [
+        "Branch1][C][Cl][",
+        "C][Branch1][C][Cl][=C]["
+      ],
+      [
+        "[",
+        "C][=C][C]["
+      ],
+      [
+        "C][Branch1][C][Cl][=C][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "Branch2][Ring2][=",
+        "Branch1]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "O][C][C][",
+        "C][C]["
+      ],
+      [
+        "C@@][",
+        "Branch1][C][C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Branch2]"
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "O][C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C]["
+      ],
+      [
+        "[",
+        "F]["
+      ],
+      [
+        "O][",
+        "C][="
+      ],
+      [
+        "Ring1][=Branch2][",
+        "="
+      ],
+      [
+        "Branch2][Ring1][",
+        "C][C]["
+      ],
+      [
+        "C][=C][C][=N][",
+        "C][=C][Ring1][="
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "C]["
+      ],
+      [
+        "C][C][C][C][",
+        "C][C][C]["
+      ],
+      [
+        "Ring1][#Branch2][",
+        "=C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "P]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "Branch1][C]["
+      ],
+      [
+        "Ring1][Branch2][",
+        "=C]["
+      ],
+      [
+        "N][Ring1][",
+        "S]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][=C][C]["
+      ],
+      [
+        "Ring1][=",
+        "N][C]["
+      ],
+      [
+        "-",
+        "1]"
+      ],
+      [
+        "Branch1][Ring1][O][C][",
+        "C][=C][Ring1][Branch2]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][C][C][=Branch1][C][=O]["
+      ],
+      [
+        "N][C][=N][",
+        "C][=N]["
+      ],
+      [
+        "Branch1][C][Cl][",
+        "C]["
+      ],
+      [
+        "N][C][=C][",
+        "C][=N]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Branch2]["
+      ],
+      [
+        "Ring1][",
+        "O]"
+      ],
+      [
+        "N][",
+        "S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C]["
+      ],
+      [
+        "/",
+        "C][=N]["
+      ],
+      [
+        "C@][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Ring1][#",
+        "C][C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "C][=N]["
+      ],
+      [
+        "Branch1][C][Cl][",
+        "=C]["
+      ],
+      [
+        "Branch2][Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "O][",
+        "Ring1][Branch1]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][C][="
+      ],
+      [
+        "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][",
+        "C][=C][Ring1][=Branch2]["
+      ],
+      [
+        "C][=N][",
+        "NH1]["
+      ],
+      [
+        "S][",
+        "Ring1][Branch1]["
+      ],
+      [
+        "Branch2][Ring2][#",
+        "Branch1]["
+      ],
+      [
+        "Branch1][C][Cl][C][=C][Ring1][#",
+        "Branch1]"
+      ],
+      [
+        "C][=C][C][",
+        "Branch1][Ring1][O][C][=C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Branch1]"
+      ],
+      [
+        "Ring2][Ring2][",
+        "Ring1]"
+      ],
+      [
+        "Branch2][",
+        "Branch1]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "P]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1][="
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][",
+        "Branch1][C][F][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        ".[O][=C][Branch1][C][O][",
+        "C][Branch1][C][F][Branch1][C][F][F]"
+      ],
+      [
+        "Ring1][",
+        "N][=C]["
+      ],
+      [
+        "Branch1][Ring1][O][C][C][",
+        "Branch1][Ring1][O]["
+      ],
+      [
+        "F][",
+        "=C]["
+      ],
+      [
+        "N][C][=N][",
+        "N][=C]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "Ring1][",
+        "O][="
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][C][C][C][",
+        "N]["
+      ],
+      [
+        "=",
+        "O][=C]["
+      ],
+      [
+        "Branch1][=Branch1][C][C][C][",
+        "Ring1][Ring1]["
+      ],
+      [
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "=C]["
+      ],
+      [
+        "Branch1][S][",
+        "S][=Branch1][C][=O][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][C][F][",
+        "=C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "Branch1][S][",
+        "C]["
+      ],
+      [
+        "C][=",
+        "Branch1][C][=N]["
+      ],
+      [
+        "C][=C][",
+        "Branch1][C][O]["
+      ],
+      [
+        "C][Branch1][C][",
+        "N][=N]["
+      ],
+      [
+        "N][=C][",
+        "N][=C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "=C]["
+      ],
+      [
+        "N][C][C][C][C][",
+        "Ring1]["
+      ],
+      [
+        "Ring2][Ring1][#",
+        "C]["
+      ],
+      [
+        "N][",
+        "S][=Branch1][C][=O][=Branch1][C][=O]["
+      ],
+      [
+        "Ring1][=",
+        "N][="
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch1]"
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N][C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "O]"
+      ],
+      [
+        "O][",
+        "C][=N]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][C][="
+      ],
+      [
+        "C][=C][C][=C][C][",
+        "Ring1][=Branch1][=C][Ring1][#Branch2]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][",
+        "Branch1][C][Cl][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "NH1][",
+        "C][=C]["
+      ],
+      [
+        "N+1][",
+        "Branch1][C][O-1]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Branch1][C]["
+      ],
+      [
+        "Ring1][",
+        "N][="
+      ],
+      [
+        "Branch2][Ring1][Ring2][",
+        "C]["
+      ],
+      [
+        "C][=C][C][=C][N][=C][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "S]["
+      ],
+      [
+        "C][=C][NH1][",
+        "C][=C][C][=C][C][=C][Ring1][="
+      ],
+      [
+        "N][Branch1][C][C][",
+        "C][="
+      ],
+      [
+        "[C][C][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "[O][=",
+        "S][=Branch1][C][=O]["
+      ],
+      [
+        "O][",
+        "N][="
+      ],
+      [
+        "O][",
+        "N][=C]["
+      ],
+      [
+        "NH1][",
+        "C][=C][C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][",
+        "C][Branch1][C][F][=C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Ring1]"
+      ],
+      [
+        "N][=C][",
+        "Branch1][C][N]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "C][C][=Branch1][C][=O]["
+      ],
+      [
+        "C][Branch1][C][",
+        "O]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Ring2]"
+      ],
+      [
+        "Branch1][=Branch2][",
+        "N][C][C][O][C][C]["
+      ],
+      [
+        "Branch1][#",
+        "C][C][=Branch1][C][=O]["
+      ],
+      [
+        "C][=C][",
+        "C][=N][C]["
+      ],
+      [
+        "O][C][C][",
+        "O]["
+      ],
+      [
+        "Branch1][#Branch2][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "N]"
+      ],
+      [
+        "Ring1][#",
+        "Branch1][=N]["
+      ],
+      [
+        "Branch1][Ring1][C][",
+        "O][C@@H1]["
+      ],
+      [
+        "Ring1][#Branch2][",
+        "C][C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "C]"
+      ],
+      [
+        "Branch1][C][Br][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "C][=Branch1][Ring2][=C][",
+        "Ring1][=Branch1][C]["
+      ],
+      [
+        "Branch1][C][F][",
+        "C][Branch1][C][F][=C]["
+      ],
+      [
+        "S][",
+        "C][C]["
+      ],
+      [
+        "N][C][C][N][",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "Ring2]"
+      ],
+      [
+        "Branch1][C][N][",
+        "=Branch1][C][=O]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "C]["
+      ],
+      [
+        "Branch1][",
+        "N][C]["
+      ],
+      [
+        "C][C][C][C][",
+        "N]["
+      ],
+      [
+        "O][C][",
+        "C][=C]["
+      ],
+      [
+        "N][=C][",
+        "N]["
+      ],
+      [
+        "Branch1][S][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "/C][=N][",
+        "/"
+      ],
+      [
+        "Ring1][=Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][",
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][C]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "S]["
+      ],
+      [
+        "[C][C][",
+        "C][C][C]["
+      ],
+      [
+        "[",
+        "Cl]"
+      ],
+      [
+        "Branch1][#Branch2][O][",
+        "C][Branch1][C][F][Branch1][C][F][F]["
+      ],
+      [
+        "Ring1][",
+        "O][=C]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][",
+        "Branch1][C][Cl][C][=C][Ring1][#"
+      ],
+      [
+        "=",
+        "N][C]["
+      ],
+      [
+        "Branch1][Branch2][",
+        "C][C]["
+      ],
+      [
+        "NH1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][C][",
+        "\\"
+      ],
+      [
+        "N][=C][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "[",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][Branch2][",
+        "C]["
+      ],
+      [
+        "F][",
+        "C]["
+      ],
+      [
+        "[C][O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "NH1][",
+        "N][="
+      ],
+      [
+        "Ring1][=Branch2][",
+        "C][C]["
+      ],
+      [
+        "Branch1][C][F][C][=C][Ring1][#",
+        "Branch1]"
+      ],
+      [
+        "Branch2][Ring1][Ring1][",
+        "C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C][=C]["
+      ],
+      [
+        "Branch1][C][",
+        "C][="
+      ],
+      [
+        "O][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "N]["
+      ],
+      [
+        "S][",
+        "Branch1][C][N][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][",
+        "Branch1][C][F][C][=C][Ring1][#"
+      ],
+      [
+        "[C][C][",
+        "C][=C]["
+      ],
+      [
+        "C][Branch1][C][F][",
+        "=C][C]["
+      ],
+      [
+        "C][C][C][C][",
+        "C][C][C][C]["
+      ],
+      [
+        "C@@H1][",
+        "O][C@H1]["
+      ],
+      [
+        "[C][",
+        "N][C][=C]["
+      ],
+      [
+        "[C][",
+        "N][C][C][N]["
+      ],
+      [
+        "Branch1][=",
+        "N][C][=C]["
+      ],
+      [
+        "C][Branch1][C][Cl][",
+        "=C][C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "O]["
+      ],
+      [
+        "+",
+        "1]"
+      ],
+      [
+        "Branch1][C][C][",
+        "O]["
+      ],
+      [
+        "O][C][C][",
+        "N]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "[C][",
+        "S][=Branch1][C][=O][=Branch1][C][=O]["
+      ],
+      [
+        "N][C][C][C][C][",
+        "Ring1][Branch1]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][C][C][Branch1][C][C][C]["
+      ],
+      [
+        "C][C][",
+        "C][=C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "S]["
+      ],
+      [
+        "O-",
+        "1]"
+      ],
+      [
+        "Ring1][",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "I",
+        "]["
+      ],
+      [
+        "C][=",
+        "Branch1]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][C][N]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][C][C]["
+      ],
+      [
+        "Branch1][C][F][",
+        "C][=C][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][C][",
+        "O][=C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "S][Branch1][C][C][=Branch1][C][=O]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][=Branch1][C][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "\\",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][",
+        "Branch1][C][Cl]["
+      ],
+      [
+        "N][C][C][",
+        "N][C][C]["
+      ],
+      [
+        "[",
+        "Cl]["
+      ],
+      [
+        "C][Branch1][C][Cl][=C][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "N][Ring1][",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "N][C][=N][",
+        "C][=C][C]["
+      ],
+      [
+        "Branch1][C][O][C@H1][",
+        "Branch1][C][O][C@H1]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "O]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][=",
+        "Branch1]"
+      ],
+      [
+        "Branch2][Ring1][#",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Ring1][="
+      ],
+      [
+        "Branch1][P][",
+        "C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][=",
+        "Branch2]"
+      ],
+      [
+        "Ring1][",
+        "N][C]["
+      ],
+      [
+        "Branch1][=N][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=C][C][=N]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "Branch1]["
+      ],
+      [
+        "C@H1][",
+        "Branch1][C][O][C]["
+      ],
+      [
+        "Ring1][",
+        "Branch1][C][C]["
+      ],
+      [
+        "N][C][C][C][C][C][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][Ring1][C][#N][",
+        "C][=C][Ring1][Branch2]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "N]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "C][C]["
+      ],
+      [
+        "N][C][C][C][",
+        "C@H1]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "N]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][=C][C][=C][C]["
+      ],
+      [
+        "S][",
+        "C][=N][N][=C]["
+      ],
+      [
+        "Br",
+        "]"
+      ],
+      [
+        "C][=N][",
+        "C][=N][C]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "Ring2]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][C][",
+        "C][=C]["
+      ],
+      [
+        "[N][#",
+        "C]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "Branch1]"
+      ],
+      [
+        "Ring2][Ring2][=",
+        "Branch1]"
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch2][Ring1][="
+      ],
+      [
+        "Branch1][#Branch2][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C]["
+      ],
+      [
+        "Branch1][C][Cl][C][=C][Ring1][#Branch1][",
+        "Cl]["
+      ],
+      [
+        "C][=",
+        "Branch1][="
+      ],
+      [
+        "[C][C][",
+        "C@H1]["
+      ],
+      [
+        "C][Branch1][C][F][=C][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][C][Cl][C][Branch1][C][Cl][=C][",
+        "Ring1][Branch2]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "O][C]["
+      ],
+      [
+        "#",
+        "C][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C][C]["
+      ],
+      [
+        "C][=Branch1][Ring2][=C][Ring1][=Branch1][",
+        "O][C][O]["
+      ],
+      [
+        "Ring1][",
+        "Ring1]"
+      ],
+      [
+        "C][=",
+        "Ring1][Branch1]["
+      ],
+      [
+        "Branch1][Branch2][",
+        "C][C][=C]["
+      ],
+      [
+        ".[",
+        "N"
+      ],
+      [
+        "[O][=C][",
+        "Branch1][C][O][C]["
+      ],
+      [
+        "a",
+        "+1]"
+      ],
+      [
+        "C][=N][",
+        "C][=C][C]["
+      ],
+      [
+        ".[N",
+        "a+1]"
+      ],
+      [
+        "Branch2][Ring1][Branch2][",
+        "C]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][#Branch2]"
+      ],
+      [
+        "N][",
+        "Ring1][="
+      ],
+      [
+        "C@@H1][",
+        "Branch1][C][O][C]["
+      ],
+      [
+        "C@H1][",
+        "Branch1][C][O][C@@H1]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "=N]["
+      ],
+      [
+        "Branch1][=Branch2][C][",
+        "Branch1][C][C][Branch1][C][C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "P]"
+      ],
+      [
+        "N][=C][",
+        "Ring1]["
+      ],
+      [
+        "O][",
+        "=N]["
+      ],
+      [
+        "Branch2][",
+        "Branch1][Ring2]["
+      ],
+      [
+        "N][",
+        "/N][=C]["
+      ],
+      [
+        "Branch1][=Branch1][C][",
+        "Branch1][C][C][="
+      ],
+      [
+        "N][",
+        "C][=Branch1][C][=S]["
+      ],
+      [
+        "C][C][=C][",
+        "N][=C]["
+      ],
+      [
+        "[N][#",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "F][",
+        "C][C]["
+      ],
+      [
+        "NH1][",
+        "N][=C]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "N][C]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "Branch1][C]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][#Branch1]"
+      ],
+      [
+        "N][=",
+        "N][Ring1]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "O][C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "[C][",
+        "C][=N][C]["
+      ],
+      [
+        "Branch1][C][O][",
+        "C][Branch1][C][O][=C]["
+      ],
+      [
+        "O][Ring1][",
+        "Branch1]"
+      ],
+      [
+        "C@@H1][",
+        "C]["
+      ],
+      [
+        "Branch2][",
+        "#"
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "Branch1][Ring1][O][",
+        "C][=C][Ring1][Branch2]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch2]"
+      ],
+      [
+        "Branch2][",
+        "Branch1][Ring1]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "S][Branch1][C][N][=Branch1][C][=O]["
+      ],
+      [
+        "Branch2][Ring1][Ring2][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring1][S][",
+        "=C]["
+      ],
+      [
+        "Branch2][Ring1][=Branch2][",
+        "C]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][#Branch2][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][C]["
+      ],
+      [
+        "N][Branch1][C][C][",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "[C][C][",
+        "C][N]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][=",
+        "N]"
+      ],
+      [
+        "C][=C][Ring2][Ring1][=",
+        "Branch2]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "N][C][C][O][C][C][Ring1][=Branch1]["
+      ],
+      [
+        "N][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][C][C][C][C][C]["
+      ],
+      [
+        "[C][C][O][C][=Branch1][C][=O][",
+        "C]["
+      ],
+      [
+        "Branch1][C][=",
+        "N][C]["
+      ],
+      [
+        "O][",
+        "O]["
+      ],
+      [
+        "N+1][",
+        "=C]["
+      ],
+      [
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][=N]["
+      ],
+      [
+        "C][=N][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][=Branch1]["
+      ],
+      [
+        "N][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "Cl][",
+        "=C]["
+      ],
+      [
+        "Branch1][",
+        "Branch1]["
+      ],
+      [
+        "O][C][C][",
+        "C][C][C]["
+      ],
+      [
+        "N][C][C][O][C][C][",
+        "Ring1][=Branch1]"
+      ],
+      [
+        "C][=C][C][=C][",
+        "Branch1][C][F][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "N][C][C][",
+        "C][=C]["
+      ],
+      [
+        "C@@][",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "Branch2][Ring1][#Branch2][",
+        "C]["
+      ],
+      [
+        "C][=Branch1][Ring2][",
+        "=N]["
+      ],
+      [
+        "Ring1][",
+        "Ring1][=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][N][C][=C][C][=C][",
+        "C]["
+      ],
+      [
+        "C][=C][C][=N][",
+        "C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C][=N][",
+        "N][Branch1][C][C][C][="
+      ],
+      [
+        "[C][",
+        "N][C]["
+      ],
+      [
+        "C@H1][",
+        "C]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "O]["
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][C][",
+        "Branch1][C][C][Branch1][C][C][C]["
+      ],
+      [
+        "[C][C][N][",
+        "Branch1][Ring1]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][#Branch2]["
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "N]["
+      ],
+      [
+        "[O][=",
+        "N+1][Branch1][C][O-1]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][=N]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "C][C]["
+      ],
+      [
+        "Ring1][",
+        "O][C]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "Branch1][Branch2][",
+        "C][C][C][C][C]["
+      ],
+      [
+        "Branch2][Ring1][#",
+        "C][C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "S]"
+      ],
+      [
+        "C][=C][Ring1][",
+        "S]"
+      ],
+      [
+        "Ring1][Ring1][",
+        "C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "N]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "N]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][N]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Ring1][=C]["
+      ],
+      [
+        "[O][=",
+        "C][C]["
+      ],
+      [
+        "Ring2][Ring2][#",
+        "Branch1]"
+      ],
+      [
+        "Ring1][#",
+        "C][C][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][C][=C][C][=C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][=",
+        "C]"
+      ],
+      [
+        "[C][C][",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][C][=C]["
+      ],
+      [
+        "Branch2][=",
+        "O]"
+      ],
+      [
+        "C][=C][Ring1][=",
+        "Branch2]"
+      ],
+      [
+        "Branch1][C][Cl][C][=C][Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][N][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Ring1][=",
+        "C][="
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "NH1][C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][C][O][C][C]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "C][C]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "S][C]["
+      ],
+      [
+        "Ring2][",
+        "Branch1]["
+      ],
+      [
+        "O][",
+        "C@]["
+      ],
+      [
+        "O][C][",
+        "Branch1][C][C][Branch1][C][C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch1][=C]["
+      ],
+      [
+        "O][",
+        "P][=Branch1][C][=O][Branch1][C][O]["
+      ],
+      [
+        "C][=N][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][C][C]["
+      ],
+      [
+        "/C][=",
+        "Branch1]["
+      ],
+      [
+        "Ring1][=",
+        "N][C][C]["
+      ],
+      [
+        "C][=C][C][=C][C][",
+        "Ring1][=Branch1][=N]["
+      ],
+      [
+        "[C][C][N][",
+        "Branch1][Ring1][C][C]["
+      ],
+      [
+        "Branch2][Ring2][#",
+        "C]["
+      ],
+      [
+        "[C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][S][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][C][O][C][=C][C][=C]["
+      ],
+      [
+        "Cl][",
+        "C][C]["
+      ],
+      [
+        "C][=Branch1][Ring2][=C][",
+        "Ring1][=Branch1][C][C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "=O][",
+        "C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "O][",
+        "C][Branch1][C][C][="
+      ],
+      [
+        "[",
+        "N][C][=N]["
+      ],
+      [
+        "C][=Branch1][C][=O][N][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch1][=Branch1][",
+        "N][Branch1][C][C][C]["
+      ],
+      [
+        "C][C][C][",
+        "C@@H1]["
+      ],
+      [
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "C][=C][Ring1]["
+      ],
+      [
+        "N][",
+        "Ring2][Ring1]["
+      ],
+      [
+        "Branch1][C][C][C][",
+        "C@H1]["
+      ],
+      [
+        "Branch1][",
+        "Branch1][C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "O][C]["
+      ],
+      [
+        "N][C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][",
+        "O][C][O]["
+      ],
+      [
+        "S][",
+        "Ring1][Branch1]"
+      ],
+      [
+        "Branch1][Ring2][C][",
+        "Ring1][=Branch1][C]["
+      ],
+      [
+        "Branch1][Ring1][C][#",
+        "N][C]["
+      ],
+      [
+        "Branch1][P][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "C][=C][C]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "N][C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=N][C][=C][Ring1][="
+      ],
+      [
+        "C][=Branch1][C][=O][N][",
+        "C][=C][C]["
+      ],
+      [
+        "C@H1][",
+        "C][C][C@H1]["
+      ],
+      [
+        "O][C][C][",
+        "O][C][C]["
+      ],
+      [
+        "Ring1][=Branch1][=",
+        "N][C]["
+      ],
+      [
+        "/",
+        "C][Branch1][C][C][=C]["
+      ],
+      [
+        "Ring1][",
+        "Branch1][=N]["
+      ],
+      [
+        "[C][",
+        "O][C]["
+      ],
+      [
+        "Branch1][C][F][",
+        "F]["
+      ],
+      [
+        "Cl][",
+        "C]["
+      ],
+      [
+        "Ring1][=Branch2][",
+        "=N]["
+      ],
+      [
+        "C][=",
+        "N+1]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "NH1]["
+      ],
+      [
+        "/C][=C][",
+        "/C][=C]["
+      ],
+      [
+        "Ring2][",
+        "Ring2][Ring1]["
+      ],
+      [
+        "C][=C][C][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "Ring1][Branch2][",
+        "C][C]["
+      ],
+      [
+        "[C][N][",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "[O][=C][",
+        "C][=C]["
+      ],
+      [
+        "[C][O][C][=C][C][=C][",
+        "Branch2]["
+      ],
+      [
+        "N][C][C][",
+        "C@H1]["
+      ],
+      [
+        "Branch1][=Branch1][C][=Branch1][C][=O][O][",
+        "C][=C][Ring1][=Branch2]["
+      ],
+      [
+        "Branch1][#",
+        "Branch1][C]["
+      ],
+      [
+        "Branch1][C][F][C][=C][Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "[Cl]",
+        ".["
+      ],
+      [
+        "Ring2][",
+        "Ring1][=Branch1][=C]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][=C][C]["
+      ],
+      [
+        "[C][C][",
+        "O]["
+      ],
+      [
+        "Ring1][",
+        "Branch1][="
+      ],
+      [
+        "Ring2][Ring1][=",
+        "Branch1][C]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "C]"
+      ],
+      [
+        "[C][",
+        "C][=N][C][=C]["
+      ],
+      [
+        "[C][C][",
+        "C][C][N]["
+      ],
+      [
+        "N][C][=N][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O][C][C]["
+      ],
+      [
+        "#",
+        "C]["
+      ],
+      [
+        "#",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][C][C]["
+      ],
+      [
+        "N][C][C][",
+        "C@@H1]["
+      ],
+      [
+        "N][C][C][C][",
+        "Branch1][Branch1][C][C]["
+      ],
+      [
+        "Ring1][",
+        "S][C]["
+      ],
+      [
+        "C@H1][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "C][C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][O]["
+      ],
+      [
+        "C][=N][",
+        "O][C]["
+      ],
+      [
+        "C][=C][",
+        "N][=C][C]["
+      ],
+      [
+        "C@@H1][",
+        "Branch1][C][O][C@H1]["
+      ],
+      [
+        "Ring1][#",
+        "C][C][=C]["
+      ],
+      [
+        "N][C][C][C][",
+        "C@@H1]["
+      ],
+      [
+        "Ring2][Ring1][Ring1][",
+        "C]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "C][=C][Ring1][Branch2]["
+      ],
+      [
+        "[C][C][",
+        "C][C][C][C][C][C]["
+      ],
+      [
+        "S",
+        "+1]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][",
+        "=N]["
+      ],
+      [
+        "#",
+        "N]"
+      ],
+      [
+        "Ring2][Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "N]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][#Branch2]["
+      ],
+      [
+        "C][=C][",
+        "Branch1][C][F]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][#C]"
+      ],
+      [
+        "Ring2][Ring2][",
+        "C]["
+      ],
+      [
+        "C][=C][C][Branch1][C][Cl][=C][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "C][Branch1][C][",
+        "O][=C][C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C][=C]["
+      ],
+      [
+        "O][",
+        "C@@]["
+      ],
+      [
+        "Ring1][#",
+        "C][="
+      ],
+      [
+        "Ring1][#Branch2][",
+        "="
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "P]"
+      ],
+      [
+        "Branch1][Ring1][",
+        "C][="
+      ],
+      [
+        "N][=C][",
+        "Branch1][C]["
+      ],
+      [
+        "Ring1][=Branch1][",
+        "N]["
+      ],
+      [
+        "C][C][",
+        "C@@]["
+      ],
+      [
+        "/C][=C][",
+        "Branch1][C][\\"
+      ],
+      [
+        "C@@H1][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Br",
+        "-1]"
+      ],
+      [
+        "N][C][C][O][C][C][",
+        "Ring1][=Branch1][=C]["
+      ],
+      [
+        "[C][",
+        "S]["
+      ],
+      [
+        "[C][",
+        "C@]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][=C][N][=C]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "C]"
+      ],
+      [
+        "Ring1][=",
+        "N][C][=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][N][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C][="
+      ],
+      [
+        "C][=N][",
+        "C][=N]["
+      ],
+      [
+        "C][Branch1][C][F][=C][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "C][=Branch1][=",
+        "Branch1][=C]["
+      ],
+      [
+        "N][C][C][C][",
+        "Ring1][Ring1]["
+      ],
+      [
+        "Ring1][=",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C][=C][Ring1][#Branch2][Ring1][="
+      ],
+      [
+        ".[",
+        "Br-1]"
+      ],
+      [
+        "Ring1][Branch1][=C][",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "[C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][",
+        "=C][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Ring1][",
+        "O][C][C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "N+1][=Branch1][C][=O][",
+        "O-1]"
+      ],
+      [
+        "N][=N][",
+        "N]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N][C@@H1]["
+      ],
+      [
+        "C][=N][C][=C][C][=C][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "C][=C][",
+        "S][C]["
+      ],
+      [
+        "Ring1][=",
+        "C][C][=C]["
+      ],
+      [
+        "NH1][",
+        "C][="
+      ],
+      [
+        "Ring1][Branch2][",
+        "=N]["
+      ],
+      [
+        "Branch1][C][C][Branch1][C][C][",
+        "C@@H1]["
+      ],
+      [
+        "C][=C][C][Branch1][Ring1][O][C][=C][",
+        "Branch1][Ring1][O][C][C][Branch1][Ring1][O]["
+      ],
+      [
+        "Ring1][P][",
+        "C]["
+      ],
+      [
+        "Branch1][C][=N][",
+        "N]["
+      ],
+      [
+        "Ring1][#Branch2][",
+        "=N]["
+      ],
+      [
+        "Ring1][=",
+        "C][C][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][C][C][C]["
+      ],
+      [
+        "Branch1][C][C][Branch1][C][C][",
+        "C]"
+      ],
+      [
+        "Branch1][=Branch2][",
+        "N][C][C][C][C][C]["
+      ],
+      [
+        "N][",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "Branch2][",
+        "Branch1][C]["
+      ],
+      [
+        "Branch1][Ring2][C][Ring1][=Branch1][C][",
+        "Ring1][=Branch2][C]["
+      ],
+      [
+        "Branch1][C][Cl][",
+        "C][=C][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "N][=",
+        "O]"
+      ],
+      [
+        "Branch1][C][O][",
+        "C][=C]["
+      ],
+      [
+        "Ring1][P][",
+        "=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][=C]["
+      ],
+      [
+        "Branch1][=",
+        "Branch1][C][="
+      ],
+      [
+        "Ring1][#Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "N][",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "Branch1][=Branch1][C][Branch1][C][N][=",
+        "O][=C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "Ring2][Ring1][Ring2][",
+        "C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch2][Ring1]["
+      ],
+      [
+        "Branch1][O][C][C][",
+        "Branch1][Ring2][C][Ring1][=Branch1][C][Ring1][=Branch2][C]["
+      ],
+      [
+        "C][C][C][",
+        "N][Ring1][Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][N][",
+        "N][C][C]["
+      ],
+      [
+        "Branch1][",
+        "O][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][C][F][Branch1][C][F][",
+        "F]"
+      ],
+      [
+        "Branch1][#C][C][",
+        "C][=C][NH1][C][=C][C][=C][C][=C][Ring1][="
+      ],
+      [
+        "Branch1][C][O][C@H1][Branch1][C][O][C@H1][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "N][Ring1][",
+        "O]["
+      ],
+      [
+        "[",
+        "N][C]["
+      ],
+      [
+        "Branch1][Ring1][C][",
+        "O][C]["
+      ],
+      [
+        "C][=C][C][=C][C][",
+        "Ring1][=Branch1][=C]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "Branch2]"
+      ],
+      [
+        "-",
+        "1]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch1][C]["
+      ],
+      [
+        "[C][O][C][=Branch1][C][=O][",
+        "C]["
+      ],
+      [
+        "#",
+        "N]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "[F][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "Branch2]"
+      ],
+      [
+        "Ring2][Ring2][=",
+        "Branch2]"
+      ],
+      [
+        "Ring2][Ring1][",
+        "C][="
+      ],
+      [
+        "N+1][",
+        "="
+      ],
+      [
+        "Ring1][Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=C][",
+        "N][C][=Branch1][C][=O]["
+      ],
+      [
+        "Ring1][#Branch1][",
+        "N]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "C][C]["
+      ],
+      [
+        "Branch2][",
+        "Branch1][=Branch2]["
+      ],
+      [
+        "[C][",
+        "N][C][=Branch1][C][=O]["
+      ],
+      [
+        "[C][C][Branch1][C][C][Branch1][C][C][",
+        "O][C][=Branch1][C][=O]["
+      ],
+      [
+        "C][C][C][",
+        "Ring1][Ring1]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "Ring1][",
+        "N][C][C]["
+      ],
+      [
+        "C@@H1][",
+        "C][C@H1]["
+      ],
+      [
+        "Branch1][C][N][N][=C][",
+        "N][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][#Branch1][",
+        "C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C][Branch1][C][Cl][=C][C][",
+        "Branch1][C][Cl][=C]["
+      ],
+      [
+        "C][=C][C][",
+        "Branch1][Ring1][O]["
+      ],
+      [
+        "Branch1][=",
+        "C][C][C]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][=",
+        "N]["
+      ],
+      [
+        "Branch1][#Branch1][N][",
+        "C][Branch1][C][C][="
+      ],
+      [
+        "Branch2][Ring1][",
+        "O][C][=Branch1][C][=O]["
+      ],
+      [
+        "[C][",
+        "/C][="
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "O]["
+      ],
+      [
+        "C][=C][Ring1][#Branch2][",
+        "C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C][=N]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1][C][="
+      ],
+      [
+        "[N][#",
+        "C][C][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][",
+        "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][=C]["
+      ],
+      [
+        "N][Ring1][",
+        "N]["
+      ],
+      [
+        "Branch2][",
+        "Branch1][Branch2]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "N]"
+      ],
+      [
+        "N][=",
+        "N][C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "O][="
+      ],
+      [
+        "O][C][C][",
+        "C][C][C][C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=C][N][=C]["
+      ],
+      [
+        "Branch1][=Branch1][C][=Branch1][C][=O][",
+        "O][C]["
+      ],
+      [
+        "[C][",
+        "C][=N][N]["
+      ],
+      [
+        "Branch1][C][C][Branch1][C][C][",
+        "C][C][C]["
+      ],
+      [
+        "Branch2][Ring1][Ring1][C][=C][C][=C][",
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "Branch2][Ring1][=Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][#",
+        "C][C][=C]["
+      ],
+      [
+        "[C][O][C][=C][C][=C][",
+        "Branch2][Ring2]["
+      ],
+      [
+        "/N][=C][",
+        "\\"
+      ],
+      [
+        "Branch1][C][Cl][",
+        "C][=N]["
+      ],
+      [
+        "[Cl][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "O][",
+        "C][Branch1][C]["
+      ],
+      [
+        "F][",
+        "=N]["
+      ],
+      [
+        "C][Branch1][C][F][=C][C][",
+        "Branch1][C][F][=C]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "C][C][C][C][C][C][C]["
+      ],
+      [
+        "N][Ring1][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch1][",
+        "N][C][C]["
+      ],
+      [
+        "Ring1][=",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "/C][="
+      ],
+      [
+        "C][C][C][",
+        "C@H1]["
+      ],
+      [
+        "/C][=C][/",
+        "C]["
+      ],
+      [
+        "Branch1][=Branch1][C][Branch1][C][N][=",
+        "O]["
+      ],
+      [
+        "Branch1][#Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "Cl]["
+      ],
+      [
+        "C][=C][",
+        "C][Branch1][C][O][=C]["
+      ],
+      [
+        "=N][",
+        "\\"
+      ],
+      [
+        "Branch1][C][F][",
+        "C][Branch1][C][Cl][=C]["
+      ],
+      [
+        "[",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "N][C][=N][",
+        "N]["
+      ],
+      [
+        "Branch1][O][",
+        "O][C]["
+      ],
+      [
+        "Branch1][C][C][C][C][",
+        "N]["
+      ],
+      [
+        "Branch2][Ring1][Ring1][",
+        "S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring1][P][",
+        "C]["
+      ],
+      [
+        "C][=Branch1][Ring2][=C][",
+        "Ring1][=Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "S][",
+        "C][=N][C]["
+      ],
+      [
+        "C@@H1][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][C][=",
+        "N][N][=C]["
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "C@H1]["
+      ],
+      [
+        "C][=Branch1][C][=N][",
+        "N]["
+      ],
+      [
+        "O][C][=C][",
+        "N][=C]["
+      ],
+      [
+        "[",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "[C][",
+        "C][=Branch1][C][=O][N][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][C][",
+        "I]["
+      ],
+      [
+        "Branch1][C][",
+        "N][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Branch1][O]["
+      ],
+      [
+        "Branch2][Ring2][Ring2][",
+        "C]["
+      ],
+      [
+        "C@@][",
+        "Branch1][C][O]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][",
+        "N][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "C][C][=C]["
+      ],
+      [
+        "Ring1][Branch2][",
+        "="
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C@H1]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "Branch1][C][C]["
+      ],
+      [
+        "C][=Ring1][",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "[C][",
+        "N][N][=C]["
+      ],
+      [
+        "[C][C][Branch1][C][C][C][",
+        "C@H1]["
+      ],
+      [
+        "N][Ring1][",
+        "S]"
+      ],
+      [
+        "Branch1][N][",
+        "N][C][C][N][Branch1][C][C][C][C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch2][Ring1][Ring2]["
+      ],
+      [
+        "C][Branch1][C][N][=",
+        "N][C]["
+      ],
+      [
+        "Branch1][Ring1][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring1][#Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring1][=",
+        "C][=N]["
+      ],
+      [
+        "Branch1][O][",
+        "O][C][C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][=",
+        "C]["
+      ],
+      [
+        "N][=C][",
+        "Ring2][Ring1]["
+      ],
+      [
+        "O][Ring1][",
+        "Branch1][C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=Branch1][C][=O][",
+        "N]["
+      ],
+      [
+        "NH1][",
+        "C][=N]["
+      ],
+      [
+        "Branch1][C][F][C][=C][Ring1][#",
+        "Branch1][C][C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][=C]["
+      ],
+      [
+        "C][=Branch1][",
+        "Branch1][=C]["
+      ],
+      [
+        "C][=N][",
+        "N][=N]["
+      ],
+      [
+        "C][=C][Branch1][C][C][",
+        "N]["
+      ],
+      [
+        "C][=",
+        "Ring1][Branch1][C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "Branch1][C][Cl][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][C][C][C][",
+        "C@@H1]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "S]["
+      ],
+      [
+        "[C][C][Branch1][C][C][",
+        "C@H1]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C@@H1]["
+      ],
+      [
+        "Branch1][#Branch2][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "C][C]["
+      ],
+      [
+        "O][=",
+        "N][C]["
+      ],
+      [
+        "N][Ring1][",
+        "P]"
+      ],
+      [
+        "C][=C][C][",
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][C]["
+      ],
+      [
+        "[C][O][C][=Branch1][C][=O][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring1][Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch2][",
+        "Branch1][=Branch1]["
+      ],
+      [
+        "Branch1][=N][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "[C][C][",
+        "N][=C]["
+      ],
+      [
+        "Branch1][P][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "Branch1]["
+      ],
+      [
+        "Branch1][C][C][C][C][",
+        "C@@H1]["
+      ],
+      [
+        "C][=N][C][=C][",
+        "C][Branch1][C][Cl][=C]["
+      ],
+      [
+        "Branch2][Ring2][Ring1][",
+        "C]["
+      ],
+      [
+        "C][=C][Ring1][=Branch1][",
+        "N][=C]["
+      ],
+      [
+        "C@H1][",
+        "C][C@@H1]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "O]"
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "N][C][C]["
+      ],
+      [
+        "S][Branch1][C][C][=Branch1][C][=O][",
+        "=O]["
+      ],
+      [
+        "Branch1][O][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "NH1][",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "C@@H1][O][C@H1][",
+        "Branch1][Ring1][C][O][C@@H1]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "N][C][C][C][C][C]["
+      ],
+      [
+        "[",
+        "N][=C][Branch1][C][N]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "N][C]["
+      ],
+      [
+        "C][=Branch1][C][=O][N][C][C][",
+        "C][C][C][C]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "C][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C@]["
+      ],
+      [
+        "[",
+        "O][C]["
+      ],
+      [
+        "N][C][=C][N][=C][",
+        "Ring1][Branch1]["
+      ],
+      [
+        "O][C][C@H1][",
+        "O][C@@H1]["
+      ],
+      [
+        "\\",
+        "C]["
+      ],
+      [
+        "O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C]["
+      ],
+      [
+        "Ring1][P][",
+        "=C][Ring2][Ring1]["
+      ],
+      [
+        "Ring1][S][",
+        "="
+      ],
+      [
+        "C][=C][C][=C][",
+        "Branch1][C][Cl][C][=C][Ring1][#Branch1]"
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch1][="
+      ],
+      [
+        "Branch2][Ring1][#",
+        "C][C][=Branch1][C][=O]["
+      ],
+      [
+        "NH1][",
+        "C][=C][C][=C][C][=C][Ring1][="
+      ],
+      [
+        "S][",
+        "Ring1][Branch1][=C]["
+      ],
+      [
+        "Branch1][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "Ring1][#",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "C][=C][C][",
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O][=C]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "Branch1][C][O]["
+      ],
+      [
+        "[F][",
+        "C][Branch1][C][F][Branch1][C][F]["
+      ],
+      [
+        "NH1][",
+        "N][=C][C]["
+      ],
+      [
+        "Branch2][Ring2][",
+        "Branch1][C]["
+      ],
+      [
+        "O][",
+        "N]["
+      ],
+      [
+        "Branch1][=Branch1][",
+        "C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "N][C][C][C]["
+      ],
+      [
+        "Branch2][",
+        "Branch1][#Branch2]["
+      ],
+      [
+        "N][C][C][C][C][",
+        "Ring1][Branch1]"
+      ],
+      [
+        "Ring1][=",
+        "N][=N]["
+      ],
+      [
+        "Ring1][P][",
+        "="
+      ],
+      [
+        "/N][=C][",
+        "/C][=C][C][=C]["
+      ],
+      [
+        "S][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][",
+        "C][Branch1][C][Cl][=C]["
+      ],
+      [
+        "Branch2][Ring2][=",
+        "Branch1][C]["
+      ],
+      [
+        "Branch1][O][C][",
+        "C][=N][N][Branch1][C][C][C][="
+      ],
+      [
+        "[C][C][=C][",
+        "C][Branch1][C][C][=C]["
+      ],
+      [
+        "Ring2][Ring1][Ring2][",
+        "=C]["
+      ],
+      [
+        "Branch1][=Branch1][C][=Branch1][C][=O][",
+        "O][C][C]["
+      ],
+      [
+        "Branch2][Ring1][Ring2][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][C][=C][N][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "N]"
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "P]["
+      ],
+      [
+        "Branch1][O][",
+        "O][C][C]["
+      ],
+      [
+        "/C][=",
+        "Branch1][="
+      ],
+      [
+        "Branch1][#Branch1][C][C][C][C][",
+        "Ring1][Ring1]["
+      ],
+      [
+        "O][",
+        "C][C][C][N]["
+      ],
+      [
+        "O][",
+        "Ring1][Branch2]["
+      ],
+      [
+        "[C][",
+        "N][C][C][C]["
+      ],
+      [
+        "Branch1][=Branch1][",
+        "N][Branch1][C][C]["
+      ],
+      [
+        "Cl",
+        "-1]"
+      ],
+      [
+        "O][",
+        "C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "Branch2][Ring1][=",
+        "Branch1]"
+      ],
+      [
+        "/C][=Branch1][",
+        "Ring1][=N]["
+      ],
+      [
+        "C][=N][C][=C][",
+        "C][=N]["
+      ],
+      [
+        "[C][C][C][C][C][C][",
+        "C][C][C][C]["
+      ],
+      [
+        "Branch1][Ring1][O][C][C][Branch1][Ring1][O][",
+        "C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "C][C][=C]["
+      ],
+      [
+        "Branch1][=N][C][=C][C][=C][",
+        "Branch1][Ring1][O][C][C][=C][Ring1][Branch2]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "N][C][C][N][C][C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][P]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "Branch1][="
+      ],
+      [
+        "Branch1][=Branch1][C][",
+        "Branch1][C][C][C][C]["
+      ],
+      [
+        "NH1][C][=C][C][",
+        "Ring1][=Branch2][="
+      ],
+      [
+        "C][Branch1][C][Cl][=C][",
+        "Ring1][#Branch1]"
+      ],
+      [
+        "/C][=C][\\",
+        "C]["
+      ],
+      [
+        "O][C@H1][",
+        "Branch1][Ring1][C][O][C@@H1]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][C][C][C]["
+      ],
+      [
+        "C@@H1][",
+        "C][C][C@H1]["
+      ],
+      [
+        ".[Cl]",
+        ".[Cl]"
+      ],
+      [
+        "Ring1][=Branch1][",
+        "N][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][=",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "[C][",
+        "N][C][C]["
+      ],
+      [
+        "Branch2][Branch1][",
+        "Branch1]["
+      ],
+      [
+        ".[",
+        "Cl-1]"
+      ],
+      [
+        "Branch1][S][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "N][C]["
+      ],
+      [
+        "Branch1][=Branch2][N][C][C][O][C][C][",
+        "Ring1][=Branch1][=C]["
+      ],
+      [
+        "N][Branch1][C][C][",
+        "C]"
+      ],
+      [
+        "Branch1][Ring1][",
+        "C][C][C]["
+      ],
+      [
+        "Ring2][Ring2][#",
+        "Branch2]"
+      ],
+      [
+        "Ring1][=",
+        "Branch1][C][=N]["
+      ],
+      [
+        "O][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]"
+      ],
+      [
+        "/N][=C][",
+        "/"
+      ],
+      [
+        "N][=N][",
+        "NH1][N][="
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O][C@H1]["
+      ],
+      [
+        "[C][C@@H1][",
+        "C][N]["
+      ],
+      [
+        "Cl][",
+        "=N]["
+      ],
+      [
+        "S][",
+        "Ring1][Branch1][C]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N][C][C]["
+      ],
+      [
+        "C@H1][",
+        "Branch1][C][O][C@H1]["
+      ],
+      [
+        "Branch1][=Branch1][C][Branch1][C][N][=",
+        "O][C]["
+      ],
+      [
+        "Ring1][#",
+        "C][=N]["
+      ],
+      [
+        "C@H1][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "N][=C][",
+        "C][=C][C]["
+      ],
+      [
+        ".[",
+        "I"
+      ],
+      [
+        "C][Branch1][C][Br][=C][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "[",
+        "N][C][=N][C]["
+      ],
+      [
+        "Branch1][C][Br][",
+        "C][=C][Ring1][#Branch1]"
+      ],
+      [
+        "N][=C][",
+        "Ring1][=Branch1][C]["
+      ],
+      [
+        "Branch1][",
+        "N][C][C][C]["
+      ],
+      [
+        "O][",
+        "C][=N][C]["
+      ],
+      [
+        "S][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "[N][#",
+        "C][C]["
+      ],
+      [
+        "Branch1][Branch2][C][=C][C][=C][",
+        "O][Ring1][Branch1]["
+      ],
+      [
+        "Branch1][C][Cl][C][=C][Ring1][#",
+        "Branch1][C][C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "C][=N][C]["
+      ],
+      [
+        "Branch1][S][",
+        "C][C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][",
+        "Branch1][C][F][Branch1][C][F][F]["
+      ],
+      [
+        "Branch1][=Branch1][C][C][C][",
+        "Ring1]["
+      ],
+      [
+        "S][C][=",
+        "Ring1][Branch1]["
+      ],
+      [
+        "S+1][",
+        "Branch1][C][O-1]["
+      ],
+      [
+        "Branch1][=Branch2][S][Branch1][C][N][=Branch1][C][=O][",
+        "=O][C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "Branch1][#Branch1][C][=Branch1][C][=O][",
+        "N]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "S][=Branch1][C][=O][=Branch1][C][=O]["
+      ],
+      [
+        "C][=C][",
+        "C][="
+      ],
+      [
+        "[C][N][Branch1][C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][Ring1][C][",
+        "O][C@H1]["
+      ],
+      [
+        "[C][C][",
+        "N][C]["
+      ],
+      [
+        "Ring1][Ring2][",
+        "C]["
+      ],
+      [
+        "Ring2][Ring1][=Branch2][",
+        "=C]["
+      ],
+      [
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "N]["
+      ],
+      [
+        "Branch1][S][",
+        "C][=Branch1][C][=O][C][=C][C][=C]["
+      ],
+      [
+        "O][Ring1][",
+        "Branch1][=C]["
+      ],
+      [
+        ".",
+        "[O][=C]["
+      ],
+      [
+        "[O][=",
+        "C][C][C]["
+      ],
+      [
+        "Ring1][=",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch1][C][",
+        "Branch1][C][F][F]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "C][C][C]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][O]["
+      ],
+      [
+        "[",
+        "N][C][=N][C][=C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "S]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "B",
+        "]["
+      ],
+      [
+        "[C][",
+        "C][=C][N][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "O][C]["
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "O]"
+      ],
+      [
+        "[C][C][",
+        "C@@H1]["
+      ],
+      [
+        "N][C][C][N][",
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][C][C]["
+      ],
+      [
+        "N][C][C][C][C][C][",
+        "Ring1][=Branch1]"
+      ],
+      [
+        "Branch1][C][F][C][Branch1][C][F][=C][",
+        "Ring1][Branch2]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][",
+        "Branch1][C][O][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][S]["
+      ],
+      [
+        "=C][",
+        "\\"
+      ],
+      [
+        "C][=C][",
+        "S]["
+      ],
+      [
+        "NH1][",
+        "Ring1][Branch1]["
+      ],
+      [
+        "=",
+        "O][C][C]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "C][=C][C][=C][",
+        "Branch2][Ring1][Branch2]["
+      ],
+      [
+        "=C][Ring2][Ring1][",
+        "O]"
+      ],
+      [
+        "C@@H1][",
+        "C][C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][N][",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "C][C][=C][",
+        "N]["
+      ],
+      [
+        "N][C][C][C][C][",
+        "C][C][C]["
+      ],
+      [
+        "[C][",
+        "C][=Branch1][C][=O][N][C]["
+      ],
+      [
+        "C][Branch1][C][O][=C][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "[C][",
+        "N][C][=Branch1][C][=O][C]["
+      ],
+      [
+        "/C][Branch1][C][C][=C][",
+        "/"
+      ],
+      [
+        ".[I",
+        "-1]"
+      ],
+      [
+        "C@@H1][",
+        "C@@H1]["
+      ],
+      [
+        "O][C][C][",
+        "Ring1][=Branch1][C]["
+      ],
+      [
+        "Branch1][S][",
+        "C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][O][C][O]["
+      ],
+      [
+        "O][",
+        "P][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][C][O][C][Branch1][C][O][=C][",
+        "Ring1][Branch2]["
+      ],
+      [
+        "N][C][C][C][C][",
+        "Ring1][Branch1][=C]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][",
+        "C][Branch1][C][F][Branch1][C][F][F]["
+      ],
+      [
+        "C@H1][",
+        "C][C@H1]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][C][=N]["
+      ],
+      [
+        "=C][Ring2][Ring1][",
+        "Branch2]"
+      ],
+      [
+        "C][=C][C][=C][",
+        "Branch1][=C]["
+      ],
+      [
+        "/C][=C][/",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "[C][O][C][=C][C][=C][",
+        "Branch1][#Branch1][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "Branch2][Ring2][#",
+        "Branch1][C]["
+      ],
+      [
+        "Branch1][N][",
+        "O][C][C]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][Branch2]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][#Branch2][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Ring1][P][",
+        "=N]["
+      ],
+      [
+        "[N][",
+        "S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C]["
+      ],
+      [
+        "C][=N][",
+        "Ring1][=Branch1]"
+      ],
+      [
+        "[C][O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C]["
+      ],
+      [
+        "C@][",
+        "Branch1][C][O]["
+      ],
+      [
+        "[C][C][",
+        "N][C][=C]["
+      ],
+      [
+        "O][C][C][",
+        "Branch1][C][O][C]["
+      ],
+      [
+        "C][=C][Ring1][=",
+        "C][C]["
+      ],
+      [
+        "Ring1][S][",
+        "=N]["
+      ],
+      [
+        "N][=C][",
+        "C][=C]["
+      ],
+      [
+        "N][C][C][C][C][",
+        "Ring1][Branch1][C]["
+      ],
+      [
+        "C][=C][C][",
+        "Branch1][P]["
+      ],
+      [
+        "N][C][=N][",
+        "C][=N][C]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#Branch1][",
+        "=C]["
+      ],
+      [
+        "[C][C][",
+        "C][C][C][C][C]["
+      ],
+      [
+        "Ring2][Ring2][=",
+        "Branch1]["
+      ],
+      [
+        "=C][Ring2][Ring1][",
+        "Ring2]"
+      ],
+      [
+        "Branch2][Ring1][#",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch2][Ring2][Branch2][",
+        "C]["
+      ],
+      [
+        "C@H1][",
+        "C@H1]["
+      ],
+      [
+        "[C][C][Branch1][C][C][Branch1][C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "[C][C][Branch1][C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring1][#",
+        "C][=O]"
+      ],
+      [
+        "Branch1][C][Cl][C][=C][Ring1][#",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "[C][C][N][Branch1][Ring1][",
+        "C][C][C][C]["
+      ],
+      [
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C@@H1][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "Ring2][Ring1][#",
+        "Branch1][="
+      ],
+      [
+        "[",
+        "N][C][=N][C][=N]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "C][N]["
+      ],
+      [
+        "C][=C][C][Branch1][C][F][=C][",
+        "C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][Branch2][C][=C][C][=C][",
+        "S][Ring1][Branch1]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "Branch1][C][=",
+        "N][C][=C]["
+      ],
+      [
+        "C][=Branch1][C][=S][",
+        "N]["
+      ],
+      [
+        "N][C][=C][C][=C][",
+        "C][=Branch1][Ring2][=C][Ring1][=Branch1]["
+      ],
+      [
+        "C@H1][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "N][C][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C]["
+      ],
+      [
+        "S][Branch1][C][C][=Branch1][C][=O][",
+        "=O][=C]["
+      ],
+      [
+        "Branch1][#",
+        "C][N]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][C][C][N]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O][C@@H1]["
+      ],
+      [
+        "C][C@@H1][",
+        "Ring1][Ring1]["
+      ],
+      [
+        "[C][C][O][C][=Branch1][C][=O][",
+        "C][=C]["
+      ],
+      [
+        "O][Ring1][",
+        "Branch2]"
+      ],
+      [
+        "C][=N][C][=C][C][Branch1][C][Cl][=C][",
+        "C][=C][Ring1][O]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][#"
+      ],
+      [
+        "Branch1][Ring1][",
+        "N]["
+      ],
+      [
+        "Ring1][S][",
+        "C][C]["
+      ],
+      [
+        "C][=C][C][",
+        "Branch2][Ring1][Ring2]["
+      ],
+      [
+        "Ring2][Ring2][=",
+        "Branch2]["
+      ],
+      [
+        "Ring1][O][",
+        "=N]["
+      ],
+      [
+        "Branch1][P][",
+        "C][=Branch1][C][=O][N][C][=C][C][=C]["
+      ],
+      [
+        "/C][=",
+        "Branch2][Ring1]["
+      ],
+      [
+        "[O][=C][",
+        "Branch2][Ring1][Ring1]["
+      ],
+      [
+        "Branch1][C][",
+        "C][=N]["
+      ],
+      [
+        "Branch2][Ring1][#Branch2][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][C][C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][=C][Ring2][Ring2][",
+        "C]"
+      ],
+      [
+        "Ring1][=Branch1][=",
+        "N][Ring1]["
+      ],
+      [
+        "[C][C][",
+        "O][C][=C][C]["
+      ],
+      [
+        "N][",
+        "Branch1][=N][C][C][=C][C][=C]["
+      ],
+      [
+        "Ring2][Ring1][Ring2][",
+        "=O]"
+      ],
+      [
+        "O][C][=C][C][=C][",
+        "Branch1][C][Cl][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch1][O][",
+        "C]"
+      ],
+      [
+        "C@][",
+        "Branch1][C][C][C@H1]["
+      ],
+      [
+        "C][Branch1][C][N][=",
+        "O]"
+      ],
+      [
+        "Branch1][#",
+        "Branch1][O][C]["
+      ],
+      [
+        "N][Ring1][Branch1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][C][="
+      ],
+      [
+        "N][C][=Branch1][C][=O][C@H1][",
+        "Branch1][#Branch2][C][C][=C][C][=C][C][=C][Ring1][=Branch1]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][P]["
+      ],
+      [
+        "C][=C][",
+        "N][Branch1][C][C]["
+      ],
+      [
+        "Branch1][=C][",
+        "C][=N]["
+      ],
+      [
+        "Branch2][",
+        "Branch1][#Branch1]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "Branch2]["
+      ],
+      [
+        "Ring2][Ring1][#",
+        "Branch1][=O]"
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N][C][=C]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C][=C][C]["
+      ],
+      [
+        "N][Ring1][",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "C][=C][Ring1][=Branch2][",
+        "C]["
+      ],
+      [
+        "Branch1][#Branch1][O][",
+        "C][Branch1][C][F]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][#Branch2][Ring1][=",
+        "Branch1]"
+      ],
+      [
+        "Ring2][Ring1][",
+        "C][=O]"
+      ],
+      [
+        "[C][",
+        "C][=N][N][=C]["
+      ],
+      [
+        "Branch1][O][",
+        "C][C][C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch1][=O]"
+      ],
+      [
+        "C@][",
+        "Ring1][#Branch1]["
+      ],
+      [
+        "Ring2][Ring1][=Branch2][",
+        "C]["
+      ],
+      [
+        "Branch1][C][",
+        "N][C][C]["
+      ],
+      [
+        "Ring2][Ring1][Ring1][",
+        "C][C]["
+      ],
+      [
+        "C][=",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][N]["
+      ],
+      [
+        "Ring2][Ring2][",
+        "Branch1]["
+      ],
+      [
+        "O][Ring1][",
+        "Branch1][C][C]["
+      ],
+      [
+        "C][=C][C][Branch1][Ring1][O][C][=C][",
+        "Branch1][Ring1][O][C]["
+      ],
+      [
+        "Branch1][C][F][",
+        "C][=N]["
+      ],
+      [
+        "Branch1][Branch2][C][=C][C][=C][",
+        "S][Ring1]["
+      ],
+      [
+        "C][=C][Ring1][#",
+        "C][C]["
+      ],
+      [
+        "C][=C][C][",
+        "Branch2][Ring1][Ring1]["
+      ],
+      [
+        "N",
+        "-1]["
+      ],
+      [
+        "Branch2][Ring2][=Branch2][",
+        "C]["
+      ],
+      [
+        "Ring1][",
+        "N][=N]["
+      ],
+      [
+        "C@H1][",
+        "C][N]["
+      ],
+      [
+        "Ring1][=",
+        "C][=O]"
+      ],
+      [
+        "N][C][=Branch1][C][=O][C][",
+        "N]["
+      ],
+      [
+        "Ring1][=N][=",
+        "O]"
+      ],
+      [
+        "Branch1][=",
+        "N][C][C]["
+      ],
+      [
+        "Branch1][Ring1][C][",
+        "O][=C]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][C][",
+        "S]["
+      ],
+      [
+        "N][C][=C][",
+        "N][=C][C]["
+      ],
+      [
+        "C][=C][Ring1][",
+        "O][C]["
+      ],
+      [
+        "Ring1][=Branch1][",
+        "C][=C]["
+      ],
+      [
+        "Branch2][Ring1][=Branch2][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C@@H1][",
+        "Branch1][C][O][C@@H1]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "NH1]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=C][N][=C]["
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=",
+        "Branch1][C][C][C]["
+      ],
+      [
+        "O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]"
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][C][Ring1][#Branch2]["
+      ],
+      [
+        "Ring1][O][=",
+        "O]"
+      ],
+      [
+        "=C][Ring2][Ring1][",
+        "N]"
+      ],
+      [
+        "C][=C][C][=C][",
+        "Branch1][C][F][C][=C][Ring1][#Branch1]"
+      ],
+      [
+        "[C][C][=C][",
+        "C][Branch1][C][C][=C][C]["
+      ],
+      [
+        "O][",
+        "C][=N][C][=C]["
+      ],
+      [
+        "Branch1][=",
+        "N][Ring1]["
+      ],
+      [
+        "C@H1][",
+        "Branch1][C][O]["
+      ],
+      [
+        "[C][",
+        "#C][C]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch2][=O]"
+      ],
+      [
+        "Branch1][=N][C][=C][C][=C][",
+        "Branch1][C][Cl][C][=C][Ring1][#Branch1][Cl]["
+      ],
+      [
+        "[C][N][",
+        "C][=C][C]["
+      ],
+      [
+        "Branch1][=Branch1][C][C][C][",
+        "Ring1][Ring1][=C]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][Branch1]["
+      ],
+      [
+        "Branch2][Ring1][Ring2][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][C][O][C@H1][",
+        "Ring1][Branch2]["
+      ],
+      [
+        "Ring2][Ring1][#Branch2][",
+        "C]["
+      ],
+      [
+        "S][=Branch1][C][=O][=Branch1][C][=O][",
+        "N][C][C][N]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][Branch1][C][Cl][C][=C][Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "Ring2][Ring1][Branch2][",
+        "C]["
+      ],
+      [
+        "Branch1][C][F][C][=C][Ring1][#Branch1][",
+        "F]["
+      ],
+      [
+        "Branch1][C][Br][",
+        "C][=C][Ring1][#"
+      ],
+      [
+        "N][C][C][O][C][C][",
+        "Ring1][=Branch1][C]["
+      ],
+      [
+        "[O][=N+1][Branch1][C][O-1][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "C][C][C][",
+        "N][C]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "Branch1][=O]"
+      ],
+      [
+        "N][C][C][C][C][C][",
+        "Ring1][=Branch1][=C]["
+      ],
+      [
+        "C@H1][",
+        "Ring1][=Branch1]["
+      ],
+      [
+        "[C][O][C][=C][C][=C][",
+        "Branch1][Ring1][O][C][C]["
+      ],
+      [
+        "/C][=C][/",
+        "C][=Branch1][C][=O]["
+      ],
+      [
+        "Ring1][P][",
+        "=O]"
+      ],
+      [
+        "Ring1][=Branch1][=",
+        "O]["
+      ],
+      [
+        "Branch2][Ring2][#Branch2][",
+        "C]["
+      ],
+      [
+        "C][=C][C][",
+        "Branch1][=C]["
+      ],
+      [
+        "/",
+        "N][=N]["
+      ],
+      [
+        "Ring2][Ring1][",
+        "C][=N]["
+      ],
+      [
+        "Branch1][C][Cl][C][Branch1][C][Cl][=C][",
+        "Ring1][Branch2]"
+      ],
+      [
+        "Branch1][=",
+        "N][C][=C][C][=C][C]["
+      ],
+      [
+        "Branch1][#Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "F]["
+      ],
+      [
+        "C][=",
+        "Branch1][#"
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "C][C][C]["
+      ],
+      [
+        "C][Branch1][C][F][=C][",
+        "Ring1][#Branch1][C]["
+      ],
+      [
+        "=C][",
+        "/"
+      ],
+      [
+        "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][",
+        "C][=C][Ring1][=Branch2]"
+      ],
+      [
+        "C][=C][Ring1][=",
+        "N][C]["
+      ],
+      [
+        "Branch1][C][C][",
+        "C][=C][Ring1][#"
+      ],
+      [
+        "Ring2][Ring1][",
+        "Branch2][="
+      ],
+      [
+        "Branch1][#Branch2][O][C][Branch1][C][F][Branch1][C][F][F][",
+        "=C]["
+      ],
+      [
+        "C][=",
+        "Ring1][O]["
+      ],
+      [
+        "Branch2][Ring2][=",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "O][Ring1][",
+        "N]"
+      ],
+      [
+        "Ring2][Ring2][#",
+        "Branch1]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][C][Branch1][C][C][C][",
+        "C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "Branch1][C][Br][",
+        "=C]["
+      ],
+      [
+        "C][C][",
+        "O][C]["
+      ],
+      [
+        "Branch1][C][N][=",
+        "O]"
+      ],
+      [
+        "Ring2][Ring1][#Branch1][",
+        "=C]["
+      ],
+      [
+        "C][C][=Branch1][C][=O][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring2][#",
+        "Branch1][C][=Branch1][C][=O]["
+      ],
+      [
+        "Branch1][=Branch1][C][",
+        "Branch1][C][C]["
+      ],
+      [
+        "Branch1][P][",
+        "N][C][=Branch1][C][=O][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][",
+        "Ring1][#Branch2]["
+      ],
+      [
+        "Ring2][Ring1][Ring1][=",
+        "O]"
+      ],
+      [
+        "Branch1][#",
+        "C][C][C]["
+      ],
+      [
+        "[C][",
+        "S][=Branch1][C][=O][=Branch1][C][=O][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][N][C][=C][C][=C][Branch1][C][F][C][=C][Ring1][#",
+        "Branch1][C]["
+      ],
+      [
+        "C][C][C][C][C][C][",
+        "C][C][C]["
+      ],
+      [
+        "Branch1][=C][",
+        "C][=Branch1][C][=O][O][C]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1][C][=N]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O][C][=C]["
+      ],
+      [
+        "Ring1][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "/C][=",
+        "Branch1][#Branch2]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][",
+        "C]["
+      ],
+      [
+        "S][",
+        "C][=C][C]["
+      ],
+      [
+        "Branch1][=Branch2][S][Branch1][C][C][=Branch1][C][=O][",
+        "=O][C][=C][Ring1][#Branch2]["
+      ],
+      [
+        "N][N][=C][",
+        "C][=N]["
+      ],
+      [
+        ".[O][=C][Branch1][C][O][",
+        "C][=Branch1][C][=O][O]"
+      ],
+      [
+        "Ring1][N][=",
+        "O]"
+      ],
+      [
+        "S][",
+        "C][=Ring1]["
+      ],
+      [
+        "[C][",
+        "N][C][=N][C]["
+      ],
+      [
+        "[C][C][",
+        "Branch1][C][C][=C]["
+      ],
+      [
+        "C][=N][",
+        "C][=C][Ring1][="
+      ],
+      [
+        "Branch1][C][F][C][=C][C][=C][Ring1][#Branch1][",
+        "F]["
+      ],
+      [
+        "Ring1][S][",
+        "=O]"
+      ],
+      [
+        "Branch1][=Branch2][C][=C][C][=C][C][=C][Ring1][=Branch1][",
+        "C][=C][C][=C][C][=C][Ring1][=Branch1]"
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N][C][C][C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "C][=C][C][=C][Ring1][#Branch1]["
+      ],
+      [
+        "Branch2][Ring1][P][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Ring2][Ring2][#",
+        "Branch2]["
+      ],
+      [
+        "Branch1][#Branch2][O][C][Branch1][C][F][Branch1][C][F][F][",
+        "C][=C][Ring1][O]["
+      ],
+      [
+        "[C][",
+        "C][=Branch1][C][=O][N]["
+      ],
+      [
+        "[C][C][",
+        "N][C][C][N]["
+      ],
+      [
+        "C][=C][C][Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C][C][",
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][=C]["
+      ],
+      [
+        "Branch1][Ring2][",
+        "N][="
+      ],
+      [
+        "Branch1][C][C][Branch1][C][C][",
+        "O]["
+      ],
+      [
+        "NH1][",
+        "C][=Branch1][C][=O][N]["
+      ],
+      [
+        "C][=C][C][",
+        "Branch1][S]["
+      ],
+      [
+        "C][=Branch1][C][=O][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "O][C][C]["
+      ],
+      [
+        "[C][",
+        "N+1]["
+      ],
+      [
+        "C][=C][Ring2][Ring1][",
+        "C][C]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][="
+      ],
+      [
+        "C][=Branch1][C][=O][C][",
+        "Branch1][=Branch1][C][=Branch1][C][=O][O][=C]["
+      ],
+      [
+        "C][Branch1][C][",
+        "I]["
+      ],
+      [
+        "C][=C][C][=C][C][Ring1][=Branch1][=C][",
+        "Ring1][#Branch2]"
+      ],
+      [
+        "Branch1][#Branch1][O][C][Branch1][C][C][=",
+        "O][C@H1]["
+      ],
+      [
+        "Ring1][#",
+        "Branch1][=C][C]["
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "C@@H1]["
+      ],
+      [
+        "S][Branch1][C][C][=Branch1][C][=O][",
+        "=O]"
+      ],
+      [
+        "Ring1][",
+        "N][C][=C]["
+      ],
+      [
+        "/N][=C][",
+        "Branch1][C][\\"
+      ],
+      [
+        "C][Branch1][C][F][=C][",
+        "Ring1][#Branch1]"
+      ],
+      [
+        "Branch1][",
+        "N][C][=Branch1][C][=O][C][=C][C][=C]["
+      ],
+      [
+        "N][C][C][",
+        "O][C]["
+      ],
+      [
+        "N][C][C][",
+        "Branch1][C][O][C]["
+      ],
+      [
+        "[C][O][C][=Branch1][C][=O][",
+        "C][=C]["
+      ],
+      [
+        "Branch1][=C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "[C][C][=N][",
+        "O][C][Branch1][C]["
+      ],
+      [
+        "NH1][",
+        "C][=N][C]["
+      ],
+      [
+        "Branch1][=N][C][=C][C][=C][",
+        "Branch1][Ring1][C][#N][C][=C][Ring1][Branch2]["
+      ],
+      [
+        "Branch1][=C][",
+        "N][C][=C][C][=C]["
+      ],
+      [
+        "O][C][Branch1][C][C][=",
+        "O]"
+      ],
+      [
+        "O][C][=Branch1][C][=O][",
+        "N][C@@H1]["
+      ],
+      [
+        "[C][C][",
+        "O][C]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][C][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "C][C][",
+        "C][=Branch1][C][=O][N]["
+      ],
+      [
+        "C][=N][",
+        "Ring1][=Branch1][C]["
+      ],
+      [
+        "Branch1][S][C][=C][C][=C][",
+        "Branch1][=Branch1][N+1][=Branch1][C][=O][O-1][C][=C][Ring1][=Branch2]["
+      ],
+      [
+        "[C][C][",
+        "O][C][=C]["
+      ],
+      [
+        "[O][=C][",
+        "Branch1][=N][N][C][=C][C][=C]["
+      ],
+      [
+        "[C][C][=C][",
+        "N]["
+      ],
+      [
+        "C][C][",
+        "N][C]["
+      ],
+      [
+        "O][C][",
+        "C]"
+      ],
+      [
+        "C][=C][C][=C][C][=Branch1][Ring2][=C][Ring1][=Branch1][",
+        "O][C][C][O]["
+      ],
+      [
+        "Branch1][C][C][C][C][",
+        "C@H1]["
+      ],
+      [
+        "N][C][=Branch1][C][=O][",
+        "N][C@H1]["
+      ],
+      [
+        "Branch1][=Branch2][C][Branch1][C][F][Branch1][C][F][F][",
+        "C][=N]["
+      ],
+      [
+        "N][=C][",
+        "Ring1][#C]["
+      ],
+      [
+        "C][=C][C][Branch1][Ring1][O][C][=C][Branch1][Ring1][O][C][C][Branch1][Ring1][O][",
+        "C][=C][Ring1]["
+      ],
+      [
+        "Ring2][",
+        "Branch1][="
+      ],
+      [
+        "Branch2][Ring2][",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "Branch1][=Branch2][",
+        "C][=N][C][=C][C][=N]["
+      ],
+      [
+        "N][C][C][C][C][",
+        "N]["
+      ],
+      [
+        "C][=",
+        "Branch2][Ring1]["
+      ],
+      [
+        "[O][=C][",
+        "Branch2][Ring1][Branch2]["
+      ],
+      [
+        "Branch1][O][",
+        "N][C][=Branch1][C][=O][C][C][C]["
+      ],
+      [
+        "N][Branch1][C][C][",
+        "C][=C][C][=C]["
+      ],
+      [
+        "Branch2][Ring1][",
+        "O][C][=C][C][=C]["
+      ],
+      [
+        "C][=C][",
+        "Ring2][Ring1][#C]["
+      ],
+      [
+        "C@][",
+        "Branch1][C][C][C@@H1]["
+      ],
+      [
+        "C][=C][Ring1][Branch2][",
+        "C]["
+      ],
+      [
+        "[N][",
+        "C@@H1]["
+      ],
+      [
+        "Branch2][Ring1][#",
+        "C][C][=C][C][=C]["
+      ],
+      [
+        "Ring2][Ring1][#Branch2][",
+        "=C]["
+      ],
+      [
+        "Branch1][C][Cl][C][=C][Ring1][#Branch1][",
+        "=C]["
+      ],
+      [
+        "N][",
+        "N][=C][C]["
+      ],
+      [
+        "N][C][=C][",
+        "C][Branch1][C][Cl][=C]["
+      ],
+      [
+        "Ring2][Ring1][=",
+        "Branch2][="
+      ],
+      [
+        "N][=C][",
+        "Ring1][=C]["
+      ],
+      [
+        "S][Branch1][C][C][=Branch1][C][=O][",
+        "="
+      ],
+      [
+        "C][=C][C][=C][C][=C][Ring1][=Branch1][S][",
+        "Ring1][=Branch2]["
+      ],
+      [
+        "Branch1][C][Cl][",
+        "S]["
+      ],
+      [
+        "[C][",
+        "C][=Branch1][C][=O][N][C@@H1]["
+      ],
+      [
+        "Ring1][=Branch1][",
+        "O]["
+      ]
+    ]
+  }
+}

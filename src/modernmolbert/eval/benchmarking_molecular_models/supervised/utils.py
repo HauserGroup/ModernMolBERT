@@ -2,7 +2,8 @@ import numpy as np
 import json
 import hashlib
 
-from .models import RF_CLF, RF_REG, RIDGE_CLF, RIDGE_REG
+from .const import CV_SPLITS
+from .models import KNN_CLF, KNN_REG, RF_CLF, RF_REG, RIDGE_CLF, RIDGE_REG
 from sklearn.metrics import (
     get_scorer,
     get_scorer_names,
@@ -42,6 +43,10 @@ def get_model_version_hash() -> str:
             "RF_REG": RF_REG,
             "RIDGE_CLF": RIDGE_CLF,
             "RIDGE_REG": RIDGE_REG,
+            "KNN_CLF": KNN_CLF,
+            "KNN_REG": KNN_REG,
+            "cv_splits": CV_SPLITS,
+            "cv_shuffle_seed": 0,
         },
         sort_keys=True,
         cls=NpEncoder,

@@ -1,13 +1,23 @@
 #!/usr/bin/env python3
-"""Validate APE tokenizer quality before model training."""
+"""Validate an APE or BPE tokenizer before model training.
+
+Checks the file against its metadata, then tokenizes a sample of molecules and
+reports unknown-token, silent-loss, length and truncation statistics.
+"""
 
 import argparse
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
 
-from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+from modernmolbert.tokenization.load import (
+    SMIRK,
+    load_verified_tokenizer,
+    tokenizer_algorithm,
+    tokenizer_representation,
+)
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     EXPECTED_SPECIAL_IDS,
@@ -16,13 +26,9 @@ from modernmolbert.utils import (
     assert_metadata_representation,
     assert_representation_compatible,
     compute_tokenization_stats,
-    default_tokenizer_path,
     encode_sequence,
-    file_sha256,
     get_streaming_dataset,
     infer_molecule_column,
-    load_tokenizer_metadata,
-    metadata_path_for_vocab,
     normalize_sequence,
     resolve_special_ids,
     sample_jsonl_sequences,
@@ -30,29 +36,35 @@ from modernmolbert.utils import (
     validate_sample_shape,
 )
 
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
+
 DATASET_NAME = PUBCHEM10M_DATASET
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate APE tokenizer metadata and tokenization quality.",
+        description="Validate tokenizer metadata and tokenization quality.",
     )
     parser.add_argument(
         "--tokenizer_vocab_path",
         type=str,
-        default=None,
-        help="Path to tokenizer vocabulary JSON. Defaults by representation.",
+        required=True,
+        help="Tokenizer file: an APE vocabulary JSON or a BPE/SMIRK tokenizer.json.",
     )
     parser.add_argument(
         "--tokenizer_metadata_path",
         type=str,
         default=None,
+        help="Tokenizer metadata JSON. Defaults to <file>.metadata.json.",
     )
     parser.add_argument(
         "--representation",
         type=str,
         choices=[SELFIES_REPRESENTATION, SMILES_REPRESENTATION],
-        default=SELFIES_REPRESENTATION,
+        default=None,
+        help="Expected representation; fails if the metadata records another. "
+        "Defaults to the metadata's.",
     )
     parser.add_argument("--dataset_name", type=str, default=DATASET_NAME)
     parser.add_argument(
@@ -115,7 +127,7 @@ def _sample_sequences(args: argparse.Namespace) -> list[str]:
     if args.fixture_jsonl:
         return sample_jsonl_sequences(
             Path(args.fixture_jsonl),
-            representation=args.molecule_column,
+            column=args.molecule_column,
             n=args.n,
         )
 
@@ -154,7 +166,7 @@ def _fail_or_warn(args: argparse.Namespace, message: str) -> bool:
 
 
 def _print_unknown_examples(
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "PreTrainedTokenizerBase",
     sequences: list[str],
     special_ids: dict[str, int],
     max_seq_length: int,
@@ -186,44 +198,18 @@ def main() -> None:
     load_dotenv()
     args = parse_args()
 
-    if args.tokenizer_vocab_path is None:
-        args.tokenizer_vocab_path = str(default_tokenizer_path(args.representation))
-
+    # A hash mismatch always fails, even under --warn_only.
+    tokenizer, metadata, vocab_path, metadata_path = load_verified_tokenizer(
+        args.tokenizer_vocab_path,
+        args.tokenizer_metadata_path,
+        log=lambda message: print(message, flush=True),
+    )
+    if args.representation is not None:
+        assert_metadata_representation(metadata, expected_representation=args.representation)
+    args.representation = tokenizer_representation(metadata)
     args.molecule_column = infer_molecule_column(
         args.dataset_name, args.representation, args.molecule_column
     )
-
-    vocab_path = Path(args.tokenizer_vocab_path)
-    if not vocab_path.exists():
-        raise FileNotFoundError(f"Tokenizer vocabulary not found: {vocab_path}")
-
-    metadata_path = (
-        Path(args.tokenizer_metadata_path)
-        if args.tokenizer_metadata_path
-        else metadata_path_for_vocab(vocab_path)
-    )
-    if not metadata_path.exists():
-        raise FileNotFoundError(f"Tokenizer metadata missing. Expected file: {metadata_path}")
-
-    metadata = load_tokenizer_metadata(metadata_path)
-    assert_metadata_representation(metadata, expected_representation=args.representation)
-
-    recorded_sha = str(metadata.get("tokenizer_sha256", ""))
-    actual_sha = file_sha256(vocab_path)
-    if not recorded_sha:
-        print(
-            "WARNING: metadata has no tokenizer_sha256; skipping vocabulary integrity check.",
-            flush=True,
-        )
-    elif recorded_sha != actual_sha:
-        # Corruption / wrong file pairing — always hard fail, even under --warn_only.
-        raise ValueError(
-            "Tokenizer hash mismatch between metadata and file. "
-            f"metadata={recorded_sha} file={actual_sha}"
-        )
-
-    tokenizer = APEPreTrainedTokenizer(representation=args.representation)
-    tokenizer.load_vocabulary_file(vocab_path)
 
     special_ids = resolve_special_ids(tokenizer)
     vocab_size = tokenizer_vocab_size(tokenizer)
@@ -232,7 +218,7 @@ def main() -> None:
 
     warning_count = 0
 
-    if special_ids != EXPECTED_SPECIAL_IDS:
+    if tokenizer_algorithm(metadata) != SMIRK and special_ids != EXPECTED_SPECIAL_IDS:
         warning_count += int(
             _fail_or_warn(
                 args,
@@ -241,6 +227,8 @@ def main() -> None:
             )
         )
     metadata_special_ids = metadata.get("special_ids")
+    if tokenizer_algorithm(metadata) == SMIRK and not isinstance(metadata_special_ids, dict):
+        warning_count += int(_fail_or_warn(args, "SMIRK metadata must pin its special token IDs."))
     if metadata_special_ids is not None and metadata_special_ids != special_ids:
         warning_count += int(
             _fail_or_warn(
@@ -276,6 +264,7 @@ def main() -> None:
         _fail_or_warn(args, str(exc))
         return
 
+    print(f"algorithm: {tokenizer_algorithm(metadata)}")
     print(f"representation: {args.representation}")
     print(f"molecule_column: {args.molecule_column}")
     print(f"split: {args.split}")
@@ -288,6 +277,7 @@ def main() -> None:
     print(f"special_ids: {special_ids}")
     print(f"sample_size: {int(stats['sample_size'])}")
     print(f"unk_rate: {stats['unk_rate']:.6f}")
+    print(f"silent_loss_rate: {stats['silent_loss_rate']:.6f}")
     print(f"mean_len: {stats['mean_len']:.2f}")
     print(f"p50_len: {stats['p50_len']:.0f}")
     print(f"p95_len: {stats['p95_len']:.0f}")
@@ -309,6 +299,14 @@ def main() -> None:
                 "Tokenizer unknown-token rate too high: "
                 f"{stats['unk_rate']:.6f} "
                 f"(threshold {args.unk_rate_threshold:.6f})",
+            )
+        )
+    if stats["silent_loss_rate"] > 0.0:
+        warning_count += int(
+            _fail_or_warn(
+                args,
+                "Tokenization silently changed some inputs (no <unk>, but the tokens do not "
+                f"rebuild the string): rate {stats['silent_loss_rate']:.6f}",
             )
         )
     if stats["empty_sequence_rate"] > 0.0:

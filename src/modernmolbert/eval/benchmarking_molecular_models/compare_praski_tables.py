@@ -166,11 +166,6 @@ def select_best_head_per_dataset_embedder(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)
 
 
-def best_head_per_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    """Alias for select_best_head_per_dataset_embedder for external callers."""
-    return select_best_head_per_dataset_embedder(df)
-
-
 def summarize_head_specific(df: pd.DataFrame, *, head: str) -> pd.DataFrame:
     """Mean rank and mean metric for a fixed head: knn, rf, or linear."""
     sub = df[df["head"] == head].copy()

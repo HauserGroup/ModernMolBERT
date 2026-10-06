@@ -9,6 +9,7 @@ Single source of truth for the static cards: `tokenizer_card()` is imported by
 `python -m modernmolbert.model_cards`.
 """
 
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -65,23 +66,33 @@ VARIANTS: list[dict[str, Any]] = [
         mlm=0.20,
         lr="2e-4",
     ),
-    dict(
-        path=RUNS / "modernmolbert_best_hetero_span/README.md",
-        title="ModernMolBERT-small-hetero-span",
-        repo="HauserGroup/ModernMolBERT-small-hetero-span",
-        role="small ablation variant (heteroatom-biased span masking)",
-        size="small",
-        params="34.15M",
-        hidden=512,
-        layers=8,
-        heads=8,
-        inter=2048,
-        maxpos=128,
-        masking="hetero_span",
-        mlm=0.15,
-        lr="4e-4",
-    ),
 ]
+
+# Hetero-span ablation: exploratory, reported in preprint v1 and kept only as a
+# supplementary column in the revised manuscript. Cards are written only with
+# --include-hetero-span.
+HETERO_SPAN_VARIANT: dict[str, Any] = dict(
+    path=RUNS / "modernmolbert_best_hetero_span/README.md",
+    title="ModernMolBERT-small-hetero-span",
+    repo="HauserGroup/ModernMolBERT-small-hetero-span",
+    role="small ablation variant (heteroatom-biased span masking)",
+    note=(
+        "> **Exploratory ablation.** This checkpoint was reported in the ModernMolBERT\n"
+        "> preprint (v1). In the revised manuscript it appears only as a supplementary,\n"
+        "> single-seed result and is not used for any claim. Use\n"
+        "> ModernMolBERT-small or ModernMolBERT-base for general embedding work.\n\n"
+    ),
+    size="small",
+    params="34.15M",
+    hidden=512,
+    layers=8,
+    heads=8,
+    inter=2048,
+    maxpos=128,
+    masking="hetero_span",
+    mlm=0.15,
+    lr="4e-4",
+)
 
 # Aspirin SELFIES, used as the worked example (one bracketed token per primitive).
 EXAMPLE_SELFIES = (
@@ -114,7 +125,7 @@ with a chemically aware **Atom Pair Encoding (APE)** tokenizer and is pre-traine
 from scratch with masked language modeling (MLM) on ~2.4M unique **SELFIES**
 strings from ChEMBL 36. This checkpoint is the **{v["role"]}**.
 
-The model expects **SELFIES** input (not SMILES) and is intended primarily as a
+{v.get("note", "")}The model expects **SELFIES** input (not SMILES) and is intended primarily as a
 *frozen* molecular embedder.
 
 ## Model Details
@@ -257,7 +268,6 @@ tokenization for enhanced chemical language modeling*, Sci. Rep. 14, 25016 (2024
 
 TOKENIZER_REPO = "HauserGroup/ApeTokenizer-SELFIES"
 TOKENIZER_VOCAB_SIZE = 631
-TOKENIZER_MAX_LENGTH = 128
 TOKENIZER_TRAIN_SIZE = "2M"
 TOKENIZER_STAGING = ROOT / "tmp-hf-tokenizer"
 
@@ -375,8 +385,17 @@ tokenization for enhanced chemical language modeling*, Sci. Rep. 14, 25016 (2024
 """
 
 
-def main() -> None:
-    for v in VARIANTS:
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Write model and tokenizer cards.")
+    parser.add_argument(
+        "--include-hetero-span",
+        action="store_true",
+        help="Also write the card for the ModernMolBERT-small-hetero-span ablation.",
+    )
+    args = parser.parse_args(argv)
+
+    variants = [*VARIANTS, HETERO_SPAN_VARIANT] if args.include_hetero_span else VARIANTS
+    for v in variants:
         p: Path = v["path"]
         if not p.parent.exists():
             print(f"SKIP (missing dir): {p}")

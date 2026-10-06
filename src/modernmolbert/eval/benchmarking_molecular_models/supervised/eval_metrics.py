@@ -18,12 +18,6 @@ def log_predictions(data: HeadResult, pred_directory: str):
     )
     os.makedirs(os.path.dirname(base_path), exist_ok=True)
 
-    # Legacy: raw predict_proba output (shape varies by task).
-    try:
-        np.save(base_path + ".npy", data.y_test_pred)
-    except ValueError:
-        np.save(base_path + ".npy", _object_array(data.y_test_pred))
-
     # ROC-ready: y_true and y_score (positive-class probability) in one file.
     # Mirrors the extraction logic in get_skfp_roc_auc.
     y_true = np.asarray(data.y_test_true)
@@ -34,21 +28,22 @@ def log_predictions(data: HeadResult, pred_directory: str):
         n_samples=y_true.shape[0],
     )
 
-    np.savez(base_path + ".npz", y_true=y_true, y_score=y_score)
-    print(f"Saving predictions to {base_path}.npy / .npz")
+    artifact = {"y_true": y_true, "y_score": y_score}
+    if data.test_source_row_indices is not None:
+        source_rows = np.asarray(data.test_source_row_indices, dtype=np.int64)
+        if source_rows.ndim != 1 or len(source_rows) != len(y_true):
+            raise ValueError("Test source row indices must match prediction rows")
+        artifact["test_source_row_indices"] = source_rows
+    if data.prepared_data_sha256 is not None:
+        artifact["prepared_data_sha256"] = np.asarray(data.prepared_data_sha256)
+    if data.scoring_identity is not None:
+        artifact["scoring_identity"] = np.asarray(data.scoring_identity)
 
-
-def _object_array(value):
-    """Return a pickle-saveable object array without forcing nested shapes."""
-    if isinstance(value, np.ndarray):
-        return value
-
-    if isinstance(value, list | tuple):
-        arr = np.empty(len(value), dtype=object)
-        arr[:] = list(value)
-        return arr
-
-    return np.asarray(value, dtype=object)
+    target_path = base_path + ".npz"
+    tmp_path = base_path + ".tmp.npz"
+    np.savez(tmp_path, **artifact)
+    os.replace(tmp_path, target_path)
+    print(f"Saving predictions to {base_path}.npz")
 
 
 def _positive_column(proba) -> np.ndarray:
@@ -165,8 +160,8 @@ def get_skfp_roc_auc(y_pred: np.ndarray, y_test: np.ndarray) -> float:
     if np.isnan(np.min(y_test)):
         return multioutput_auroc_score(y_test, y_pred)
     try:
-        return roc_auc_score(y_test, y_pred)
-    except Exception:
+        return float(roc_auc_score(y_test, y_pred))
+    except ValueError:
         return multioutput_auroc_score(y_test, y_pred)
 
 

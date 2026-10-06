@@ -1,24 +1,21 @@
+import argparse
 from pathlib import Path
 
 import pytest
 
+from modernmolbert import train_selfies_ape_modernbert as trainer
 from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
 from modernmolbert.utils import assert_representation_compatible
 from modernmolbert.utils import (
     PUBCHEM10M_DATASET,
     SELFIES_REPRESENTATION,
-    ZINC20_CHEMBL36_DATASET,
-    ZINC20_DATASET,
     collect_corpus_for_tokenizer,
     compute_tokenization_stats,
     find_local_dataset,
     eligible_token_ids,
     file_sha256,
-    infer_selfies_column,
-    infer_validation_split,
     ignored_special_token_ids,
     metadata_path_for_vocab,
-    normalize_sequence,
     resolve_special_ids,
     sample_jsonl_sequences,
     validate_selfies_sample_shape,
@@ -100,6 +97,15 @@ def test_tokenization_stats_and_metadata_helpers(tmp_path: Path):
     assert stats["unk_rate"] <= 0.001
     assert stats["mean_len"] > 0
     assert stats["truncation_rate"] == 0.0
+
+    long_stats = compute_tokenization_stats(
+        tokenizer=tokenizer,
+        sequences=["[C]" * 20],
+        max_seq_length=8,
+        special_ids=special_ids,
+    )
+    assert long_stats["max_len"] == 22
+    assert long_stats["truncation_rate"] == 1.0
 
     vocab_path = tmp_path / "selfies_ape_tokenizer.json"
     tokenizer.save_vocabulary_file(vocab_path)
@@ -189,27 +195,6 @@ def test_ignored_special_token_ids_excludes_unk_token():
     assert special_ids["unk_token"] not in ignored
 
 
-def test_infer_selfies_column_for_pubchem_and_zinc20():
-    assert infer_selfies_column(PUBCHEM10M_DATASET, None) == "SELFIES"
-    assert infer_selfies_column(ZINC20_DATASET, None) == "SELFIES"
-    # zinc20_chembl36 uses lowercase "selfies" column
-    assert infer_selfies_column(ZINC20_CHEMBL36_DATASET, None) == "selfies"
-    assert infer_selfies_column(PUBCHEM10M_DATASET, "my_col") == "my_col"
-
-
-def test_infer_validation_split_for_pubchem_and_zinc20():
-    assert infer_validation_split(PUBCHEM10M_DATASET, None) is None
-    assert infer_validation_split(ZINC20_DATASET, None) == "validation"
-    assert infer_validation_split(ZINC20_CHEMBL36_DATASET, None) is None
-    assert infer_validation_split(PUBCHEM10M_DATASET, "dev") == "dev"
-
-
-def test_normalize_sequence_supports_pubchem_and_zinc20_column_names():
-    assert normalize_sequence({"SELFIES": "[C][O]"}, "SELFIES") == "[C][O]"
-    assert normalize_sequence({"selfies": "[C][O]"}, "selfies") == "[C][O]"
-    assert normalize_sequence({"SELFIES": "   "}, "SELFIES") is None
-
-
 def test_find_local_dataset_raises_for_invalid_explicit_dir(tmp_path: Path):
     missing = tmp_path / "not_a_dataset"
     missing.mkdir(parents=True, exist_ok=True)
@@ -244,7 +229,7 @@ def test_collect_corpus_passes_data_files(monkeypatch):
 
     corpus = collect_corpus_for_tokenizer(
         dataset_name=PUBCHEM10M_DATASET,
-        representation="SELFIES",
+        column="SELFIES",
         n=2,
         seed=13,
         buffer_size=100,
@@ -255,61 +240,52 @@ def test_collect_corpus_passes_data_files(monkeypatch):
     assert captured.get("data_files") == "/tmp/data/*.parquet"
 
 
-# ---------------------------------------------------------------------------
-# validate_tokenizer._fail_or_warn
-# ---------------------------------------------------------------------------
+SAMPLE = ["[C][O]", "[C][C][O]", "[O][C]"] * 3
 
 
-def test_fail_or_warn_raises_system_exit_when_not_warn_only():
-    import argparse
-    from modernmolbert.validate_tokenizer import _fail_or_warn
-
-    args = argparse.Namespace(warn_only=False)
-    with pytest.raises(SystemExit):
-        _fail_or_warn(args, "something went wrong")
-
-
-def test_fail_or_warn_returns_true_and_does_not_raise_when_warn_only(capsys):
-    import argparse
-    from modernmolbert.validate_tokenizer import _fail_or_warn
-
-    args = argparse.Namespace(warn_only=True)
-    result = _fail_or_warn(args, "soft failure")
-    assert result is True
-    out = capsys.readouterr().out
-    assert "WARNING" in out
-    assert "soft failure" in out
+def _large_vocab_tokenizer() -> APEPreTrainedTokenizer:
+    # The training gate rejects vocabularies under 100 tokens.
+    tok = APEPreTrainedTokenizer()
+    vocab = {"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<mask>": 4, "[C]": 5, "[O]": 6}
+    vocab.update({f"[Fill{i}]": 7 + i for i in range(100)})
+    tok.vocabulary = vocab
+    tok.special_tokens = {"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3, "<mask>": 4}
+    tok.update_reverse_vocabulary()
+    return tok
 
 
-# ---------------------------------------------------------------------------
-# validate_tokenizer._print_unknown_examples
-# ---------------------------------------------------------------------------
+def _gate_args(**overrides):
+    args = argparse.Namespace(
+        require_corpus_only_vocab=False,
+        tokenizer_validation_samples=10,
+        representation="SELFIES",
+        max_seq_length=64,
+        unk_rate_threshold=0.0,
+    )
+    for key, value in overrides.items():
+        setattr(args, key, value)
+    return args
 
 
-def test_print_unknown_examples_skips_when_n_zero(capsys):
-    from modernmolbert.validate_tokenizer import _print_unknown_examples
-
-    tok = _tiny_tokenizer()
-    special_ids = resolve_special_ids(tok)
-    _print_unknown_examples(tok, ["[C][C][O]"], special_ids, max_seq_length=64, n=0)
-    assert capsys.readouterr().out == ""
-
-
-def test_print_unknown_examples_prints_sequences_with_unk(capsys):
-    from modernmolbert.validate_tokenizer import _print_unknown_examples
-
-    tok = _incomplete_vocab_tokenizer()
-    special_ids = resolve_special_ids(tok)
-    _print_unknown_examples(tok, ["[C][C][O]"], special_ids, max_seq_length=64, n=1)
-    out = capsys.readouterr().out
-    assert "UNKNOWN EXAMPLE" in out
+def test_training_gate_accepts_covered_sample(monkeypatch):
+    monkeypatch.setattr(trainer, "_sample_train_partition_sequences", lambda *_a, **_k: SAMPLE)
+    vocab_size, special_ids, stats = trainer.validate_tokenizer_for_training(
+        _gate_args(), _large_vocab_tokenizer(), {}
+    )
+    assert vocab_size == 107
+    assert special_ids["pad_token"] == 1
+    assert stats["unk_rate"] == 0
 
 
-def test_print_unknown_examples_skips_sequences_without_unk(capsys):
-    from modernmolbert.validate_tokenizer import _print_unknown_examples
+def test_training_gate_rejects_unknown_primitives(monkeypatch):
+    monkeypatch.setattr(
+        trainer, "_sample_train_partition_sequences", lambda *_a, **_k: ["[C][N][O]"] * 5
+    )
+    with pytest.raises(ValueError, match="Unknown-token rate too high"):
+        trainer.validate_tokenizer_for_training(_gate_args(), _large_vocab_tokenizer(), {})
 
-    tok = _tiny_tokenizer()
-    special_ids = resolve_special_ids(tok)
-    # [C][O] are in vocab — no UNK
-    _print_unknown_examples(tok, ["[C][O]"], special_ids, max_seq_length=64, n=5)
-    assert "UNKNOWN EXAMPLE" not in capsys.readouterr().out
+
+def test_training_gate_rejects_tiny_vocabulary(monkeypatch):
+    monkeypatch.setattr(trainer, "_sample_train_partition_sequences", lambda *_a, **_k: SAMPLE)
+    with pytest.raises(ValueError, match="small tokenizer vocabulary"):
+        trainer.validate_tokenizer_for_training(_gate_args(), _tiny_tokenizer(), {})

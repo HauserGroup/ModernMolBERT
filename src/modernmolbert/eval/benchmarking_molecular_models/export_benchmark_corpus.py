@@ -19,7 +19,7 @@ Missing symbols can be force-added to the tokenizer vocabulary as atomic symbols
 after APE merge training.
 
 Extra vocabulary symbols:
-    `train_ape_tokenizer` supports forcing additional primitive symbols into the
+    `train_tokenizer` supports forcing additional primitive symbols into the
     tokenizer vocabulary after APE merge training and before writing the final
     vocabulary. This is useful when a tokenizer trained on the pretraining corpus
     has low sequence truncation but nonzero `<unk>` rates on downstream datasets
@@ -61,7 +61,7 @@ Extra vocabulary symbols:
 
     To train from a full-SELFIES input file, pass it during tokenizer training:
 
-        uv run python -m modernmolbert.train_ape_tokenizer \\
+        uv run python -m modernmolbert.train_tokenizer \\
           --output_vocab_path tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json \\
           --dataset_name data/pretrain/chembl36_selfies \\
           --molecule_column selfies \\
@@ -87,7 +87,7 @@ Recommended workflow (SELFIES):
           --min_count 10
 
     3. Train tokenizer with forced primitive-symbol coverage:
-        uv run python -m modernmolbert.train_ape_tokenizer \\
+        uv run python -m modernmolbert.train_tokenizer \\
           --output_vocab_path tokenizer/chembl36_selfies_2m_benchmark_covered_ape_tokenizer.json \\
           --dataset_name data/pretrain/chembl36_selfies \\
           --molecule_column selfies \\
@@ -115,7 +115,7 @@ Recommended workflow (SMILES):
           --min_count 10
 
     3. Train tokenizer with forced primitive-symbol coverage:
-        uv run python -m modernmolbert.train_ape_tokenizer \\
+        uv run python -m modernmolbert.train_tokenizer \\
           --output_vocab_path tokenizer/my_smiles_ape_covered.json \\
           --dataset_name data/pretrain/chembl36_selfies \\
           --molecule_column smiles \\

@@ -130,7 +130,7 @@ def _frontmatter(counts: dict) -> str:
     return (
         "---\n"
         "pretty_name: ChEMBL 36 SELFIES\n"
-        "license: cc-by-4.0\n"
+        "license: cc-by-sa-3.0\n"
         "task_categories:\n"
         "- fill-mask\n"
         "size_categories:\n"
@@ -163,7 +163,7 @@ def _columns_table(metadata: dict) -> str:
     return "## Columns\n\n" + header + "\n".join(rows) + "\n\n"
 
 
-def build_readme(metadata: dict) -> str:
+def build_readme(metadata: dict, repo_id: str = DEFAULT_REPO_ID) -> str:
     stats = metadata.get("preparation_stats", {})
     counts = metadata.get("row_counts", {})
     config = metadata.get("config", {})
@@ -209,7 +209,7 @@ def build_readme(metadata: dict) -> str:
         f"{split.get('valid_fraction', config.get('valid_fraction', '-'))} and no test split. "
         "The split is reproducible: the same molecule always lands in the same split.\n\n"
         f"Train/validation molecule overlap: **{_fmt_int(overlap)}** "
-        "(residual hash collisions; effectively disjoint).\n\n"
+        "(distinct source identifiers can share a canonical SMILES).\n\n"
         "## Preparation stats\n\n"
         f"- Input rows: {_fmt_int(stats.get('input_rows', '-'))}\n"
         f"- After deduplication: {_fmt_int(stats.get('rows_after_dedupe', '-'))}\n"
@@ -222,7 +222,7 @@ def build_readme(metadata: dict) -> str:
         + "## Usage\n\n"
         "```python\n"
         "from datasets import load_dataset\n\n"
-        f"ds = load_dataset('{DEFAULT_REPO_ID}')\n"
+        f"ds = load_dataset('{repo_id}')\n"
         "train, valid = ds['train'], ds['validation']\n\n"
         "print(train[0]['selfies'])\n"
         f"# {EXAMPLE_SELFIES}\n"
@@ -256,8 +256,10 @@ def build_readme(metadata: dict) -> str:
         "```\n\n"
         "## Versions\n\n" + "\n".join(f"- {k}: {v}" for k, v in versions.items()) + "\n\n"
         "## License\n\n"
-        "ChEMBL data is released under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). "
-        "The prepared dataset files in this repository are released under CC BY 4.0.\n"
+        "Source attribution: [ChEMBL release 36](https://doi.org/10.6019/CHEMBL.database.36) "
+        "from the [EMBL-EBI ChEMBL resource](https://www.ebi.ac.uk/chembl/). "
+        "ChEMBL data is released under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/); "
+        "the prepared dataset files retain those terms.\n"
     )
 
 
@@ -281,7 +283,7 @@ def validate_dataset_dir(dataset_dir: Path) -> dict:
     return metadata
 
 
-def build_staging_dir(dataset_dir: Path, tmp: Path) -> dict:
+def build_staging_dir(dataset_dir: Path, tmp: Path, repo_id: str = DEFAULT_REPO_ID) -> dict:
     metadata = validate_dataset_dir(dataset_dir)
 
     shutil.copy(dataset_dir / "train.parquet", tmp / "train.parquet")
@@ -291,7 +293,7 @@ def build_staging_dir(dataset_dir: Path, tmp: Path) -> dict:
     if (dataset_dir / "example.tsv").exists():
         shutil.copy(dataset_dir / "example.tsv", tmp / "example.tsv")
 
-    (tmp / "README.md").write_text(build_readme(metadata), encoding="utf-8")
+    (tmp / "README.md").write_text(build_readme(metadata, repo_id), encoding="utf-8")
 
     print(
         f"[stage] staged files: {sorted(p.name for p in tmp.iterdir())}",
@@ -318,7 +320,7 @@ def upload_dataset_to_hub(
 
     try:
         print(f"[upload] staging directory: {tmp}", flush=True)
-        metadata = build_staging_dir(dataset_dir, tmp)
+        metadata = build_staging_dir(dataset_dir, tmp, repo_id)
 
         staged = sorted(tmp.iterdir())
         staged_names = [p.name for p in staged]

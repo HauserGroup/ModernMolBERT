@@ -1,5 +1,3 @@
-import inspect
-
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.ensemble import RandomForestClassifier
@@ -13,7 +11,6 @@ from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
 )
 from modernmolbert.eval.benchmarking_molecular_models.supervised.train import (
     finite_label_multioutput_score,
-    fit_model,
     fit_multioutput_finite_label_model,
 )
 
@@ -130,17 +127,6 @@ def test_single_class_endpoint_uses_constant_classifier() -> None:
     assert proba.shape == (5, 2)
 
 
-def test_prediction_shape_is_stable() -> None:
-    X = _toy_X(5)
-    y = _toy_multitask_labels()
-
-    wrapped = FiniteLabelMultiOutputClassifier(RecordingEstimator())
-    wrapped.fit(X, y)
-
-    y_score = wrapped.predict_proba(X)
-    assert y_score.shape == (5, 3)
-
-
 def test_score_masks_nans_endpoint_wise() -> None:
     y_true = np.array(
         [
@@ -204,8 +190,3 @@ def test_sparse_tox21_muv_like_matrix_completes_for_ridge_and_rf() -> None:
 
     assert ridge_pred.shape == (n_samples, n_outputs)
     assert rf_pred.shape == (n_samples, n_outputs)
-
-
-def test_no_forbidden_nan_to_zero_in_classification_fit_path() -> None:
-    source = inspect.getsource(fit_model)
-    assert "np.nan_to_num(y_arr, nan=0)" not in source

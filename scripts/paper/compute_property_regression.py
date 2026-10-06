@@ -44,8 +44,8 @@ Outputs
 
 Usage
 -----
-    python scripts/compute_property_regression.py
-    python scripts/compute_property_regression.py --test_size 0.3 --alpha 10
+    uv run python scripts/paper/compute_property_regression.py
+    uv run python scripts/paper/compute_property_regression.py --test_size 0.3 --alpha 10
 """
 
 import argparse

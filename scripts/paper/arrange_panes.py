@@ -4,8 +4,8 @@ This is intentionally a small one-off utility for the current filenames, e.g.
 nn020_mn0p25_fp12p0_qed_weighted_small.png.
 
 Usage:
-    .venv/bin/python scripts/arrange_panes.py
-    .venv/bin/python scripts/arrange_panes.py --input pacmap_qed --out pacmap_qed/overview.png
+    uv run python scripts/paper/arrange_panes.py
+    uv run python scripts/paper/arrange_panes.py --input pacmap_qed --out pacmap_qed/overview.png
 """
 
 import argparse

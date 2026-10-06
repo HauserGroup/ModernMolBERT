@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Regenerate the task-group distribution figure from bundled source data."""
+"""Regenerate the task-group distribution figure from bundled source data.
 
-from __future__ import annotations
+The default model set is the six models of the archived analysis. Pass
+``models`` (or ``--models``) to plot another set, such as a newly trained
+ModernMolBERT model against the four baselines.
+"""
 
 import argparse
 from collections.abc import Sequence
@@ -33,8 +36,8 @@ MODEL_LABELS = {
     "ChemBERTa-2": "ChemBERTa-2",
     "SELFormer": "SELFormer",
     "MoLFormer": "MoLFormer",
-    "MMB-small": "ModernMolBERT-small",
-    "MMB-base": "ModernMolBERT-base",
+    "MMB-small": "MMB-small",
+    "MMB-base": "MMB-base",
 }
 MODEL_COLORS = {
     "ECFP4": "#1B9E77",
@@ -44,7 +47,25 @@ MODEL_COLORS = {
     "MMB-small": "#66A61E",
     "MMB-base": "#E6AB02",
 }
+EXTRA_COLORS = ["#1F78B4", "#33A02C", "#E31A1C", "#FF7F00", "#6A3D9A", "#A6761D"]
 DEFAULT_OUTPUT_RELATIVE = Path("paper/figures/Fig_task_group_distributions.pdf")
+
+
+def _models(models: Sequence[str] | None) -> list[str]:
+    return list(MODELS if models is None else models)
+
+
+def model_label(model: str) -> str:
+    if model in MODEL_LABELS:
+        return MODEL_LABELS[model]
+    return model
+
+
+def model_color(model: str, models: Sequence[str]) -> str:
+    if model in MODEL_COLORS:
+        return MODEL_COLORS[model]
+    extras = [m for m in models if m not in MODEL_COLORS]
+    return EXTRA_COLORS[extras.index(model) % len(EXTRA_COLORS)]
 
 
 def default_csv_path() -> Path:
@@ -65,7 +86,9 @@ def default_output_path() -> Path:
         return DEFAULT_OUTPUT_RELATIVE.resolve()
 
 
-def load_group_distribution_data(csv_path: str | Path | None = None) -> pd.DataFrame:
+def load_group_distribution_data(
+    csv_path: str | Path | None = None, models: Sequence[str] | None = None
+) -> pd.DataFrame:
     """Load and validate task-group ROC-AUC source data.
 
     Parameters
@@ -82,15 +105,17 @@ def load_group_distribution_data(csv_path: str | Path | None = None) -> pd.DataF
         raise FileNotFoundError(f"Source CSV does not exist: {csv_path}")
     df = pd.read_csv(csv_path)
 
-    validate_group_distribution_data(df)
+    validate_group_distribution_data(df, models)
     df = df.copy()
     df["roc_auc_x100"] = pd.to_numeric(df["roc_auc_x100"], errors="raise")
     return df
 
 
-def validate_group_distribution_data(df: pd.DataFrame) -> None:
+def validate_group_distribution_data(df: pd.DataFrame, models: Sequence[str] | None = None) -> None:
     """Raise ``ValueError`` if the group-distribution source data is incomplete."""
 
+    require_complete = models is None
+    models = _models(models)
     missing_columns = sorted(set(REQUIRED_COLUMNS) - set(df.columns))
     if missing_columns:
         raise ValueError(f"Missing required columns: {missing_columns}")
@@ -99,7 +124,7 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
     if unknown_groups:
         raise ValueError(f"Unknown task groups: {unknown_groups}")
 
-    unknown_models = sorted(set(df["model"]) - set(MODELS))
+    unknown_models = sorted(set(df["model"]) - set(models))
     if unknown_models:
         raise ValueError(f"Unknown models: {unknown_models}")
 
@@ -108,7 +133,7 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
         duplicates = df.loc[duplicated, ["task_group", "task", "model"]]
         raise ValueError(f"Duplicate task/model rows:\n{duplicates.to_string(index=False)}")
 
-    numeric_auc = pd.to_numeric(df["roc_auc_x100"], errors="coerce")
+    numeric_auc = pd.Series(pd.to_numeric(df["roc_auc_x100"], errors="coerce"), index=df.index)
     if numeric_auc.isna().any():
         bad_rows = df.loc[numeric_auc.isna(), ["task_group", "task", "model", "roc_auc_x100"]]
         raise ValueError(f"Non-numeric ROC-AUC values:\n{bad_rows.to_string(index=False)}")
@@ -120,40 +145,45 @@ def validate_group_distribution_data(df: pd.DataFrame) -> None:
         raise ValueError(f"ROC-AUC values outside [0, 100]:\n{bad_rows.to_string(index=False)}")
 
     expected_counts = pd.Series(GROUP_TASK_COUNTS, name="expected")
-    coverage = (
-        df.groupby(["task_group", "model"])["task"]
-        .nunique()
-        .unstack(fill_value=0)
-        .reindex(index=GROUP_ORDER, columns=MODELS, fill_value=0)
-    )
+    task_counts = df.groupby(["task_group", "model"])["task"].nunique()
+    assert isinstance(task_counts, pd.Series)
+    coverage = task_counts.unstack(fill_value=0)
+    assert isinstance(coverage, pd.DataFrame)
+    coverage = coverage.reindex(index=GROUP_ORDER, columns=models, fill_value=0)
     expected = pd.DataFrame(
-        {model: expected_counts for model in MODELS},
+        {model: expected_counts for model in models},
         index=GROUP_ORDER,
         dtype="int64",
     )
-    if not coverage.equals(expected):
+    invalid_coverage = (
+        not coverage.equals(expected)
+        if require_complete
+        else bool((coverage > expected).to_numpy().any())
+    )
+    if invalid_coverage:
         raise ValueError(
             "Unexpected task coverage by group/model:\n"
             f"{coverage.to_string()}\n\nExpected:\n{expected.to_string()}"
         )
 
 
-def group_means(df: pd.DataFrame) -> pd.DataFrame:
+def group_means(df: pd.DataFrame, models: Sequence[str] | None = None) -> pd.DataFrame:
     """Return group mean ROC-AUC x100 values with canonical ordering."""
 
-    return (
-        df.groupby(["task_group", "model"])["roc_auc_x100"]
-        .mean()
-        .round(1)
-        .unstack()
-        .reindex(index=GROUP_ORDER, columns=MODELS)
-    )
+    means = df.groupby(["task_group", "model"])["roc_auc_x100"].mean()
+    assert isinstance(means, pd.Series)
+    table = means.round(1).unstack()
+    assert isinstance(table, pd.DataFrame)
+    return table.reindex(index=GROUP_ORDER, columns=_models(models))
 
 
-def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.DataFrame:
+def plot_group_distribution(
+    df: pd.DataFrame, output_path: str | Path, models: Sequence[str] | None = None
+) -> pd.DataFrame:
     """Plot per-task ROC-AUC distributions and write the figure to ``output_path``."""
 
-    validate_group_distribution_data(df)
+    validate_group_distribution_data(df, models)
+    models = _models(models)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -168,14 +198,14 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
 
     for ax, group in zip(axes, GROUP_ORDER, strict=True):
         sub = df[df.task_group == group]
-        for xi, model in enumerate(MODELS):
-            vals = sub[sub.model == model]["roc_auc_x100"].to_numpy()
+        for xi, model in enumerate(models):
+            vals = np.asarray(sub.loc[sub["model"] == model, "roc_auc_x100"], dtype=float)
             jitter = rng.uniform(-0.18, 0.18, size=len(vals))
             ax.scatter(
                 np.full(len(vals), xi) + jitter,
                 vals,
                 s=42,
-                color=MODEL_COLORS[model],
+                color=model_color(model, models),
                 alpha=0.75,
                 edgecolor="white",
                 linewidth=0.4,
@@ -196,9 +226,9 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
             fontsize=11,
             fontweight="bold",
         )
-        ax.set_xticks(range(len(MODELS)))
-        ax.set_xticklabels(MODELS, rotation=40, ha="right", fontsize=8.5)
-        ax.set_xlim(-0.6, len(MODELS) - 0.4)
+        ax.set_xticks(range(len(models)))
+        ax.set_xticklabels(models, rotation=40, ha="right", fontsize=8.5)
+        ax.set_xlim(-0.6, len(models) - 0.4)
         ax.grid(axis="y", color="0.85", linewidth=0.6, zorder=0)
         ax.set_axisbelow(True)
         for spine in ("top", "right"):
@@ -214,25 +244,26 @@ def plot_group_distribution(df: pd.DataFrame, output_path: str | Path) -> pd.Dat
             marker="o",
             linestyle="",
             markersize=7,
-            markerfacecolor=MODEL_COLORS[model],
+            markerfacecolor=model_color(model, models),
             markeredgecolor="white",
-            label=MODEL_LABELS[model],
+            label=model_label(model),
         )
-        for model in MODELS
+        for model in models
     ]
     fig.legend(
         handles=handles,
         loc="lower center",
-        ncol=len(MODELS),
+        ncol=len(models),
         frameon=False,
         fontsize=8.5,
         bbox_to_anchor=(0.5, -0.02),
     )
+    fig.text(0.5, 0.045, "MMB = ModernMolBERT", ha="center", fontsize=8.5)
 
     fig.tight_layout(rect=(0.0, 0.08, 1.0, 1.0))
     fig.savefig(output_path, bbox_inches="tight")
     plt.close(fig)
-    return group_means(df)
+    return group_means(df, models)
 
 
 def generate_group_distribution_figure(
@@ -240,14 +271,15 @@ def generate_group_distribution_figure(
     csv_path: str | Path | None = None,
     output_path: str | Path | None = None,
     verbose: bool = True,
+    models: Sequence[str] | None = None,
 ) -> pd.DataFrame:
     """Load source data, generate the figure, and return corrected group means."""
 
     if output_path is None:
         output_path = default_output_path()
 
-    df = load_group_distribution_data(csv_path)
-    means = plot_group_distribution(df, output_path)
+    df = load_group_distribution_data(csv_path, models)
+    means = plot_group_distribution(df, output_path, models)
     if verbose:
         print(f"Wrote {Path(output_path)}")
         print("Group means:")
@@ -272,6 +304,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=f"Output figure path. Default: {default_output_path()}",
     )
     parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help="Models to plot, in order (default: the six archived-analysis models).",
+    )
+    parser.add_argument(
         "--no-summary",
         action="store_true",
         help="Suppress the printed group-means table.",
@@ -285,6 +323,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         csv_path=args.csv,
         output_path=args.out,
         verbose=not args.no_summary,
+        models=args.models,
     )
 
 

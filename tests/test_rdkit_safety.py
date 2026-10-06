@@ -13,6 +13,12 @@ from modernmolbert.common.rdkit_safety import looks_like_smiles
         "[13CH4]",
         "ClCBr",
         "C%12CCCCC%12",
+        "[K+]",
+        "[Li+]",
+        "[Zn+2]",
+        "[As]",
+        "[Al+3]",
+        "*",
     ],
 )
 def test_looks_like_smiles_accepts_common_valid_syntax(smiles: str) -> None:
@@ -29,7 +35,7 @@ def test_looks_like_smiles_accepts_common_valid_syntax(smiles: str) -> None:
         "not-a-smiles",
         "C%1",
         "C[",
-        "[AlH6]",
+        "[Foo]",
         "C]",
         "C[C",
     ],

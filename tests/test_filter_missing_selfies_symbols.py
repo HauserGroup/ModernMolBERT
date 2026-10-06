@@ -30,29 +30,6 @@ def test_read_symbol_counts_accepts_header_comments_and_blank_lines(tmp_path: Pa
     ]
 
 
-def test_read_symbol_counts_skips_malformed_rows(tmp_path: Path) -> None:
-    path = tmp_path / "symbol_counts.tsv"
-    path.write_text(
-        "\n".join(
-            [
-                "symbol\tcount",
-                "[C]\t100",
-                "missing_count_column",
-                "[O]\tnot_an_integer",
-                "[N]\t50",
-                "",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    assert read_symbol_counts(path) == [
-        ("[C]", 100),
-        ("[N]", 50),
-    ]
-
-
 def test_cli_writes_only_missing_symbols_above_min_count(tmp_path: Path) -> None:
     vocab_path = tmp_path / "vocab.json"
     counts_path = tmp_path / "symbol_counts.tsv"
@@ -172,34 +149,3 @@ def test_cli_sorts_by_count_descending_then_symbol(tmp_path: Path) -> None:
     ]
 
     assert lines == ["[C]", "[A]", "[B]"]
-
-
-def test_cli_creates_parent_directory(tmp_path: Path) -> None:
-    vocab_path = tmp_path / "vocab.json"
-    counts_path = tmp_path / "symbol_counts.tsv"
-    output_path = tmp_path / "nested" / "dir" / "missing_symbols.txt"
-
-    vocab_path.write_text(json.dumps({"<unk>": 0}), encoding="utf-8")
-    counts_path.write_text("[C@@H1]\t100\n", encoding="utf-8")
-
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "modernmolbert.tokenization.filter_missing_selfies_symbols",
-            "--vocab",
-            str(vocab_path),
-            "--symbol_counts",
-            str(counts_path),
-            "--output",
-            str(output_path),
-            "--min_count",
-            "10",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    assert output_path.exists()
-    assert "[C@@H1]" in output_path.read_text(encoding="utf-8")

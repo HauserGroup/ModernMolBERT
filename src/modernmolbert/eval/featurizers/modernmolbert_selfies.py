@@ -7,19 +7,29 @@ from typing import Literal
 import numpy as np
 import torch
 from tqdm import tqdm
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel
 
 from modernmolbert.eval.featurizers.base import FeatureBatch
 from modernmolbert.eval.pooling import mean_pool_excluding_token_ids
-from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+from modernmolbert.tokenization.load import load_checkpoint_tokenizer
+from modernmolbert.utils import SELFIES_REPRESENTATION
 
 
 @dataclass
 class ModernMolBERTSelfiesFeaturizer:
+    """Frozen ModernMolBERT embeddings for SMILES inputs.
+
+    The checkpoint's tokenizer fixes the model input: SMILES are encoded as
+    SELFIES for a SELFIES checkpoint and passed through unchanged for a SMILES
+    checkpoint. Inputs that cannot be converted, or that the tokenizer does not
+    reproduce exactly, are marked invalid rather than embedded. Inputs longer
+    than the checkpoint's trained context are rejected and counted.
+    """
+
     model_dir: str | Path
     tokenizer_path: str | Path | None = None
     name: str = "modernmolbert_selfies"
-    max_seq_length: int = 256
+    max_seq_length: int | None = None
     pooling: Literal["mean", "cls"] = "mean"
     device: str = "auto"
     batch_size: int = 32
@@ -36,10 +46,18 @@ class ModernMolBERTSelfiesFeaturizer:
             raise ValueError(f"Unsupported pooling strategy: {self.pooling!r}")
 
         self._device = self._resolve_device(self.device)
-        self.tokenizer = _load_ape_tokenizer(self.tokenizer_path)
+        self.tokenizer, self.representation = load_checkpoint_tokenizer(self.tokenizer_path)
         self.model = AutoModel.from_pretrained(self.model_dir)
         self.model.to(self._device)
         self.model.eval()
+        trained_context = int(self.model.config.max_position_embeddings)
+        if self.max_seq_length is None:
+            self.max_seq_length = trained_context
+        elif not 0 < self.max_seq_length <= trained_context:
+            raise ValueError(
+                f"Embedding context {self.max_seq_length} exceeds trained context "
+                f"{trained_context} or is not positive"
+            )
 
     def featurize_smiles(
         self,
@@ -53,8 +71,12 @@ class ModernMolBERTSelfiesFeaturizer:
         if effective_batch_size <= 0:
             raise ValueError("batch_size must be positive")
 
-        selfies_strings: list[str] = []
+        model_inputs: list[str] = []
         valid_mask = np.zeros(len(smiles), dtype=bool)
+        n_tokenization_failures = 0
+        n_truncated = 0
+        special_ids = self._special_token_ids()
+        assert self.max_seq_length is not None
 
         for i, smi in enumerate(smiles):
             if smi is None:
@@ -64,32 +86,47 @@ class ModernMolBERTSelfiesFeaturizer:
             if not text:
                 continue
 
-            try:
-                encoded = sf.encoder(text)
-            except Exception:
-                continue
+            if self.representation == SELFIES_REPRESENTATION:
+                try:
+                    text = sf.encoder(text)
+                except Exception:
+                    continue
+                if not text:
+                    continue
 
-            if not encoded:
+            # Validate the complete string before truncation can hide a failure.
+            # Older checkpoint-bundled tokenizers silently discard component dots.
+            # An unknown-ID check alone cannot detect that molecular information loss.
+            if "".join(self.tokenizer.tokenize(text)) != text:
+                n_tokenization_failures += 1
                 continue
-
-            selfies_strings.append(encoded)
+            content_ids = self.tokenizer.encode(text, add_special_tokens=False, truncation=False)
+            if not content_ids or any(token_id in special_ids for token_id in content_ids):
+                n_tokenization_failures += 1
+                continue
+            if len(content_ids) + 2 > self.max_seq_length:
+                n_truncated += 1
+                continue
+            model_inputs.append(text)
             valid_mask[i] = True
 
         hidden_size = int(getattr(self.model.config, "hidden_size", 0))
 
-        if not selfies_strings:
+        if not model_inputs:
             out = FeatureBatch(
                 X=np.zeros((0, hidden_size), dtype=np.float32),
                 valid_mask=valid_mask,
                 metadata=self._metadata(
                     n_inputs=len(smiles),
                     n_valid=0,
+                    n_tokenization_failures=n_tokenization_failures,
+                    n_truncated=n_truncated,
                 ),
             )
             out.check(n_inputs=len(smiles))
             return out
 
-        n_valid = len(selfies_strings)
+        n_valid = len(model_inputs)
         X = np.empty((n_valid, hidden_size), dtype=np.float32)
         n_batches = math.ceil(n_valid / effective_batch_size)
         row = 0
@@ -102,9 +139,9 @@ class ModernMolBERTSelfiesFeaturizer:
                 unit="batch",
                 leave=False,
             ):
-                batch_strings = selfies_strings[start : start + effective_batch_size]
+                batch_strings = model_inputs[start : start + effective_batch_size]
 
-                batch = self._tokenize_selfies_batch(batch_strings)
+                batch = self._tokenize_batch(batch_strings)
                 batch = {key: value.to(self._device) for key, value in batch.items()}
 
                 outputs = self.model(**batch)
@@ -130,25 +167,27 @@ class ModernMolBERTSelfiesFeaturizer:
             metadata=self._metadata(
                 n_inputs=len(smiles),
                 n_valid=int(valid_mask.sum()),
+                n_tokenization_failures=n_tokenization_failures,
+                n_truncated=n_truncated,
             ),
         )
         out.check(n_inputs=len(smiles))
         return out
 
-    def featurize(
+    def _metadata(
         self,
-        smiles: Sequence[str],
         *,
-        batch_size: int | None = None,
-    ) -> FeatureBatch:
-        return self.featurize_smiles(smiles, batch_size=batch_size)
-
-    def _metadata(self, *, n_inputs: int, n_valid: int) -> dict[str, object]:
+        n_inputs: int,
+        n_valid: int,
+        n_tokenization_failures: int = 0,
+        n_truncated: int = 0,
+    ) -> dict[str, object]:
         return {
             "featurizer": self.name,
-            "backend": "modernmolbert_selfies",
+            "backend": "modernmolbert",
             "model_dir": str(self.model_dir),
             "tokenizer_path": str(self.tokenizer_path),
+            "representation": self.representation,
             "pooling": self.pooling,
             "pooling_special_tokens_excluded": self.pooling == "mean",
             "max_seq_length": self.max_seq_length,
@@ -159,6 +198,8 @@ class ModernMolBERTSelfiesFeaturizer:
             "num_parameters": int(sum(p.numel() for p in self.model.parameters())),
             "n_inputs": n_inputs,
             "n_valid": n_valid,
+            "n_tokenization_failures": n_tokenization_failures,
+            "n_truncated": n_truncated,
             "invalid_fraction": float(1.0 - n_valid / n_inputs) if n_inputs else 0.0,
         }
 
@@ -186,26 +227,48 @@ class ModernMolBERTSelfiesFeaturizer:
 
         return {int(x) for x in ids if x is not None}
 
-    def _tokenize_selfies_batch(
+    def _tokenize_batch(
         self,
-        selfies_strings: list[str],
+        model_inputs: list[str],
     ) -> dict[str, torch.Tensor]:
-        """Tokenize a batch of SELFIES strings with the APE tokenizer."""
+        """Tokenize a batch of model input strings (SELFIES or SMILES)."""
 
-        if isinstance(selfies_strings, str):
-            raise TypeError("_tokenize_selfies_batch expects list[str], not str")
+        if isinstance(model_inputs, str):
+            raise TypeError("_tokenize_batch expects list[str], not str")
 
-        if not selfies_strings:
-            raise ValueError("Cannot tokenize an empty SELFIES batch")
+        if not model_inputs:
+            raise ValueError("Cannot tokenize an empty batch")
+
+        if type(self.tokenizer).__name__ == "SmirkTokenizerFast":
+            # SMIRK 0.3.0's list path is incompatible with Transformers 5.
+            # Its single-string path remains correct, so pad those encodings
+            # here without changing the tokenizer used by existing models.
+            sequences = [
+                self.tokenizer.encode(text, add_special_tokens=True, truncation=False)
+                for text in model_inputs
+            ]
+            pad_id = self.tokenizer.pad_token_id
+            if not isinstance(pad_id, int):
+                raise ValueError("SMIRK tokenizer must have one integer pad token ID")
+            longest = max(map(len, sequences))
+            input_ids = torch.full((len(sequences), longest), pad_id, dtype=torch.long)
+            attention_mask = torch.zeros_like(input_ids)
+            for row, ids in enumerate(sequences):
+                if self.tokenizer.padding_side == "left":
+                    input_ids[row, -len(ids) :] = torch.tensor(ids, dtype=torch.long)
+                    attention_mask[row, -len(ids) :] = 1
+                else:
+                    input_ids[row, : len(ids)] = torch.tensor(ids, dtype=torch.long)
+                    attention_mask[row, : len(ids)] = 1
+            return {"input_ids": input_ids, "attention_mask": attention_mask}
 
         # Batch tokenization: one call for the whole list instead of a per-string
         # loop + manual padding. On MPS the model forward is fast enough that the
         # old Python loop became the bottleneck.
         encoded = self.tokenizer(
-            selfies_strings,
+            model_inputs,
             padding=True,
-            truncation=True,
-            max_length=self.max_seq_length,
+            truncation=False,
             return_tensors="pt",
         )
 
@@ -213,45 +276,3 @@ class ModernMolBERTSelfiesFeaturizer:
             "input_ids": encoded["input_ids"],
             "attention_mask": encoded["attention_mask"],
         }
-
-
-def _load_ape_tokenizer(path: str | Path) -> APEPreTrainedTokenizer:
-    """Load APE tokenizer from a file or checkpoint directory.
-
-    Supported inputs:
-    - directory containing ape_tokenizer/ AutoTokenizer artifacts
-    - directory containing vocab.json
-    - direct path to vocab.json
-    - legacy direct path to an APE vocabulary JSON with any filename
-    """
-
-    path = Path(path)
-
-    if path.is_file():
-        tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
-        tokenizer.load_vocabulary_file(path)
-        return tokenizer
-
-    if path.is_dir():
-        auto_dir = path / "ape_tokenizer"
-        if auto_dir.exists():
-            loaded = AutoTokenizer.from_pretrained(
-                str(auto_dir),
-                trust_remote_code=True,
-            )
-            if loaded.__class__.__name__ != "APEPreTrainedTokenizer":
-                raise TypeError(f"Expected APEPreTrainedTokenizer, got {type(loaded)!r}")
-            return loaded
-
-        vocab_json = path / "vocab.json"
-
-        if vocab_json.exists():
-            tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
-            tokenizer.load_vocabulary_file(vocab_json)
-            return tokenizer
-
-        raise FileNotFoundError(
-            f"No tokenizer vocabulary found in {path}. Expected ape_tokenizer/ or vocab.json."
-        )
-
-    raise FileNotFoundError(f"Tokenizer path does not exist: {path}")

@@ -1,5 +1,5 @@
 """
-Shared utilities for APE tokenizer interaction and dataset loading.
+Shared helpers for molecular tokenizers and dataset loading.
 """
 
 import json
@@ -7,19 +7,16 @@ import shutil
 import statistics
 import re
 from pathlib import Path
-from typing import Any, Literal
-
-import numpy as np
-import pandas as pd
-
-
-import torch
-from datasets import Dataset, DatasetDict, IterableDataset, load_dataset, load_from_disk
-from tqdm.auto import tqdm
+from typing import TYPE_CHECKING, Any
 
 # Re-exported so existing callers can keep importing it from modernmolbert.utils.
 from modernmolbert.hf_upload import file_sha256 as file_sha256
-from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+# transformers, datasets and tqdm are slow to import, so they are imported inside the
+# functions that use them; the names below are only needed for type checking.
+if TYPE_CHECKING:
+    from datasets import IterableDataset
+    from transformers import PreTrainedTokenizerBase
 
 
 SPECIAL_TOKENS: dict[str, str] = {
@@ -51,9 +48,7 @@ def assert_special_ids(special_ids: dict[str, int]) -> None:
 
 
 SELFIES_REPRESENTATION = "SELFIES"
-SELFIES_TOKENIZER_FILENAME = "selfies_ape_tokenizer.json"
 SMILES_REPRESENTATION = "SMILES"
-SMILES_TOKENIZER_FILENAME = "smiles_ape_tokenizer.json"
 TOKENIZER_METADATA_FILENAMES = (
     "tokenizer_metadata.json",
     "ape_tokenizer_metadata.json",
@@ -70,30 +65,40 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
 
 
-def infer_smiles_column(dataset_name: str, molecule_column: str | None = None) -> str:
-    if molecule_column is not None:
-        return molecule_column
-    return "smiles"
+def load_run_args(run_dir: Path) -> dict[str, Any]:
+    """Read new run identity arguments, falling back to historical run_args.json."""
+    identity_path = run_dir / "run_identity.json"
+    if identity_path.is_file():
+        identity = json.loads(identity_path.read_text(encoding="utf-8"))
+        if identity.get("schema") == 2:
+            return dict(identity["args"])
+    legacy_path = run_dir / "run_args.json"
+    if legacy_path.is_file():
+        return json.loads(legacy_path.read_text(encoding="utf-8"))
+    return {}
+
+
+def _local_dataset_metadata(dataset_name: str) -> dict[str, Any]:
+    """The metadata.json of a local dataset directory, or {} if there is none."""
+    if not _looks_like_path(dataset_name):
+        return {}
+    local_path = _resolve_dataset_name_as_local_path(dataset_name)
+    if local_path is None:
+        return {}
+    try:
+        metadata = json.loads((local_path / "metadata.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return metadata if isinstance(metadata, dict) else {}
 
 
 def infer_selfies_column(dataset_name: str, selfies_column: str | None = None) -> str:
     if selfies_column is not None:
         return selfies_column
 
-    # Try to resolve as local path and read metadata
-    if _looks_like_path(dataset_name):
-        local_path = _resolve_dataset_name_as_local_path(dataset_name)
-        if local_path is not None:
-            metadata_file = local_path / "metadata.json"
-            if metadata_file.exists():
-                try:
-                    with metadata_file.open("r", encoding="utf-8") as f:
-                        metadata = json.load(f)
-                    if isinstance(metadata, dict) and "selfies_column" in metadata:
-                        return str(metadata["selfies_column"])
-                except Exception:
-                    pass
-
+    metadata = _local_dataset_metadata(dataset_name)
+    if "selfies_column" in metadata:
+        return str(metadata["selfies_column"])
     if dataset_name == ZINC20_CHEMBL36_DATASET:
         return "selfies"  # lowercase in this dataset
     if dataset_name == ZINC20_DATASET:
@@ -116,36 +121,18 @@ def _is_smiles(representation: str) -> bool:
 def infer_molecule_column(
     dataset_name: str, representation: str, molecule_column: str | None = None
 ) -> str:
-    """Resolve the dataset column holding molecule strings for the representation."""
-    if _is_smiles(representation):
-        return infer_smiles_column(dataset_name, molecule_column)
-    return infer_selfies_column(dataset_name, molecule_column)
+    """Resolve the dataset column holding molecule strings for the representation.
 
-
-def filter_zinc20_chembl36_by_source(
-    ds: IterableDataset,
-    source: Literal["zinc", "chembl", "all"] = "all",
-) -> IterableDataset:
-    """Filter a ZINC20_CHEMBL36 streaming dataset by molecule source.
-
-    Parameters
-    ----------
-    ds:
-        Streaming dataset loaded from ZINC20_CHEMBL36_DATASET.
-    source:
-        ``"zinc"``   — keep only rows whose ``id`` starts with ``"ZINC"``.
-        ``"chembl"`` — keep only rows whose ``id`` starts with ``"CHEMBL"``.
-        ``"all"``    — no filtering; return the dataset unchanged.
+    A local dataset names its columns in metadata.json. For SMILES this is the
+    RDKit canonical column that its SELFIES were encoded from, so both
+    representations describe the same molecules.
     """
-    if source == "all":
-        return ds
-    prefix = "ZINC" if source == "zinc" else "CHEMBL"
-    # batched=True: filter is called once per batch (default 1000 rows) rather
-    # than once per row, and np.char.startswith runs the string comparison in C.
-    return ds.filter(
-        lambda batch: [s.startswith(prefix) for s in batch["id"]],
-        batched=True,
-    )
+    if molecule_column is not None:
+        return molecule_column
+    if _is_smiles(representation):
+        metadata = _local_dataset_metadata(dataset_name)
+        return str(metadata.get("canonical_smiles_column", "smiles"))
+    return infer_selfies_column(dataset_name)
 
 
 def _normalized_name(value: str) -> str:
@@ -253,54 +240,6 @@ def _split_parquet_files(directory: Path, split: str) -> list[Path]:
     return sorted(set(files))
 
 
-def collect_local_parquet_corpus(
-    *,
-    directory: Path,
-    representation: str,
-    n: int,
-    seed: int,
-    split: str = "train",
-) -> list[str]:
-    files = _split_parquet_files(directory, split)
-    if not files:
-        available = ", ".join(sorted(_available_local_parquet_splits(directory))) or "<none>"
-        raise ValueError(
-            f"Local parquet dataset at {directory} has no split '{split}'. Available splits: {available}"
-        )
-
-    rng = np.random.default_rng(seed)
-    corpus: list[str] = []
-    pbar = tqdm(total=n, desc=f"Collecting {representation} corpus for APE tokenizer")
-
-    for file_path in files:
-        try:
-            frame = pd.read_parquet(file_path, columns=[representation])
-        except ValueError as exc:
-            raise ValueError(
-                f"Parquet file {file_path} does not contain column {representation!r}."
-            ) from exc
-
-        if len(frame) == 0:
-            continue
-
-        order = rng.permutation(len(frame))
-        for row_idx in order:
-            row = {str(k): v for k, v in frame.iloc[int(row_idx)].to_dict().items()}
-            seq = normalize_sequence(row, representation)
-            if seq is None:
-                continue
-            corpus.append(seq)
-            pbar.update(1)
-            if len(corpus) >= n:
-                pbar.close()
-                return corpus
-
-    pbar.close()
-    if not corpus:
-        raise RuntimeError("Tokenizer corpus is empty. Check dataset column names.")
-    return corpus
-
-
 def find_local_dataset(
     data_dir: Path | None = None,
     dataset_name: str | None = None,
@@ -329,21 +268,6 @@ def find_local_dataset(
     return None
 
 
-def default_selfies_tokenizer_path() -> Path:
-    return repo_root() / "tokenizer" / SELFIES_TOKENIZER_FILENAME
-
-
-def default_smiles_tokenizer_path() -> Path:
-    return repo_root() / "tokenizer" / SMILES_TOKENIZER_FILENAME
-
-
-def default_tokenizer_path(representation: str) -> Path:
-    """Default tokenizer vocabulary path for the given representation."""
-    if _is_smiles(representation):
-        return default_smiles_tokenizer_path()
-    return default_selfies_tokenizer_path()
-
-
 def metadata_path_for_vocab(vocab_path: Path) -> Path:
     return vocab_path.with_suffix(".metadata.json")
 
@@ -367,24 +291,36 @@ def copy_tokenizer_artifacts(
     metadata_path: Path,
     output_dir: Path,
     final_model_dir: Path,
+    model_max_length: int | None = None,
 ) -> None:
+    """Save the training tokenizer and its metadata with a trained model.
+
+    A BPE tokenizer is a standard ``tokenizer.json`` at the model root. An APE
+    tokenizer needs custom code; it is saved at the root and in
+    ``ape_tokenizer/``, because Transformers only runs remote tokenizer code
+    from a directory without the ModernBERT model config.
+    """
+    from modernmolbert.tokenization.load import BPE, SMIRK, load_tokenizer, tokenizer_algorithm
+
     output_dir.mkdir(parents=True, exist_ok=True)
     final_model_dir.mkdir(parents=True, exist_ok=True)
 
     metadata = load_tokenizer_metadata(metadata_path)
-    representation = str(metadata.get("representation", SELFIES_REPRESENTATION))
-    tokenizer = APEPreTrainedTokenizer(representation=representation)
-    tokenizer.load_vocabulary_file(vocab_path, representation=representation)
+    tokenizer = load_tokenizer(vocab_path, metadata, model_max_length=model_max_length)
+    if tokenizer_algorithm(metadata) in {BPE, SMIRK}:
+        tokenizer.save_pretrained(str(final_model_dir))
+        for target_dir in [output_dir, final_model_dir]:
+            shutil.copy2(metadata_path, target_dir / "tokenizer_metadata.json")
+        return
 
+    representation = str(metadata["representation"]).upper()
     tokenizer.save_vocabulary(str(output_dir))
     tokenizer.save_vocabulary(str(final_model_dir))
     tokenizer.save_pretrained(str(output_dir / "ape_tokenizer"))
     tokenizer.save_pretrained(str(final_model_dir))
     tokenizer.save_pretrained(str(final_model_dir / "ape_tokenizer"))
 
-    alias_name = (
-        "selfies_vocab.json" if representation.upper() == "SELFIES" else "smiles_vocab.json"
-    )
+    alias_name = f"{representation.lower()}_vocab.json"
     for tokenizer_dir in [final_model_dir, final_model_dir / "ape_tokenizer"]:
         active_vocab = tokenizer_dir / "vocab.json"
         if active_vocab.exists():
@@ -446,7 +382,7 @@ def assert_metadata_representation(metadata: dict[str, Any], expected_representa
         )
 
 
-def sample_jsonl_sequences(file_path: Path, representation: str, n: int) -> list[str]:
+def sample_jsonl_sequences(file_path: Path, column: str, n: int) -> list[str]:
     rows: list[str] = []
     with file_path.open("r", encoding="utf-8") as f:
         for line in f:
@@ -455,7 +391,7 @@ def sample_jsonl_sequences(file_path: Path, representation: str, n: int) -> list
             record = json.loads(line)
             if not isinstance(record, dict):
                 continue
-            seq = normalize_sequence(record, representation)
+            seq = normalize_sequence(record, column)
             if seq is None:
                 continue
             rows.append(seq)
@@ -501,8 +437,8 @@ def validate_sample_shape(sequences: list[str], representation: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def normalize_sequence(example: dict[str, Any], representation: str) -> str | None:
-    seq = example.get(representation)
+def normalize_sequence(example: dict[str, Any], column: str) -> str | None:
+    seq = example.get(column)
     if seq is None:
         return None
     seq = str(seq).strip()
@@ -516,7 +452,9 @@ def get_streaming_dataset(
     split: str = "train",
     data_dir: Path | None = None,
     data_files: str | None = None,
-) -> IterableDataset:
+) -> "IterableDataset":
+    from datasets import Dataset, DatasetDict, load_dataset, load_from_disk
+
     if data_files is not None:
         print(
             f"[data] Streaming parquet files directly for split '{split}': {data_files}",
@@ -530,7 +468,35 @@ def get_streaming_dataset(
         )
         return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
 
-    local = find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
+    explicit_path = (
+        _resolve_dataset_name_as_local_path(dataset_name)
+        if _looks_like_path(dataset_name)
+        else None
+    )
+    if data_dir is None and explicit_path is not None and any(explicit_path.glob("**/*.parquet")):
+        files = _split_parquet_files(explicit_path, split)
+        if not files:
+            available = (
+                ", ".join(sorted(_available_local_parquet_splits(explicit_path))) or "<none>"
+            )
+            raise ValueError(
+                f"Local parquet dataset at {explicit_path} has no split '{split}'. "
+                f"Available splits: {available}"
+            )
+        print(f"[data] Loading local parquet split '{split}': {explicit_path}", flush=True)
+        hf_ds = load_dataset(
+            "parquet",
+            data_files={split: [str(f) for f in files]},
+            split=split,
+            streaming=True,
+        )
+        return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
+
+    local = (
+        find_local_dataset(data_dir=explicit_path)
+        if data_dir is None and explicit_path is not None
+        else find_local_dataset(data_dir=data_dir, dataset_name=dataset_name)
+    )
     if local is not None:
         print(f"[data] Loading dataset from disk: {local}", flush=True)
         raw = load_from_disk(str(local))
@@ -552,26 +518,6 @@ def get_streaming_dataset(
             return raw.shuffle(seed=seed).to_iterable_dataset()
         raise ValueError(f"Unsupported local dataset type at {local}: {type(raw).__name__}")
 
-    local_parquet = _resolve_dataset_name_as_local_path(dataset_name) if dataset_name else None
-    if local_parquet is not None:
-        files = _split_parquet_files(local_parquet, split)
-        if not files:
-            available = (
-                ", ".join(sorted(_available_local_parquet_splits(local_parquet))) or "<none>"
-            )
-            raise ValueError(
-                f"Local parquet dataset at {local_parquet} has no split '{split}'. "
-                f"Available splits: {available}"
-            )
-        print(f"[data] Loading local parquet split '{split}': {local_parquet}", flush=True)
-        hf_ds = load_dataset(
-            "parquet",
-            data_files={split: [str(f) for f in files]},
-            split=split,
-            streaming=True,
-        )
-        return hf_ds.shuffle(seed=seed, buffer_size=buffer_size)
-
     print(f"[data] Streaming dataset from HF Hub: {dataset_name} [{split}]", flush=True)
     try:
         hf_ds = load_dataset(dataset_name, split=split, streaming=True)
@@ -590,7 +536,7 @@ def get_streaming_dataset(
 
 def collect_corpus_for_tokenizer(
     dataset_name: str,
-    representation: str,
+    column: str,
     n: int,
     seed: int,
     buffer_size: int,
@@ -608,15 +554,19 @@ def collect_corpus_for_tokenizer(
     )
     corpus: list[str] = []
 
-    print(f"[corpus] Collecting {n:,} {representation} sequences...", flush=True)
+    from tqdm.auto import tqdm
+
+    print(f"[corpus] Collecting {n:,} sequences from column {column!r}...", flush=True)
     milestones = {int(n * p) for p in (0.25, 0.50, 0.75)}
     pbar = tqdm(
         total=n,
-        desc=f"Collecting {representation} corpus for APE tokenizer",
+        desc="Collecting tokenizer corpus",
         disable=not show_progress,
     )
     for row in ds:
-        seq = normalize_sequence(row, representation)
+        if column not in row:
+            raise ValueError(f"Tokenizer corpus does not contain column {column!r}")
+        seq = normalize_sequence(row, column)
         if seq is None:
             continue
         corpus.append(seq)
@@ -642,62 +592,28 @@ def collect_corpus_for_tokenizer(
 # ---------------------------------------------------------------------------
 
 
-def tokenizer_vocab_size(tokenizer: APEPreTrainedTokenizer) -> int:
-    get_vocab = getattr(tokenizer, "get_vocab", None)
-    if callable(get_vocab):
-        vocab = get_vocab()
-        if isinstance(vocab, dict):
-            return len(vocab)
-
-    for attr in ["vocab", "vocabulary", "token_to_id", "token2id"]:
-        if hasattr(tokenizer, attr):
-            value = getattr(tokenizer, attr)
-            if isinstance(value, dict):
-                return len(value)
-
-    raise AttributeError(
-        "Could not infer APE tokenizer vocabulary size. "
-        "Inspect the tokenizer object and adjust tokenizer_vocab_size()."
-    )
+def tokenizer_vocab_size(tokenizer: "PreTrainedTokenizerBase") -> int:
+    return len(tokenizer.get_vocab())
 
 
-def token_id(tokenizer: APEPreTrainedTokenizer, token: str) -> int:
-    if hasattr(tokenizer, "convert_tokens_to_ids"):
-        out = tokenizer.convert_tokens_to_ids([token])
-        return int(out[0] if isinstance(out, list) else out)
-
-    encoded = tokenizer(token, add_special_tokens=False)
-    ids = encoded["input_ids"]
-
-    if isinstance(ids, torch.Tensor):
-        ids = ids.tolist()
-    if ids and isinstance(ids[0], list):
-        ids = ids[0]
-    if len(ids) != 1:
-        raise ValueError(f"Token {token!r} resolved to {ids}, expected one ID.")
-
-    return int(ids[0])
-
-
-def resolve_special_ids(tokenizer: APEPreTrainedTokenizer) -> dict[str, int]:
-    ids: dict[str, int] = {}
-    for name, token in SPECIAL_TOKENS.items():
-        try:
-            ids[name] = token_id(tokenizer, token)
-        except Exception as err:
-            attr_name = name + "_id"
-            if hasattr(tokenizer, attr_name):
-                ids[name] = int(getattr(tokenizer, attr_name))
-            else:
-                raise RuntimeError(
-                    f"Could not resolve ID for special token {token!r}. "
-                    "Check APE tokenizer special-token names."
-                ) from err
-    return ids
+def resolve_special_ids(tokenizer: "PreTrainedTokenizerBase") -> dict[str, int]:
+    """Each special token's ID in the tokenizer's vocabulary."""
+    vocab = tokenizer.get_vocab()
+    tokens: dict[str, str] = {}
+    missing: list[str] = []
+    for name in SPECIAL_TOKENS:
+        token = getattr(tokenizer, name, None)
+        if not isinstance(token, str) or token not in vocab:
+            missing.append(name)
+        else:
+            tokens[name] = token
+    if missing:
+        raise ValueError(f"Tokenizer vocabulary lacks special tokens: {missing}")
+    return {name: int(vocab[token]) for name, token in tokens.items()}
 
 
 def encode_sequence(
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "PreTrainedTokenizerBase",
     seq: str,
     max_seq_length: int | None,
 ) -> dict[str, list[int]]:
@@ -713,9 +629,9 @@ def encode_sequence(
     input_ids = encoded["input_ids"]
     attention_mask = encoded.get("attention_mask", [1] * len(input_ids))
 
-    if isinstance(input_ids, torch.Tensor):
+    if hasattr(input_ids, "tolist"):
         input_ids = input_ids.tolist()
-    if isinstance(attention_mask, torch.Tensor):
+    if hasattr(attention_mask, "tolist"):
         attention_mask = attention_mask.tolist()
 
     if input_ids and isinstance(input_ids[0], list):
@@ -749,7 +665,7 @@ def eligible_token_ids(input_ids: list[int], special_ids: dict[str, int]) -> lis
 
 
 def assert_representation_compatible(
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "PreTrainedTokenizerBase",
     special_ids: dict[str, int],
     representation: str,
     max_seq_length: int | None = 256,
@@ -774,15 +690,22 @@ def assert_representation_compatible(
 
 
 def compute_tokenization_stats(
-    tokenizer: APEPreTrainedTokenizer,
+    tokenizer: "PreTrainedTokenizerBase",
     sequences: list[str],
     max_seq_length: int,
     special_ids: dict[str, int],
 ) -> dict[str, float]:
+    """Length, truncation and coverage statistics over ``sequences``.
+
+    ``silent_loss_rate`` is the fraction of sequences whose tokens, joined, do not
+    reproduce the input although no token is ``<unk>``: content was dropped or
+    altered without trace.
+    """
     if not sequences:
         raise ValueError("Cannot compute tokenization stats on an empty sequence list.")
 
     unk_id = special_ids["unk_token"]
+    unk_token = tokenizer.unk_token
 
     lengths: list[int] = []
     truncations = 0
@@ -790,11 +713,16 @@ def compute_tokenization_stats(
     eligible_tokens = 0
     empty_sequences = 0
     mostly_unknown = 0
+    silent_losses = 0
 
     for seq in sequences:
+        tokens = tokenizer.tokenize(seq)
+        if unk_token not in tokens and "".join(tokens) != seq:
+            silent_losses += 1
+
         raw = tokenizer(seq, add_special_tokens=True, return_tensors=None)
         raw_ids = raw["input_ids"]
-        if isinstance(raw_ids, torch.Tensor):
+        if hasattr(raw_ids, "tolist"):
             raw_ids = raw_ids.tolist()
         if raw_ids and isinstance(raw_ids[0], list):
             raw_ids = raw_ids[0]
@@ -807,10 +735,9 @@ def compute_tokenization_stats(
         if len(raw_ids) > max_seq_length:
             truncations += 1
 
-        encoded = encode_sequence(tokenizer, seq, max_seq_length)["input_ids"]
-        lengths.append(len(encoded))
+        lengths.append(len(raw_ids))
 
-        eligible = eligible_token_ids(encoded, special_ids)
+        eligible = eligible_token_ids(raw_ids, special_ids)
         if eligible:
             unk_count = sum(1 for tok in eligible if tok == unk_id)
             unknown_tokens += unk_count
@@ -837,5 +764,25 @@ def compute_tokenization_stats(
         "unk_rate": float(unknown_tokens / max(1, eligible_tokens)),
         "empty_sequence_rate": float(empty_sequences / len(sequences)),
         "mostly_unknown_rate": float(mostly_unknown / len(sequences)),
+        "silent_loss_rate": float(silent_losses / len(sequences)),
     }
     return stats
+
+
+def get_git_revision() -> dict[str, object]:
+    """Return the current Git commit hash and dirty status, or None values if unavailable."""
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], capture_output=True, text=True, check=False
+        )
+        if proc.returncode == 0:
+            commit = proc.stdout.strip()
+            return {"commit": commit if commit else None, "dirty": bool(status.stdout.strip())}
+    except Exception:
+        pass
+    return {"commit": None, "dirty": None}

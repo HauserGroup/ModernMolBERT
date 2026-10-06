@@ -14,21 +14,22 @@ df <- raw |>
   mutate(
     strategy = factor(strategy, levels = c("standard", "span")),
     lr_label = case_when(
-      learning_rate == 1e-4 ~ "1e-4",
-      learning_rate == 2e-4 ~ "2e-4",
-      learning_rate == 4e-4 ~ "4e-4"
+      near(learning_rate, 1e-4) ~ "1e-4",
+      near(learning_rate, 2e-4) ~ "2e-4",
+      near(learning_rate, 4e-4) ~ "4e-4"
     ),
     lr_label = factor(lr_label, levels = c("1e-4", "2e-4", "4e-4"))
   ) |>
+  # collect_sweep_results.R prefixes the all_results.json eval metrics with final_.
   pivot_longer(
-    cols      = c(eval_loss, eval_masked_accuracy),
+    cols      = c(final_eval_loss, final_eval_masked_accuracy),
     names_to  = "metric",
     values_to = "value"
   ) |>
   mutate(
     metric = factor(
       metric,
-      levels = c("eval_masked_accuracy", "eval_loss"),
+      levels = c("final_eval_masked_accuracy", "final_eval_loss"),
       labels = c("Masked accuracy", "Eval loss")
     )
   )

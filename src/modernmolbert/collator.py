@@ -252,6 +252,8 @@ class MolecularMLMCollator(DataCollatorMixin):
         weights = torch.ones(self.vocab_size, dtype=torch.float32)
         special_ids = set(self.special_token_ids)
         for tok_id, tok_str in self.ids_to_tokens.items():
+            if tok_id < 0 or tok_id >= self.vocab_size:
+                continue
             if tok_id in special_ids:
                 weights[tok_id] = 0.0
             elif self._HETEROATOM_IN_BRACKET.search(tok_str):

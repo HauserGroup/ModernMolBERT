@@ -47,7 +47,7 @@ OUTPUT FILES (written to --output_dir, defaults to --sweep_root)
 ----------------------------------------------------------------------
 fixed_eval_per_prob.log          — full run log (also printed to stdout)
 fixed_eval_valid_full.pt         — frozen masked dataset tensors (all examples)
-fixed_eval_valid_full.pt         — frozen masked dataset tensors (4096 examples)
+fixed_eval_valid_4096_train_matched.pt — frozen masked dataset tensors (4096 examples)
 fixed_eval_per_prob_results.csv  — one row per (eval_set, run) with metrics
 fixed_eval_per_prob_results.json — same data as JSON
 fixed_eval_per_prob_manifest.json — run metadata, SHAs, dataset fingerprints
@@ -55,18 +55,18 @@ fixed_eval_per_prob_manifest.json — run metadata, SHAs, dataset fingerprints
 USAGE
 -----
 Basic:
-    python scripts/fixed_eval_best_models.py
+    uv run python analysis/sweep/fixed_eval_best_models.py
 
 Different sweep root:
-    python scripts/fixed_eval_best_models.py \\
+    uv run python analysis/sweep/fixed_eval_best_models.py \\
         --sweep_root runs/my_sweep \\
-        --valid_parquet data/pretrain/chembl36_selfies/valid/valid.parquet
+        --valid_parquet data/pretrain/chembl36_selfies/valid.parquet
 
 Smoke test (fast, small subset):
-    python scripts/fixed_eval_best_models.py --limit 128
+    uv run python analysis/sweep/fixed_eval_best_models.py --limit 128
 
 Write outputs to a separate directory:
-    python scripts/fixed_eval_best_models.py --output_dir results/fixed_eval
+    uv run python analysis/sweep/fixed_eval_best_models.py --output_dir results/fixed_eval
 
 REQUIREMENTS
 ------------
@@ -98,7 +98,8 @@ from tqdm.auto import tqdm
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 from modernmolbert.collator import MolecularMLMCollator
-from modernmolbert.utils import encode_sequence, resolve_special_ids
+from modernmolbert.common.paths import find_project_root
+from modernmolbert.utils import encode_sequence, file_sha256 as sha256_file, resolve_special_ids
 
 
 log = logging.getLogger(__name__)
@@ -118,7 +119,7 @@ def setup_logging(log_path: Path) -> None:
 
 
 SWEEP_ROOT = Path("runs/chembl36_small_mask_mlm_lr_sweep")
-VALID_PARQUET = Path("data/pretrain/chembl36_selfies/valid/valid.parquet")
+VALID_PARQUET = Path("data/pretrain/chembl36_selfies/valid.parquet")
 
 
 @dataclass(frozen=True)
@@ -166,7 +167,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Smoke mode: cap each eval set to this many examples.",
     )
-    parser.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto")
+    parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     parser.add_argument(
         "--bf16",
         action=argparse.BooleanOptionalAction,
@@ -178,14 +179,6 @@ def parse_args() -> argparse.Namespace:
 
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def discover_best_per_group(sweep_root: Path) -> list[SelectedRun]:
@@ -224,6 +217,14 @@ def discover_best_per_group(sweep_root: Path) -> list[SelectedRun]:
         mlm_prob = float(run_args["mlm_probability"])
         lr = float(run_args["learning_rate"])
         best_checkpoint = Path(best_ckpt_str)
+        if not best_checkpoint.is_absolute():
+            # Trainer records the path relative to the training cwd (the repo root);
+            # fall back to the run directory for sweeps copied elsewhere.
+            candidates = [
+                find_project_root(Path(__file__)) / best_checkpoint,
+                subdir / best_checkpoint.name,
+            ]
+            best_checkpoint = next((p for p in candidates if p.exists()), candidates[0])
         if not best_checkpoint.exists():
             log.warning("  Skipping %s (checkpoint not found: %s)", subdir.name, best_checkpoint)
             continue
@@ -292,7 +293,11 @@ def assert_compatible_runs(
             )
 
         vocab_sha = sha256_file(tokenizer_vocab)
-        metadata_sha = sha256_file(tokenizer_metadata)
+        # Metadata files may differ in paths or timestamps between runs; the
+        # tokenizer hash they record must not. Older metadata without that field
+        # falls back to the file hash.
+        meta = load_json(tokenizer_metadata)
+        metadata_sha = meta.get("tokenizer_sha256") or sha256_file(tokenizer_metadata)
         config_sha = sha256_file(config_path)
         ref_vocab_sha = vocab_sha if ref_vocab_sha is None else ref_vocab_sha
         ref_tokenizer_metadata_sha = (
@@ -303,7 +308,7 @@ def assert_compatible_runs(
         if vocab_sha != ref_vocab_sha:
             raise ValueError(f"Tokenizer vocab SHA mismatch for {run.run_name}.")
         if metadata_sha != ref_tokenizer_metadata_sha:
-            raise ValueError(f"Tokenizer metadata SHA mismatch for {run.run_name}.")
+            raise ValueError(f"Recorded tokenizer SHA mismatch for {run.run_name}.")
         if config_sha != ref_config_sha:
             raise ValueError(f"Config SHA mismatch for {run.run_name}.")
 
@@ -312,7 +317,7 @@ def assert_compatible_runs(
     assert ref_config_sha is not None
     return {
         "tokenizer_vocab_sha256": ref_vocab_sha,
-        "tokenizer_metadata_sha256": ref_tokenizer_metadata_sha,
+        "tokenizer_metadata_recorded_sha256": ref_tokenizer_metadata_sha,
         "config_sha256": ref_config_sha,
     }
 
@@ -482,8 +487,15 @@ def select_device(name: str) -> torch.device:
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA requested but unavailable.")
         return torch.device("cuda")
-    if name == "auto" and torch.cuda.is_available():
-        return torch.device("cuda")
+    if name == "mps":
+        if not (hasattr(torch.backends, "mps") and torch.backends.mps.is_available()):
+            raise RuntimeError("MPS requested but unavailable.")
+        return torch.device("mps")
+    if name == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return torch.device("mps")
     return torch.device("cpu")
 
 

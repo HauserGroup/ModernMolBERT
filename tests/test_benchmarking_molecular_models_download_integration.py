@@ -29,11 +29,8 @@ def write_download_config(config_dir: Path) -> None:
             [
                 "raw_directory: data/raw",
                 "embedded_directory: data/embedded",
-                "data_directory: data/downloaded",
                 "prepared_directory: data/prepared",
                 "predictions_directory: data/predictions",
-                "clock_directory: data/clock",
-                "svd_directory: data/svd",
                 "max_invalid_embeddings: 50",
             ]
         )

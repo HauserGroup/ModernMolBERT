@@ -5,10 +5,14 @@ can catch an exception. These helpers only reject obviously non-SMILES text;
 RDKit remains the source of truth for full chemical validation.
 """
 
+from rdkit import Chem
+
 _BARE_TWO_CHAR_ATOMS = {"Br", "Cl"}
 _BARE_ONE_CHAR_ATOMS = set("BCNOPSFIbcnops")
-_BRACKET_TWO_CHAR_ATOMS = {"Br", "Cl"}
-_BRACKET_ONE_CHAR_ATOMS = set("HBCNOPSFIbcnops")
+
+_PERIODIC_TABLE = Chem.GetPeriodicTable()
+_ELEMENTS = {_PERIODIC_TABLE.GetElementSymbol(number) for number in range(1, 119)}
+_AROMATIC_BRACKET_ATOMS = {"b", "c", "n", "o", "p", "s", "se", "as"}
 _STRUCTURAL_CHARS = set("()-.=#$:/\\+@0123456789")
 
 
@@ -20,10 +24,13 @@ def _has_safe_bracket_atom(body: str) -> bool:
     if i >= len(body):
         return False
 
-    if body[i : i + 2] in _BRACKET_TWO_CHAR_ATOMS:
+    if body[i] == "*":
         return True
-
-    return body[i] in _BRACKET_ONE_CHAR_ATOMS
+    if body[i : i + 2] in _ELEMENTS or body[i : i + 2] in _AROMATIC_BRACKET_ATOMS:
+        return True
+    if i + 1 < len(body) and body[i + 1].islower():
+        return False
+    return body[i] in _ELEMENTS or body[i] in _AROMATIC_BRACKET_ATOMS
 
 
 def looks_like_smiles(value: object) -> bool:
@@ -57,7 +64,7 @@ def looks_like_smiles(value: object) -> bool:
             i += 2
             continue
 
-        if ch in _BARE_ONE_CHAR_ATOMS:
+        if ch in _BARE_ONE_CHAR_ATOMS or ch == "*":
             i += 1
             continue
 

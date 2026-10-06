@@ -2,7 +2,7 @@
 """Create an extra-vocabulary SELFIES symbol file for tokenizer training.
 This utility filters a SELFIES symbol-count TSV against an existing tokenizer
 vocabulary and writes missing symbols above a frequency threshold. The output is
-intended for `train_ape_tokenizer --extra_vocab_symbols_path`.
+intended for `train_tokenizer --extra_vocab_symbols_path`.
 
 # This script takes:
 1. an existing tokenizer vocabulary JSON
@@ -17,7 +17,7 @@ The output is intended for:
 
     --extra_vocab_symbols_path
 
-in `modernmolbert.train_ape_tokenizer`.
+in `modernmolbert.train_tokenizer`.
 
 Input TSV format:
     symbol<TAB>count

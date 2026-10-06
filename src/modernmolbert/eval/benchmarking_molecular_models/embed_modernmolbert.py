@@ -8,6 +8,7 @@ the MLM head weights and are intentionally discarded — this is expected and sa
 
 import argparse
 import gc
+import json
 import os
 import time
 from pathlib import Path
@@ -26,23 +27,26 @@ from modernmolbert.eval.benchmarking_molecular_models.common.types import (
     EmbeddedDataset,
     EmbeddingConfig,
 )
-
-DEFAULT_MODEL_DIR = Path("runs/pubchem10m_mps_base_pilot_256/final_model")
-DEFAULT_EMBEDDER = "modernmolbert_pubchem10m_mps_base_pilot_256"
+from modernmolbert.utils import file_sha256
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Embed prepared Praski benchmark datasets with a ModernMolBERT checkpoint.",
     )
-    parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
-    parser.add_argument("--tokenizer-path", type=Path, default=DEFAULT_MODEL_DIR)
-    parser.add_argument("--embedder", default=DEFAULT_EMBEDDER)
+    parser.add_argument("--model-dir", type=Path, required=True)
+    parser.add_argument(
+        "--tokenizer-path",
+        type=Path,
+        default=None,
+        help="Tokenizer bundle path; defaults to --model-dir.",
+    )
+    parser.add_argument("--embedder", required=True)
     parser.add_argument("--datasets", nargs="+", default=["all"])
     parser.add_argument("--config-dir", default="config")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--max-seq-length", type=int, default=256)
+    parser.add_argument("--max-seq-length", type=int, default=None)
     parser.add_argument("--pooling", choices=["mean", "cls"], default="mean")
     parser.add_argument("--overwrite", action=argparse.BooleanOptionalAction, default=False)
     return parser.parse_args()
@@ -63,6 +67,16 @@ def embed_dataset(dataset: Dataset, *, featurizer: Any, embedder_name: str, batc
 
     # Expand to full matrix then immediately free the compact batch
     X = expand_to_nan_matrix(feature_batch.X, feature_batch.valid_mask, n_inputs=len(smiles))
+    if X.shape[1] == 0:
+        raise ValueError(f"No valid embeddings for {dataset.name}")
+    retained = np.flatnonzero(~np.isnan(X).any(axis=1))
+    dropped = np.flatnonzero(np.isnan(X).any(axis=1))
+    metadata["source_n_rows"] = len(smiles)
+    metadata["source_row_indices"] = retained.tolist()
+    metadata["failed_source_row_indices"] = dropped.tolist()
+    metadata["source_split_counts"] = {
+        split: len(indices) for split, indices in dataset.splits.items()
+    }
     del feature_batch
     gc.collect()
 
@@ -75,7 +89,12 @@ def embed_dataset(dataset: Dataset, *, featurizer: Any, embedder_name: str, batc
         y=dataset.labels.copy(),
         metadata=metadata,
     )
-    embedded.remove_failed_embeddings()
+    n_failed = embedded.remove_failed_embeddings()
+    if n_failed != len(dropped) or embedded.X.shape[0] != len(retained):
+        raise ValueError(f"Embedding row provenance mismatch for {dataset.name}")
+    metadata["retained_split_counts"] = {
+        split: len(indices) for split, indices in embedded.splits.items()
+    }
     return embedded
 
 
@@ -86,6 +105,58 @@ def load_prepared_dataset(path: Path) -> Dataset:
     if not path.exists():
         raise FileNotFoundError(f"Prepared dataset not found: {path}")
     return joblib.load(path)
+
+
+def model_weight_sha256(model_dir: Path) -> str | None:
+    """Identify local weights, checking a completed run record when one exists."""
+    identity_path = model_dir.parent / "run_identity.json"
+    if identity_path.is_file():
+        result = json.loads(identity_path.read_text(encoding="utf-8")).get("result", {})
+        filename = result.get("final_model_file")
+        expected = result.get("final_model_sha256")
+        if result.get("terminal_step") != 30_000 or not filename or not expected:
+            raise ValueError(f"Incomplete final run identity: {identity_path}")
+        weights = model_dir / filename
+        if not weights.is_file() or file_sha256(weights) != expected:
+            raise ValueError(f"Final model weights differ from run identity: {weights}")
+        return expected
+    for filename in ("model.safetensors", "pytorch_model.bin"):
+        weights = model_dir / filename
+        if weights.is_file():
+            return file_sha256(weights)
+    return None
+
+
+def assert_reusable_embedding(
+    output_path: Path, prepared_path: Path, *, model_sha256: str | None = None
+) -> None:
+    """Never skip a stale or unreadable pickle as if it matched the prepared cohort."""
+    source_path = prepared_path.with_suffix(".json")
+    if not source_path.exists():
+        source_path = prepared_path
+    try:
+        embedded = joblib.load(output_path, mmap_mode="r")
+    except (ModuleNotFoundError, AttributeError) as exc:
+        raise ValueError(
+            f"Existing embedding {output_path} uses an obsolete pickle class; "
+            "regenerate it with --overwrite"
+        ) from exc
+    except (EOFError, OSError) as exc:
+        raise ValueError(
+            f"Existing embedding {output_path} is truncated or unreadable; "
+            "regenerate it with --overwrite"
+        ) from exc
+    recorded = getattr(embedded, "metadata", {}).get("prepared_data_sha256")
+    if recorded != file_sha256(source_path):
+        raise ValueError(
+            f"Existing embedding {output_path} has a different prepared-data hash; "
+            "regenerate it with --overwrite"
+        )
+    if model_sha256 is not None and embedded.metadata.get("model_weights_sha256") != model_sha256:
+        raise ValueError(
+            f"Existing embedding {output_path} has a different model-weights hash; "
+            "regenerate it with --overwrite"
+        )
 
 
 def make_featurizer(args: argparse.Namespace):
@@ -104,22 +175,9 @@ def make_featurizer(args: argparse.Namespace):
     )
 
 
-def _warn_if_not_best_model(model_dir: Path) -> None:
-    resolved = str(model_dir.resolve())
-    if "best" not in resolved.lower():
-        import warnings
-
-        warnings.warn(
-            f"model-dir does not contain 'best' in its path: {model_dir}\n"
-            "Pass runs/best_<name> to use the designated best checkpoint.",
-            UserWarning,
-            stacklevel=3,
-        )
-
-
 def main() -> None:
     args = parse_args()
-    _warn_if_not_best_model(args.model_dir)
+    model_sha256 = model_weight_sha256(args.model_dir)
     root = Path(__file__).resolve().parent
     config_dir = root / args.config_dir
     embed_config = EmbeddingConfig(**load_embedding_config(config_dir))
@@ -144,6 +202,7 @@ def main() -> None:
         output_path = output_dir / f"{args.embedder}.joblib"
 
         if output_path.exists() and not args.overwrite:
+            assert_reusable_embedding(output_path, prepared_path, model_sha256=model_sha256)
             print(
                 f"[{idx:>2}/{n_total}] SKIP  {dataset_name} — embedding exists",
                 flush=True,
@@ -166,13 +225,22 @@ def main() -> None:
             embedder_name=args.embedder,
             batch_size=args.batch_size,
         )
+        source_path = prepared_path.with_suffix(".json")
+        if not source_path.exists():
+            source_path = prepared_path
+        embedded.metadata["prepared_data_path"] = str(source_path)
+        embedded.metadata["prepared_data_sha256"] = file_sha256(source_path)
+        if model_sha256 is not None:
+            embedded.metadata["model_weights_sha256"] = model_sha256
 
         # Free the prepared dataset before writing the embedded one
         del dataset
         gc.collect()
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        joblib.dump(embedded, output_path)
+        tmp_output_path = output_path.with_suffix(output_path.suffix + ".tmp")
+        joblib.dump(embedded, tmp_output_path)
+        os.replace(tmp_output_path, output_path)
 
         elapsed = time.perf_counter() - t0
         print(
@@ -184,6 +252,8 @@ def main() -> None:
         del embedded
         gc.collect()
 
+    if model_weight_sha256(args.model_dir) != model_sha256:
+        raise ValueError(f"Model weights changed during embedding: {args.model_dir}")
     total_elapsed = time.perf_counter() - wall_start
     print(f"\n[embed] finished {n_total} datasets in {total_elapsed:.1f}s", flush=True)
 

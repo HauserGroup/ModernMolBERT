@@ -1,17 +1,17 @@
 import argparse
 import gc
+import hashlib
 import json
 import logging as log
 from dataclasses import dataclass
-from datetime import datetime, UTC
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
-from modernmolbert.eval.benchmarking_molecular_models.praski_export import (
-    write_dataset_checkpoint,
-)
+from modernmolbert.utils import file_sha256, get_git_revision
+
 from modernmolbert.eval.benchmarking_molecular_models.common.config import (
     expand_dataset_selection,
     load_dataset_config,
@@ -44,7 +44,7 @@ class DatasetItem:
 
     name:
         Canonical prepared dataset name from dataset_info.name, e.g. ogbg-molhiv.
-        This is the identity used for logging, results, skips, and checkpoints.
+        This is the identity used for logging, results, and resume decisions.
 
     info:
         Fully loaded dataset config object passed into eval_procedure(...).
@@ -122,193 +122,71 @@ def normalize_name(name: str | Path) -> str:
     return stem
 
 
-def safe_file_component(value: str) -> str:
-    """Make a conservative filename component."""
-    return str(value).replace("/", "_").replace("\\", "_").replace(":", "_").replace(" ", "_")
-
-
-def _safe_name(value: str) -> str:
-    """Return a path-safe, deterministic checkpoint path component."""
-    return str(value).replace("/", "__").replace("\\", "__").replace(" ", "_")
-
-
-def head_checkpoint_path(
-    checkpoint_dir: Path,
+def scoring_identity(
+    *,
     dataset: str,
     embedder: str,
     head: str,
-) -> Path:
-    """Return path for one dataset/embedder/head checkpoint payload."""
-    return checkpoint_dir / _safe_name(dataset) / _safe_name(embedder) / f"{_safe_name(head)}.json"
-
-
-def write_head_checkpoint(
-    checkpoint_dir: Path,
-    dataset: str,
-    embedder: str,
-    head: str,
-    status: str,
-    version_hash: str | None = None,
-    error: Exception | None = None,
-    extra: dict[str, Any] | None = None,
-) -> None:
-    """Write head checkpoint with lifecycle status and optional failure metadata."""
-    if status not in {"success", "failed", "disabled"}:
-        raise ValueError(f"Unknown checkpoint status: {status!r}")
-
-    payload: dict[str, Any] = {
+    embedding_sha256: str,
+    prepared_sha256: str,
+    missing_labels: str,
+    version_hash: str,
+    code_revision: dict[str, object],
+) -> str:
+    """One identity for the exact input cohort and supervised scoring rule."""
+    payload = {
         "dataset": dataset,
         "embedder": embedder,
         "head": head,
-        "status": status,
-        "timestamp": datetime.now(UTC).isoformat(),
+        "embedding_sha256": embedding_sha256,
+        "prepared_sha256": prepared_sha256,
+        "missing_labels": missing_labels,
         "version_hash": version_hash,
+        "code_revision": code_revision,
     }
-
-    if error is not None:
-        payload["error_type"] = type(error).__name__
-        payload["error_message"] = str(error)
-
-    if extra:
-        payload.update(extra)
-
-    path = head_checkpoint_path(checkpoint_dir, dataset, embedder, head)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
-def read_head_checkpoint(
-    checkpoint_dir: Path,
+def score_row_is_complete(
+    output_csv: Path,
     dataset: str,
     embedder: str,
     head: str,
-) -> dict[str, Any] | None:
-    """Read a head checkpoint JSON payload, returning None if missing/corrupt."""
-    path = head_checkpoint_path(checkpoint_dir, dataset, embedder, head)
-    if not path.exists():
-        return None
-
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return None
-
-    return data if isinstance(data, dict) else None
-
-
-def head_checkpoint_is_success(
-    checkpoint_dir: Path,
-    dataset: str,
-    embedder: str,
-    head: str,
-    version_hash: str | None = None,
+    identity: str,
+    prediction_path: Path,
 ) -> bool:
-    """Return True when checkpoint says this head succeeded for current version."""
-    payload = read_head_checkpoint(checkpoint_dir, dataset, embedder, head)
-    if not payload:
+    """Use the results row as the only resume state; reject a different identity."""
+    if not output_csv.is_file():
         return False
-
-    if payload.get("status") != "success":
+    rows = pd.read_csv(output_csv)
+    required = {"dataset", "embedder", "model", "scoring_identity"}
+    if not required.issubset(rows.columns):
+        raise ValueError(f"Results CSV lacks scoring identity columns: {output_csv}")
+    selected = rows.loc[
+        (rows["dataset"] == dataset) & (rows["embedder"] == embedder) & (rows["model"] == head)
+    ]
+    if selected.empty:
         return False
-
-    return not (version_hash is not None and payload.get("version_hash") != version_hash)
-
-
-def head_checkpoint_is_disabled(
-    checkpoint_dir: Path,
-    dataset: str,
-    embedder: str,
-    head: str,
-    version_hash: str | None = None,
-) -> bool:
-    """Return True when checkpoint says this head is explicitly disabled."""
-    payload = read_head_checkpoint(checkpoint_dir, dataset, embedder, head)
-    if not payload:
+    if len(selected) != 1 or selected.iloc[0]["scoring_identity"] != identity:
+        raise ValueError(f"Existing result has a different or duplicate identity: {dataset}/{head}")
+    if not prediction_path.is_file():
         return False
-
-    if payload.get("status") != "disabled":
-        return False
-
-    return not (version_hash is not None and payload.get("version_hash") != version_hash)
-
-
-def dataset_is_complete(
-    checkpoint_dir: Path | None,
-    dataset: str,
-    embedder: str,
-    required_heads: list[str],
-    version_hash: str | None,
-) -> bool:
-    """Return True only when every required head is success or explicitly disabled."""
-    if checkpoint_dir is None:
-        return False
-
-    for head in required_heads:
-        if head_checkpoint_is_success(
-            checkpoint_dir,
-            dataset,
-            embedder,
-            head,
-            version_hash,
-        ):
-            continue
-
-        if head_checkpoint_is_disabled(
-            checkpoint_dir,
-            dataset,
-            embedder,
-            head,
-            version_hash,
-        ):
-            continue
-
-        return False
-
+    with np.load(prediction_path, allow_pickle=False) as prediction:
+        if "scoring_identity" not in prediction or str(prediction["scoring_identity"]) != identity:
+            return False
     return True
 
 
 def get_disabled_reason(dataset_info: Any, head: str) -> str | None:
     """Return explicit disable reason for dataset/head, otherwise None."""
-    dataset_name = str(getattr(dataset_info, "name", ""))
-    if head == "knn" and "muv" in dataset_name.lower():
-        return "KNN disabled for MUV"
+    dataset_name = str(getattr(dataset_info, "name", "")).lower()
+    if head == "knn":
+        if "muv" in dataset_name:
+            return "KNN disabled for MUV"
+        if "hiv" in dataset_name:
+            return "KNN disabled for HIV"
 
     return None
-
-
-def dataset_checkpoint_path(
-    *,
-    checkpoint_dir: str | Path,
-    dataset: str,
-    embedder: str,
-) -> Path:
-    """Return the expected per-dataset checkpoint path.
-
-    This path must match write_dataset_checkpoint(...). If checkpoint writing is
-    later moved fully into praski_export.py, this function should be moved there
-    too and imported here.
-    """
-    safe_dataset = safe_file_component(dataset)
-    safe_embedder = safe_file_component(embedder)
-    return Path(checkpoint_dir) / f"{safe_dataset}__{safe_embedder}.csv"
-
-
-def checkpoint_exists(
-    *,
-    checkpoint_dir: Path | None,
-    dataset: str,
-    embedder: str,
-) -> bool:
-    """Check whether a dataset/embedder checkpoint already exists."""
-    if checkpoint_dir is None:
-        return False
-
-    path = dataset_checkpoint_path(
-        checkpoint_dir=checkpoint_dir,
-        dataset=dataset,
-        embedder=embedder,
-    )
-    return path.exists() and path.stat().st_size > 0
 
 
 def make_short_model_name(model_name: str) -> str:
@@ -393,7 +271,7 @@ def resolve_subsample_config(cfg: Any, args: argparse.Namespace) -> SubsampleCon
 
 
 def make_scoring_model_name(model_name: str, subsample: SubsampleConfig | None) -> str:
-    """Return the result/checkpoint identity for this scoring run."""
+    """Return the result identity for this scoring run."""
     if subsample is None:
         return model_name
 
@@ -522,6 +400,12 @@ def subsample_embedded_dataset(
     }
 
     y = dataset.y.iloc[selected].reset_index(drop=True)
+    metadata = dict(dataset.metadata)
+    source_rows = metadata.get("source_row_indices")
+    if source_rows is not None:
+        if len(source_rows) != len(dataset.X):
+            raise ValueError(f"Source row mapping length mismatch for {dataset.name}")
+        metadata["source_row_indices"] = [source_rows[int(index)] for index in selected]
     subset = EmbeddedDataset(
         name=dataset.name,
         task=dataset.task,
@@ -529,7 +413,7 @@ def subsample_embedded_dataset(
         splits=remapped_splits,
         X=dataset.X[selected],
         y=y,
-        metadata=dict(dataset.metadata),
+        metadata=metadata,
     )
 
     log.info(
@@ -553,7 +437,7 @@ def load_dataset_items(
     """Expand dataset selections and load configs exactly once.
 
     The returned DatasetItem.name is the canonical prepared dataset name.
-    This is the name used for skip logic, checkpoint logic, logs, and results.
+    This is the name used for resume decisions, logs, and results.
     """
     config_names = expand_dataset_selection(config_dir, selections)
 
@@ -617,7 +501,6 @@ def print_run_plan(
     skip_set: set[str],
     embedder: str,
     heads: list[str],
-    override: bool,
     safe: bool,
     resume: bool,
     source_embedder: str | None = None,
@@ -630,7 +513,6 @@ def print_run_plan(
             f"expanded_datasets={len(items)}  "
             f"datasets_to_run={len(run_items)}  "
             f"heads={heads}  "
-            f"override={override}  "
             f"safe={safe}  "
             f"resume={resume}  "
             f"subsample={subsample or 'disabled'}"
@@ -663,9 +545,10 @@ def run_eval(
     dataset_info: Any,
     model_head: str,
     output_csv: Path,
-    override: bool,
     preloaded: Any = None,
     n_jobs: int | None = None,
+    missing_labels: str = "as-negative",
+    scoring_identity_value: str | None = None,
 ) -> bool:
     """Run one dataset/head evaluation.
 
@@ -693,9 +576,10 @@ def run_eval(
             model_name=short_model_name,
             model_head=model_head,
             output_csv=output_csv,
-            override=override,
             preloaded=preloaded,
             n_jobs=n_jobs,
+            missing_labels=missing_labels,
+            scoring_identity=scoring_identity_value,
         )
     except Exception as exc:
         if not safe:
@@ -713,48 +597,6 @@ def run_eval(
         return False
 
     return True
-
-
-def write_checkpoint_if_successful(
-    *,
-    results_csv: Path,
-    checkpoint_dir: Path | None,
-    dataset: str,
-    embedder: str,
-    required_heads: list[str],
-    version_hash: str | None,
-) -> None:
-    """Write a dataset-level checkpoint only when all required heads are complete."""
-    if checkpoint_dir is None:
-        return
-
-    if not dataset_is_complete(
-        checkpoint_dir=checkpoint_dir,
-        dataset=dataset,
-        embedder=embedder,
-        required_heads=required_heads,
-        version_hash=version_hash,
-    ):
-        print(
-            f"[score] {dataset}: required heads incomplete; not writing dataset checkpoint",
-            flush=True,
-        )
-        return
-
-    write_dataset_checkpoint(
-        results_csv=results_csv,
-        checkpoint_dir=checkpoint_dir,
-        dataset=dataset,
-        embedder=embedder,
-    )
-
-    checkpoint = dataset_checkpoint_path(
-        checkpoint_dir=checkpoint_dir,
-        dataset=dataset,
-        embedder=embedder,
-    )
-
-    print(f"[score] wrote checkpoint: {checkpoint}", flush=True)
 
 
 def parse_args() -> argparse.Namespace:
@@ -811,30 +653,10 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
-        "--checkpoint-dir",
-        type=Path,
-        default=None,
-        help="Optional directory for per-dataset result checkpoint CSVs.",
-    )
-
-    parser.add_argument(
         "--resume",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help=(
-            "Skip only dataset/embedder/head checkpoints that already succeeded "
-            "for current version hash."
-        ),
-    )
-
-    parser.add_argument(
-        "--cache",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help=(
-            "Use cached scoring results if supported by eval_procedure. "
-            "Equivalent to override = not cache."
-        ),
+        help="Skip rows only when the result and prediction have the same full scoring identity.",
     )
 
     parser.add_argument(
@@ -872,6 +694,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for scoring-time subsampling. Defaults to 42.",
+    )
+
+    parser.add_argument(
+        "--missing-labels",
+        choices=["observed", "as-negative"],
+        default="as-negative",
+        help=(
+            "Handling of missing labels in multi-endpoint datasets (Tox21, MUV). "
+            "'observed' fits each endpoint on its observed labels; 'as-negative' "
+            "treats them as negatives, matching the scorer behind the imported "
+            "Praski et al. results. Use 'as-negative' when comparing with that table."
+        ),
     )
 
     parser.add_argument(
@@ -916,13 +750,9 @@ def main() -> int:
 
     short_model_name = make_short_model_name(model_name)
 
-    cache = cfg_get(cfg, "cache", True) if args.cache is None else args.cache
     safe = cfg_get(cfg, "safe", False) if args.safe is None else args.safe
-    override = not cache
 
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
-    if args.checkpoint_dir is not None:
-        args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     dataset_selections = resolve_dataset_selections(cfg, args)
     skip_set = resolve_skip_set(cfg, args)
@@ -946,7 +776,6 @@ def main() -> int:
         skip_set=skip_set,
         embedder=scoring_model_name,
         heads=list(args.heads),
-        override=override,
         safe=safe,
         resume=args.resume,
         source_embedder=short_model_name,
@@ -960,153 +789,96 @@ def main() -> int:
     failed_datasets = 0
     failures: list[str] = []
 
+    model_version_hash = get_model_version_hash()
+    code_revision = get_git_revision()
     for idx, item in enumerate(run_items, start=1):
         attempted += 1
-        dataset_success = False
-        model_version_hash = get_model_version_hash()
-
+        source_embedding = (
+            Path(embed_config.embedded_directory) / item.name / f"{short_model_name}.joblib"
+        )
+        if not source_embedding.is_file():
+            raise FileNotFoundError(f"Missing embedded dataset: {source_embedding}")
+        embedded_sha = file_sha256(source_embedding)
         embedded_data = load_embedded_dataset(
             embedded_dir=embed_config.embedded_directory,
             dataset_info=item.info,
             model_name=short_model_name,
         )
         if embedded_data is None:
-            log.error(
-                "Skipping dataset=%s because no embedding was loaded for source embedder=%s",
-                item.name,
-                short_model_name,
-            )
-            failed_datasets += 1
-            failures.append(f"{item.name}: missing embedding")
-            continue
-
+            raise FileNotFoundError(f"Could not load embedded dataset: {source_embedding}")
         if subsample_config is not None:
             embedded_data = subsample_embedded_dataset(
                 embedded_data,
                 subsample=subsample_config,
                 embedder_name=scoring_model_name,
             )
+        prepared_sha = embedded_data.metadata.get("prepared_data_sha256")
+        if not isinstance(prepared_sha, str) or len(prepared_sha) != 64:
+            raise ValueError(f"Embedding lacks prepared-data identity: {source_embedding}")
 
+        dataset_failed = False
         for model_head in args.heads:
             disabled_reason = get_disabled_reason(item.info, model_head)
             if disabled_reason is not None:
-                if (
-                    args.checkpoint_dir is not None
-                    and args.resume
-                    and head_checkpoint_is_disabled(
-                        args.checkpoint_dir,
-                        item.name,
-                        scoring_model_name,
-                        model_head,
-                        model_version_hash,
-                    )
-                ):
-                    print(
-                        f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}  skip=disabled-checkpoint",
-                        flush=True,
-                    )
-                    continue
-
-                if args.checkpoint_dir is not None:
-                    write_head_checkpoint(
-                        checkpoint_dir=args.checkpoint_dir,
-                        dataset=item.name,
-                        embedder=scoring_model_name,
-                        head=model_head,
-                        status="disabled",
-                        version_hash=model_version_hash,
-                        extra={"reason": disabled_reason},
-                    )
-
                 print(
                     f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}  skip=disabled ({disabled_reason})",
                     flush=True,
                 )
                 continue
-
-            if (
-                args.checkpoint_dir is not None
-                and args.resume
-                and head_checkpoint_is_success(
-                    args.checkpoint_dir,
-                    item.name,
-                    scoring_model_name,
-                    model_head,
-                    model_version_hash,
-                )
-            ):
+            identity = scoring_identity(
+                dataset=item.name,
+                embedder=scoring_model_name,
+                head=model_head,
+                embedding_sha256=embedded_sha,
+                prepared_sha256=prepared_sha,
+                missing_labels=args.missing_labels,
+                version_hash=model_version_hash,
+                code_revision=code_revision,
+            )
+            prediction_path = (
+                Path(embed_config.predictions_directory)
+                / item.name
+                / scoring_model_name
+                / f"{model_head}.npz"
+            )
+            complete = score_row_is_complete(
+                args.output_csv,
+                item.name,
+                scoring_model_name,
+                model_head,
+                identity,
+                prediction_path,
+            )
+            if complete and args.resume:
                 print(
-                    f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}  skip=checkpoint-success",
+                    f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}  skip=complete-result",
                     flush=True,
                 )
                 continue
-
-            print(
-                f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}",
-                flush=True,
+            print(f"[{idx:>2}/{len(run_items)}] {item.name}  head={model_head}", flush=True)
+            success = run_eval(
+                safe=safe,
+                embed_config=embed_config,
+                full_model_name=model_name,
+                short_model_name=scoring_model_name,
+                dataset_info=item.info,
+                model_head=model_head,
+                output_csv=args.output_csv,
+                preloaded=embedded_data,
+                n_jobs=args.n_jobs,
+                missing_labels=args.missing_labels,
+                scoring_identity_value=identity,
             )
-
-            error: Exception | None = None
-            try:
-                success = run_eval(
-                    safe=safe,
-                    embed_config=embed_config,
-                    full_model_name=model_name,
-                    short_model_name=scoring_model_name,
-                    dataset_info=item.info,
-                    model_head=model_head,
-                    output_csv=args.output_csv,
-                    override=override,
-                    preloaded=embedded_data,
-                    n_jobs=args.n_jobs,
-                )
-            except Exception as exc:
-                success = False
-                error = exc
-
-            if success and args.checkpoint_dir is not None:
-                write_head_checkpoint(
-                    checkpoint_dir=args.checkpoint_dir,
-                    dataset=item.name,
-                    embedder=scoring_model_name,
-                    head=model_head,
-                    status="success",
-                    version_hash=model_version_hash,
-                )
-
-            if success is False:
+            if not success:
+                dataset_failed = True
                 failures.append(f"{item.name}/{model_head}: evaluation failed")
-                if args.checkpoint_dir is not None:
-                    write_head_checkpoint(
-                        checkpoint_dir=args.checkpoint_dir,
-                        dataset=item.name,
-                        embedder=scoring_model_name,
-                        head=model_head,
-                        status="failed",
-                        version_hash=model_version_hash,
-                        error=error,
-                    )
-                if error is not None and not safe:
-                    raise error
-            else:
-                dataset_success = True
 
         del embedded_data
         gc.collect()
-
-        write_checkpoint_if_successful(
-            results_csv=args.output_csv,
-            checkpoint_dir=args.checkpoint_dir,
-            dataset=item.name,
-            embedder=scoring_model_name,
-            required_heads=list(args.heads),
-            version_hash=model_version_hash,
-        )
-
-        if dataset_success:
-            successful_datasets += 1
-        else:
+        if dataset_failed:
             failed_datasets += 1
+        else:
+            successful_datasets += 1
 
     print(
         (

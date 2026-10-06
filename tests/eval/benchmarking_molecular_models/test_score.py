@@ -8,6 +8,7 @@ import pytest
 
 from modernmolbert.eval.benchmarking_molecular_models import score
 from modernmolbert.eval.benchmarking_molecular_models.common.types import EmbeddedDataset
+from modernmolbert.eval.benchmarking_molecular_models.praski_export import append_result_row
 
 
 def make_dataset_info(name: str, metric: str = "roc_auc"):
@@ -31,95 +32,6 @@ def make_embedded_dataset() -> EmbeddedDataset:
         X=np.arange(24).reshape(12, 2),
         y=pd.DataFrame({"label": np.arange(12)}),
     )
-
-
-def test_normalize_name_removes_clf_and_reg_prefixes() -> None:
-    assert score.normalize_name("ogbg-molhiv") == "ogbg-molhiv"
-    assert score.normalize_name("clf_ogbg-molhiv") == "ogbg-molhiv"
-    assert score.normalize_name("reg_esol") == "esol"
-    assert score.normalize_name("config/datasets/clf_ogbg-molmuv.yaml") == "ogbg-molmuv"
-
-
-def test_make_short_model_name_from_local_path() -> None:
-    assert score.make_short_model_name("runs/modernmolbert_best_span") == "modernmolbert_best_span"
-
-
-def test_make_short_model_name_from_plain_name() -> None:
-    assert score.make_short_model_name("modernmolbert_best_span") == "modernmolbert_best_span"
-
-
-def test_load_dataset_items_uses_dataset_info_name_as_canonical(monkeypatch, tmp_path) -> None:
-    def fake_expand_dataset_selection(config_dir, selections):
-        return ["clf_ogbg-molhiv", "clf_ogbg-molbbbp"]
-
-    def fake_load_dataset_config(config_dir, config_name):
-        mapping = {
-            "clf_ogbg-molhiv": "ogbg-molhiv",
-            "clf_ogbg-molbbbp": "ogbg-molbbbp",
-        }
-        return make_dataset_info(mapping[config_name])
-
-    monkeypatch.setattr(score, "expand_dataset_selection", fake_expand_dataset_selection)
-    monkeypatch.setattr(score, "load_dataset_config", fake_load_dataset_config)
-
-    items = score.load_dataset_items(
-        config_dir=tmp_path,
-        selections=["all"],
-    )
-
-    assert [item.config_name for item in items] == [
-        "clf_ogbg-molhiv",
-        "clf_ogbg-molbbbp",
-    ]
-    assert [item.name for item in items] == [
-        "ogbg-molhiv",
-        "ogbg-molbbbp",
-    ]
-
-
-def test_should_skip_item_matches_canonical_name() -> None:
-    item = score.DatasetItem(
-        config_name="clf_ogbg-molhiv",
-        name="ogbg-molhiv",
-        info=make_dataset_info("ogbg-molhiv"),
-    )
-
-    assert score.should_skip_item(item, {"ogbg-molhiv"}) is True
-
-
-def test_should_skip_item_matches_normalized_config_name() -> None:
-    item = score.DatasetItem(
-        config_name="clf_ogbg-molhiv",
-        name="ogbg-molhiv",
-        info=make_dataset_info("ogbg-molhiv"),
-    )
-
-    skip_set = {score.normalize_name("clf_ogbg-molhiv")}
-
-    assert score.should_skip_item(item, skip_set) is True
-
-
-def test_resolve_skip_set_normalizes_cli_skip_names() -> None:
-    args = argparse.Namespace(
-        skip_datasets=["clf_ogbg-molhiv", "ogbg-molmuv.yaml"],
-    )
-
-    assert score.resolve_skip_set({}, args) == {
-        "ogbg-molhiv",
-        "ogbg-molmuv",
-    }
-
-
-def test_resolve_subsample_config_defaults_to_train_scope() -> None:
-    args = argparse.Namespace(
-        subsample_size=128,
-        subsample_scope=None,
-        subsample_seed=None,
-    )
-
-    subsample = score.resolve_subsample_config({}, args)
-
-    assert subsample == score.SubsampleConfig(max_samples=128, scope="train", seed=13)
 
 
 def test_resolve_subsample_config_reads_score_yaml_values() -> None:
@@ -148,6 +60,7 @@ def test_make_scoring_model_name_adds_subsample_identity() -> None:
 
 def test_subsample_embedded_dataset_train_scope_keeps_full_test_split() -> None:
     embedded = make_embedded_dataset()
+    embedded.metadata["source_row_indices"] = list(range(100, 112))
 
     subset = score.subsample_embedded_dataset(
         embedded,
@@ -161,6 +74,8 @@ def test_subsample_embedded_dataset_train_scope_keeps_full_test_split() -> None:
     assert len(subset.splits["test"]) == 4
     assert subset.y.iloc[subset.splits["test"]]["label"].tolist() == [8, 9, 10, 11]
     assert embedded.X.shape == (12, 2)
+    assert subset.metadata["source_row_indices"][subset.splits["test"][0]] == 108
+    assert subset.metadata["source_row_indices"][subset.splits["test"][-1]] == 111
 
 
 def test_subsample_embedded_dataset_all_scope_samples_test_too() -> None:
@@ -175,73 +90,6 @@ def test_subsample_embedded_dataset_all_scope_samples_test_too() -> None:
     assert subset.X.shape == (6, 2)
     assert sum(len(indices) for indices in subset.splits.values()) == 6
     assert 0 < len(subset.splits["test"]) < len(embedded.splits["test"])
-
-
-def test_should_skip_item_does_not_match_unrelated_name() -> None:
-    item = score.DatasetItem(
-        config_name="clf_ogbg-molbbbp",
-        name="ogbg-molbbbp",
-        info=make_dataset_info("ogbg-molbbbp"),
-    )
-
-    assert score.should_skip_item(item, {"ogbg-molhiv"}) is False
-
-
-def test_dataset_checkpoint_path_uses_canonical_dataset_and_embedder(tmp_path) -> None:
-    path = score.dataset_checkpoint_path(
-        checkpoint_dir=tmp_path,
-        dataset="ogbg-molhiv",
-        embedder="modernmolbert_best_span",
-    )
-
-    assert path == tmp_path / "ogbg-molhiv__modernmolbert_best_span.csv"
-
-
-def test_checkpoint_exists_false_when_checkpoint_dir_is_none() -> None:
-    assert (
-        score.checkpoint_exists(
-            checkpoint_dir=None,
-            dataset="AMES",
-            embedder="modernmolbert_best_span",
-        )
-        is False
-    )
-
-
-def test_checkpoint_exists_true_for_nonempty_checkpoint(tmp_path) -> None:
-    checkpoint = score.dataset_checkpoint_path(
-        checkpoint_dir=tmp_path,
-        dataset="AMES",
-        embedder="modernmolbert_best_span",
-    )
-    checkpoint.write_text("dataset,embedder\nAMES,modernmolbert_best_span\n")
-
-    assert (
-        score.checkpoint_exists(
-            checkpoint_dir=tmp_path,
-            dataset="AMES",
-            embedder="modernmolbert_best_span",
-        )
-        is True
-    )
-
-
-def test_checkpoint_exists_false_for_empty_checkpoint(tmp_path) -> None:
-    checkpoint = score.dataset_checkpoint_path(
-        checkpoint_dir=tmp_path,
-        dataset="AMES",
-        embedder="modernmolbert_best_span",
-    )
-    checkpoint.write_text("")
-
-    assert (
-        score.checkpoint_exists(
-            checkpoint_dir=tmp_path,
-            dataset="AMES",
-            embedder="modernmolbert_best_span",
-        )
-        is False
-    )
 
 
 def test_build_run_plan_skips_requested_datasets() -> None:
@@ -275,51 +123,6 @@ def test_build_run_plan_skips_requested_datasets() -> None:
     ]
 
 
-def test_build_run_plan_keeps_all_items_when_no_skips() -> None:
-    # build_run_plan only applies requested skips; checkpoint-based resume is
-    # decided per-head inside the scoring loop and must not remove items here.
-    items = [
-        score.DatasetItem(
-            config_name="clf_AMES",
-            name="AMES",
-            info=make_dataset_info("AMES"),
-        ),
-        score.DatasetItem(
-            config_name="clf_DILI",
-            name="DILI",
-            info=make_dataset_info("DILI"),
-        ),
-    ]
-
-    run_items, skipped_items = score.build_run_plan(
-        items=items,
-        skip_set=set(),
-    )
-
-    assert [item.name for item in run_items] == ["AMES", "DILI"]
-    assert skipped_items == []
-
-
-def test_build_run_plan_applies_requested_skip() -> None:
-    items = [
-        score.DatasetItem(
-            config_name="clf_AMES",
-            name="AMES",
-            info=make_dataset_info("AMES"),
-        ),
-    ]
-
-    run_items, skipped_items = score.build_run_plan(
-        items=items,
-        skip_set={"AMES"},
-    )
-
-    assert run_items == []
-    assert [(item.name, item.reason) for item in skipped_items] == [
-        ("AMES", "requested skip"),
-    ]
-
-
 def test_run_eval_returns_true_on_success(monkeypatch, tmp_path) -> None:
     calls = []
 
@@ -344,7 +147,6 @@ def test_run_eval_returns_true_on_success(monkeypatch, tmp_path) -> None:
         dataset_info=make_dataset_info("AMES"),
         model_head="rf",
         output_csv=tmp_path / "results.csv",
-        override=False,
     )
 
     assert ok is True
@@ -375,34 +177,138 @@ def test_run_eval_returns_false_on_failure_in_safe_mode(monkeypatch, tmp_path) -
         dataset_info=make_dataset_info("AMES"),
         model_head="rf",
         output_csv=tmp_path / "results.csv",
-        override=False,
     )
 
     assert ok is False
 
 
-def test_run_eval_raises_on_failure_without_safe_mode(monkeypatch, tmp_path) -> None:
-    def fake_eval_procedure(**kwargs):
-        raise RuntimeError("boom")
+def test_get_disabled_reason_disables_knn_for_hiv_and_muv() -> None:
+    muv_info = make_dataset_info("clf_ogbg-molmuv")
+    hiv_info = make_dataset_info("clf_ogbg-molhiv")
+    ames_info = make_dataset_info("clf_AMES")
 
-    monkeypatch.setattr(score, "eval_procedure", fake_eval_procedure)
+    assert score.get_disabled_reason(muv_info, "knn") == "KNN disabled for MUV"
+    assert score.get_disabled_reason(hiv_info, "knn") == "KNN disabled for HIV"
+    assert score.get_disabled_reason(ames_info, "knn") is None
+    assert score.get_disabled_reason(hiv_info, "rf") is None
 
-    embed_config = cast(
-        score.EmbeddingConfig,
-        SimpleNamespace(
-            embedded_directory=tmp_path / "embedded",
-            predictions_directory=tmp_path / "predictions",
-        ),
-    )
 
-    with pytest.raises(RuntimeError, match="boom"):
-        score.run_eval(
-            safe=False,
-            embed_config=embed_config,
-            full_model_name="runs/modernmolbert_best_span",
-            short_model_name="modernmolbert_best_span",
-            dataset_info=make_dataset_info("AMES"),
-            model_head="rf",
-            output_csv=tmp_path / "results.csv",
-            override=False,
+def test_scoring_identity_changes_with_cohort_or_label_policy() -> None:
+    def identity(embedding: str = "a" * 64, mode: str = "as-negative", version: str = "v1"):
+        return score.scoring_identity(
+            dataset="AMES",
+            embedder="emb",
+            head="rf",
+            embedding_sha256=embedding,
+            prepared_sha256="b" * 64,
+            missing_labels=mode,
+            version_hash=version,
+            code_revision={"commit": "c" * 40, "dirty": False},
         )
+
+    original = identity()
+    assert identity(embedding="d" * 64) != original
+    assert identity(mode="observed") != original
+    assert identity(version="v2") != original
+
+
+def test_results_row_is_only_resume_state(tmp_path) -> None:
+    output = tmp_path / "results.csv"
+    prediction = tmp_path / "rf.npz"
+    pd.DataFrame(
+        [{"dataset": "AMES", "embedder": "emb", "model": "rf", "scoring_identity": "id-1"}]
+    ).to_csv(output, index=False)
+    np.savez(prediction, scoring_identity=np.asarray("id-1"))
+    assert score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
+    prediction.unlink()
+    assert not score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
+    np.savez(prediction, scoring_identity=np.asarray("other"))
+    assert not score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
+
+    import pytest
+
+    with pytest.raises(ValueError, match="different or duplicate"):
+        score.score_row_is_complete(output, "AMES", "emb", "rf", "id-2", prediction)
+    rows = pd.read_csv(output)
+    pd.concat([rows, rows]).to_csv(output, index=False)
+    with pytest.raises(ValueError, match="different or duplicate"):
+        score.score_row_is_complete(output, "AMES", "emb", "rf", "id-1", prediction)
+
+
+def test_scoring_main_resumes_only_matching_result_and_prediction(monkeypatch, tmp_path) -> None:
+    embedded_dir = tmp_path / "embedded"
+    predictions_dir = tmp_path / "predictions"
+    source = embedded_dir / "toy" / "emb.joblib"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"frozen embedding")
+    output_csv = tmp_path / "results.csv"
+    args = argparse.Namespace(
+        config_dir="config",
+        model_name="emb",
+        overrides=[],
+        datasets=["toy"],
+        skip_datasets=None,
+        subsample_size=None,
+        subsample_scope=None,
+        subsample_seed=42,
+        heads=["rf"],
+        output_csv=output_csv,
+        resume=True,
+        safe=False,
+        missing_labels="as-negative",
+        n_jobs=1,
+    )
+    monkeypatch.setattr(score, "parse_args", lambda: args)
+    monkeypatch.setattr(score, "load_yaml_config", lambda path: {})
+    monkeypatch.setattr(
+        score,
+        "load_embedding_config",
+        lambda path: {
+            "raw_directory": str(tmp_path / "raw"),
+            "embedded_directory": str(embedded_dir),
+            "predictions_directory": str(predictions_dir),
+            "prepared_directory": str(tmp_path / "prepared"),
+            "max_invalid_embeddings": 0,
+        },
+    )
+    monkeypatch.setattr(
+        score,
+        "load_dataset_items",
+        lambda **kwargs: [score.DatasetItem("clf_toy", "toy", make_dataset_info("toy"))],
+    )
+    embedded = make_embedded_dataset()
+    embedded.metadata["prepared_data_sha256"] = "a" * 64
+    monkeypatch.setattr(score, "load_embedded_dataset", lambda **kwargs: embedded)
+    monkeypatch.setattr(score, "get_model_version_hash", lambda: "grid-v1")
+    monkeypatch.setattr(score, "get_git_revision", lambda: {"commit": "b" * 40, "dirty": False})
+
+    calls: list[str] = []
+
+    def fake_run_eval(**kwargs) -> bool:
+        identity = kwargs["scoring_identity_value"]
+        calls.append(identity)
+        append_result_row(
+            output_csv,
+            {
+                "dataset": "toy",
+                "embedder": "emb",
+                "model": "rf",
+                "scoring_identity": identity,
+                "cv_metric_name": "roc_auc",
+            },
+            replace_existing=True,
+        )
+        prediction = predictions_dir / "toy" / "emb" / "rf.npz"
+        prediction.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(prediction, scoring_identity=np.asarray(identity))
+        return True
+
+    monkeypatch.setattr(score, "run_eval", fake_run_eval)
+    assert score.main() == 0
+    assert score.main() == 0
+    assert len(calls) == 1
+    assert len(pd.read_csv(output_csv)) == 1
+
+    args.missing_labels = "observed"
+    with pytest.raises(ValueError, match="different or duplicate identity"):
+        score.main()

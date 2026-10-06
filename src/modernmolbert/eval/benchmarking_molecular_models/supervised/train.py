@@ -1,5 +1,6 @@
 import gc
 import os
+import time
 import numpy as np
 import logging as log
 
@@ -19,7 +20,6 @@ from modernmolbert.eval.benchmarking_molecular_models.datasplit import (
 )
 from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
     CV_SPLITS,
-    N_JOBS,
     VERBOSITY,
 )
 from modernmolbert.eval.benchmarking_molecular_models.supervised.eval_metrics import (
@@ -33,6 +33,9 @@ from modernmolbert.eval.benchmarking_molecular_models.supervised.models import (
 from modernmolbert.eval.benchmarking_molecular_models.supervised.utils import (
     get_sklearn_scorer,
 )
+
+
+MISSING_LABEL_MODES = ("observed", "as-negative")
 
 
 def _grid_n_jobs(pipeline, outer_n_jobs: int) -> int:
@@ -53,7 +56,13 @@ def fit_model(
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
+    missing_labels: str = "observed",
 ):
+    # missing_labels chooses how missing multi-endpoint labels (Tox21, MUV) are
+    # handled. "observed" fits each endpoint on its observed labels only.
+    # "as-negative" counts them as negatives, as the scorer behind the imported
+    # Praski et al. results table does; use it when comparing with that table.
+    #
     # n_jobs controls both the estimator's own parallelism (RF tree building,
     # KNN search) and the GridSearchCV fold-level parallelism.
     # Passing a small value (e.g. 4) is the simplest way to cut peak memory when
@@ -64,6 +73,11 @@ def fit_model(
     y_arr = np.asarray(y)
     is_multioutput = y_arr.ndim == 2 and y_arr.shape[1] > 1
     has_missing_labels = bool(np.isnan(y_arr).any()) if y_arr.dtype.kind in {"f", "c"} else False
+    if missing_labels not in MISSING_LABEL_MODES:
+        raise ValueError(f"Unknown missing_labels mode: {missing_labels!r}")
+    if missing_labels == "as-negative" and has_missing_labels:
+        y_arr = np.nan_to_num(y_arr, nan=0.0)
+        has_missing_labels = False
 
     if task == "classification" and is_multioutput and has_missing_labels:
         models = get_clf_models(1, X.dtype, n_jobs=effective_n_jobs)
@@ -83,7 +97,10 @@ def fit_model(
     else:
         raise ValueError(f"Unknown task: {task}")
 
-    if is_multioutput:
+    if task == "regression":
+        scorer = "r2"
+        y_model = y_arr if is_multioutput else y_arr.ravel()
+    elif is_multioutput:
         log.info("Using multioutput AUROC scorer")
         scorer = make_scorer(multioutput_auroc_score, response_method="predict_proba")
         y_model = y_arr
@@ -95,7 +112,7 @@ def fit_model(
     log.info(f"Shapes: X={X.shape}, y={y_model.shape}")
 
     model = models[model_head]
-    outer_n_jobs = max(1, int(N_JOBS / memory_weight))
+    outer_n_jobs = max(1, int(effective_n_jobs / memory_weight))
     grid_n_jobs = _grid_n_jobs(model["model"], outer_n_jobs)
     log.info(f"GridSearchCV n_jobs={grid_n_jobs} (outer={outer_n_jobs}, head={model_head})")
 
@@ -115,14 +132,14 @@ def fit_model(
         log.error(f"Error fitting model {model_head}: {e}")
         if "lbfgs" not in str(e):
             raise e
-        log.error("L-BFG-S failed, replacing with SVD")
-        if "clf__estimator_solver" in model["params"]:
-            model["params"]["clf__estimator__solver"] = ["svd"]
+        log.error("L-BFG-S failed, replacing with SAGA")
+        if "clf__estimator__solver" in model["params"]:
+            model["params"]["clf__estimator__solver"] = ["saga"]
         elif "clf__solver" in model["params"]:
-            model["params"]["clf__solver"] = ["svd"]
+            model["params"]["clf__solver"] = ["saga"]
         else:
             raise ValueError(
-                "Model parameters do not contain 'solver' or 'estimator__solver' key, cannot replace with SVD"
+                "Model parameters do not contain 'solver' or 'estimator__solver' key"
             ) from e
         grid_search = GridSearchCV(
             model["model"],
@@ -134,6 +151,9 @@ def fit_model(
             refit=True,
         )
         grid_search.fit(X, y_model)
+
+    if not np.isfinite(grid_search.best_score_):
+        raise ValueError(f"All cross-validation scores are nonfinite for {model_head}")
 
     result = {
         "model": model_head,
@@ -199,9 +219,18 @@ def fit_multioutput_finite_label_model(
     best_score = -np.inf
     best_params = None
 
-    for params in param_grid:
+    for candidate_index, params in enumerate(param_grid, start=1):
         fold_scores = []
-        for train_idx, valid_idx in make_splits():
+        for fold_index, (train_idx, valid_idx) in enumerate(make_splits(), start=1):
+            started = time.monotonic()
+            log.info(
+                "Sparse multi-output CV: head=%s candidate=%s/%s fold=%s/%s",
+                model_head,
+                candidate_index,
+                len(param_grid),
+                fold_index,
+                CV_SPLITS,
+            )
             estimator = clone(base_pipeline)
             estimator.set_params(**params)
 
@@ -210,6 +239,17 @@ def fit_multioutput_finite_label_model(
             y_score = wrapped.predict_proba(X[valid_idx])
 
             score = finite_label_multioutput_score(y[valid_idx], y_score)
+            log.info(
+                "Sparse multi-output CV complete: head=%s candidate=%s/%s fold=%s/%s "
+                "score=%s elapsed_s=%.1f",
+                model_head,
+                candidate_index,
+                len(param_grid),
+                fold_index,
+                CV_SPLITS,
+                score,
+                time.monotonic() - started,
+            )
             if np.isfinite(score):
                 fold_scores.append(score)
 
@@ -218,13 +258,13 @@ def fit_multioutput_finite_label_model(
             best_score = mean_score
             best_params = params
 
-    if best_params is None:
-        best_params = {}
-        best_score = np.nan
+    if best_params is None or not np.isfinite(best_score):
+        raise ValueError(f"All cross-validation scores are nonfinite for {model_head}")
 
     final_estimator = clone(base_pipeline)
     final_estimator.set_params(**best_params)
     final_model = FiniteLabelMultiOutputClassifier(final_estimator)
+    log.info("Sparse multi-output final fit: head=%s", model_head)
     final_model.fit(X, y)
 
     return {
@@ -240,6 +280,7 @@ def fit_and_eval_embedding(
     model_head: str,
     memory_weight: int,
     n_jobs: int | None = None,
+    missing_labels: str = "observed",
 ) -> HeadResult:
     X_train, y_train = get_train_data(dataset)
     best_model = fit_model(
@@ -249,6 +290,7 @@ def fit_and_eval_embedding(
         model_head=model_head,
         memory_weight=memory_weight,
         n_jobs=n_jobs,
+        missing_labels=missing_labels,
     )
     del X_train, y_train
     X_test, y_test = get_test_data(dataset)
@@ -258,6 +300,16 @@ def fit_and_eval_embedding(
     else:
         y_pred = best_model["model_obj"].predict_proba(X_test)
 
+    test_source_row_indices = None
+    source_rows = dataset.metadata.get("source_row_indices")
+    if source_rows is not None:
+        if len(source_rows) != len(dataset.X):
+            raise ValueError(f"Source row mapping length mismatch for {dataset.name}")
+        test_indices = np.asarray(dataset.splits["test"], dtype=int)
+        test_source_row_indices = np.asarray(source_rows, dtype=int)[test_indices]
+        if len(test_source_row_indices) != len(y_test):
+            raise ValueError(f"Test prediction row mapping mismatch for {dataset.name}")
+
     return HeadResult(
         embedder=dataset.embedder,
         dataset_name=dataset.name,
@@ -266,4 +318,6 @@ def fit_and_eval_embedding(
         model=best_model["model"],
         hyperparams=best_model["best_params"],
         cv_score=best_model["best_score"],
+        test_source_row_indices=test_source_row_indices,
+        prepared_data_sha256=dataset.metadata.get("prepared_data_sha256"),
     )

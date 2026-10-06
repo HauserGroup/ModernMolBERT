@@ -24,6 +24,12 @@ class TinyTokenizer:
     unk_token_id = 3
     mask_token_id = 4
 
+    def tokenize(self, text):
+        return [text]
+
+    def encode(self, text, *, add_special_tokens=False, truncation=False):
+        return [5 + (i % 3) for i in range(max(1, min(3, len(text) % 4 + 1)))]
+
     def __call__(
         self,
         texts,
@@ -78,7 +84,7 @@ class TinyModel(torch.nn.Module):
 
     def __init__(self, hidden_size: int = 8):
         super().__init__()
-        self.config = SimpleNamespace(hidden_size=hidden_size)
+        self.config = SimpleNamespace(hidden_size=hidden_size, max_position_embeddings=32)
 
     def forward(self, input_ids, attention_mask=None):
         batch_size, seq_len = input_ids.shape
@@ -100,8 +106,8 @@ def tiny_modernmolbert_dir(tmp_path: Path, monkeypatch) -> Path:
 
     monkeypatch.setattr(
         mm_selfies,
-        "_load_ape_tokenizer",
-        lambda path: TinyTokenizer(),
+        "load_checkpoint_tokenizer",
+        lambda path: (TinyTokenizer(), "SELFIES"),
     )
     monkeypatch.setattr(
         "modernmolbert.eval.featurizers.modernmolbert_selfies.AutoModel.from_pretrained",
@@ -109,26 +115,6 @@ def tiny_modernmolbert_dir(tmp_path: Path, monkeypatch) -> Path:
     )
 
     return model_dir
-
-
-def test_modernmolbert_selfies_featurizer_valid_and_invalid_smiles(
-    tiny_modernmolbert_dir,
-):
-    featurizer = ModernMolBERTSelfiesFeaturizer(
-        model_dir=tiny_modernmolbert_dir,
-        tokenizer_path=tiny_modernmolbert_dir,
-        max_seq_length=32,
-        batch_size=2,
-        device="cpu",
-    )
-
-    batch = featurizer.featurize_smiles(["CCO", "not_a_smiles"])
-
-    assert batch.valid_mask.tolist() == [True, False]
-    assert batch.X.shape == (1, 8)
-    assert batch.X.ndim == 2
-    assert batch.X.dtype == np.float32
-    batch.check(n_inputs=2)
 
 
 def test_modernmolbert_selfies_featurizer_all_invalid_smiles(tiny_modernmolbert_dir):
@@ -185,38 +171,6 @@ def test_modernmolbert_selfies_featurizer_preserves_input_order_in_valid_mask(
     assert batch.valid_mask.tolist() == [False, True, False, True]
     assert batch.X.shape == (2, 8)
     batch.check(n_inputs=4)
-
-
-def test_modernmolbert_selfies_featurizer_cls_pooling(tiny_modernmolbert_dir):
-    featurizer = ModernMolBERTSelfiesFeaturizer(
-        model_dir=tiny_modernmolbert_dir,
-        tokenizer_path=tiny_modernmolbert_dir,
-        max_seq_length=32,
-        batch_size=2,
-        device="cpu",
-        pooling="cls",
-    )
-
-    batch = featurizer.featurize_smiles(["CCO"])
-
-    assert batch.valid_mask.tolist() == [True]
-    assert batch.X.shape == (1, 8)
-    assert batch.X.dtype == np.float32
-    batch.check(n_inputs=1)
-
-
-def test_modernmolbert_selfies_featurizer_rejects_unknown_pooling(
-    tiny_modernmolbert_dir,
-):
-    with pytest.raises(ValueError, match="pooling|Unsupported"):
-        ModernMolBERTSelfiesFeaturizer(
-            model_dir=tiny_modernmolbert_dir,
-            tokenizer_path=tiny_modernmolbert_dir,
-            max_seq_length=32,
-            batch_size=2,
-            device="cpu",
-            pooling="not_a_pooling_strategy",  # type: ignore[arg-type]
-        )
 
 
 def test_mean_pooling_excludes_special_tokens(tiny_modernmolbert_dir):
@@ -327,9 +281,78 @@ def test_modernmolbert_selfies_featurizer_records_metadata(tiny_modernmolbert_di
     batch = featurizer.featurize_smiles(["CCO", "not_a_smiles"])
 
     assert batch.metadata["featurizer"] == "modernmolbert_pilot_test"
-    assert batch.metadata["backend"] == "modernmolbert_selfies"
+    assert batch.metadata["backend"] == "modernmolbert"
     assert batch.metadata["pooling"] == "mean"
     assert batch.metadata["max_seq_length"] == 32
     assert batch.metadata["n_inputs"] == 2
     assert batch.metadata["n_valid"] == 1
     assert batch.metadata["invalid_fraction"] == pytest.approx(0.5)
+
+
+def test_embedding_context_defaults_to_trained_context(tiny_modernmolbert_dir):
+    featurizer = ModernMolBERTSelfiesFeaturizer(model_dir=tiny_modernmolbert_dir, device="cpu")
+    assert featurizer.max_seq_length == 32
+    with pytest.raises(ValueError, match="exceeds trained context"):
+        ModernMolBERTSelfiesFeaturizer(
+            model_dir=tiny_modernmolbert_dir, max_seq_length=64, device="cpu"
+        )
+
+
+def test_unknown_tail_is_rejected_before_truncation(tiny_modernmolbert_dir, monkeypatch):
+    featurizer = ModernMolBERTSelfiesFeaturizer(
+        model_dir=tiny_modernmolbert_dir, max_seq_length=4, device="cpu"
+    )
+    monkeypatch.setattr(featurizer.tokenizer, "encode", lambda *a, **k: [5] * 20 + [3])
+    result = featurizer.featurize_smiles(["CCO"])
+    assert result.valid_mask.tolist() == [False]
+    assert result.X.shape == (0, 8)
+    assert result.metadata["n_tokenization_failures"] == 1
+
+
+def test_over_context_input_is_rejected_without_shortening(tiny_modernmolbert_dir, monkeypatch):
+    featurizer = ModernMolBERTSelfiesFeaturizer(
+        model_dir=tiny_modernmolbert_dir, max_seq_length=4, device="cpu"
+    )
+    monkeypatch.setattr(featurizer.tokenizer, "encode", lambda *a, **k: [5, 6, 7])
+    result = featurizer.featurize_smiles(["CCO"])
+    assert result.valid_mask.tolist() == [False]
+    assert result.X.shape == (0, 8)
+    assert result.metadata["n_truncated"] == 1
+    assert result.metadata["n_tokenization_failures"] == 0
+
+
+def test_released_vocab_rejects_disconnected_input_without_losing_row_alignment(
+    tiny_modernmolbert_dir,
+):
+    from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+    f = ModernMolBERTSelfiesFeaturizer(model_dir=tiny_modernmolbert_dir, device="cpu")
+    f.tokenizer = APEPreTrainedTokenizer(representation="SELFIES")
+    vocab = Path(__file__).parents[1] / "tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"
+    f.tokenizer.load_vocabulary_file(vocab)
+    result = f.featurize_smiles(["CCO", "C.O", "CC"])
+    assert result.valid_mask.tolist() == [True, False, True]
+    assert result.X.shape == (2, 8)
+    assert result.metadata["n_tokenization_failures"] == 1
+    assert np.isfinite(result.X).all()
+
+
+def test_legacy_tokenizer_silent_component_loss_is_rejected(tiny_modernmolbert_dir):
+    from modernmolbert.tokenization_ape import APEPreTrainedTokenizer
+
+    class LegacyDotDroppingTokenizer(APEPreTrainedTokenizer):
+        def _tokenize(self, text, **kwargs):
+            return super()._tokenize(text.replace(".", ""), **kwargs)
+
+    f = ModernMolBERTSelfiesFeaturizer(model_dir=tiny_modernmolbert_dir, device="cpu")
+    f.tokenizer = LegacyDotDroppingTokenizer(representation="SELFIES")
+    vocab = Path(__file__).parents[1] / "tokenizer/chembl36_selfies_2m_ape_max2_min3000.json"
+    f.tokenizer.load_vocabulary_file(vocab)
+    lost_ids = f.tokenizer.encode("[C].[O]", add_special_tokens=False)
+    assert f.tokenizer.unk_token_id not in lost_ids
+    assert lost_ids == f.tokenizer.encode("[C][O]", add_special_tokens=False)
+    result = f.featurize_smiles(["CCO", "C.O", "CC"])
+    assert result.valid_mask.tolist() == [True, False, True]
+    assert result.X.shape == (2, 8)
+    assert result.metadata["n_tokenization_failures"] == 1
+    result.check(n_inputs=3)

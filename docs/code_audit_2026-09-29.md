@@ -35,6 +35,12 @@ Ordered by likely effect on the revised results.
    release, and `uv.lock` pinned 2.2.0 before the corpus was prepared, so the corpus
    `metadata.json` and the plan's "selfies 2.1.1" are probably wrong. Confirm the
    preparation environment; record versions with `importlib.metadata.version()`.
+   **3 October follow-up:** The accepted Helios environment reports distribution
+   version 2.2.0 through `importlib.metadata.version("selfies")` while the module
+   still reports 2.1.1. The manuscript now uses the distribution version. The
+   historical corpus-preparation environment cannot be reconstructed from its
+   module-version field alone; retain that provenance limit rather than claim a
+   separately verified preparation version.
 3. **Common supervised rows and folds (R114).** Each model drops only its own failed rows
    before `GridSearchCV(cv=5)`, so training rows and folds differ. G7.1 needs one
    eligibility intersection. Lowest-risk place: a scoring-time filter that drops the union

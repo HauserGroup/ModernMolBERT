@@ -53,7 +53,8 @@ Fails if `model.safetensors` or `config.json` is absent in the resolved director
     tokenizer_config.json
     special_tokens_map.json
     tokenization_ape.py
-  run_args.json                # if present in run_dir
+  run_identity.json            # campaign and final-run record, if present
+  run_args.json                # historical runs only, if present
   trainer_state.json           # if present
   eval_results.json            # if present
   train_results.json           # if present

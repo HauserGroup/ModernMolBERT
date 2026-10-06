@@ -106,7 +106,7 @@ The evaluation tests should cover:
 
 - the `ModernMolBERTSelfiesFeaturizer` and `FeatureBatch` contract,
 - the benchmark download/embed/score pipeline,
-- per-dataset checkpoint resume and output schema,
+- result-row and prediction-archive resume identity and output schema,
 - prediction export and result aggregation.
 
 ## When to run what

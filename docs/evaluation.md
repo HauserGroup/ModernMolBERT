@@ -80,11 +80,9 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
 | `--heads` | `rf ridge knn` | Supervised heads to run |
 | `--skip_datasets` | — | Skip named datasets; accepts `ogbg-molhiv` or `clf_ogbg-molhiv` |
 | `--output-csv` | `data/benchmark_results.csv` | Accumulated results CSV |
-| `--checkpoint-dir` | — | Directory for per-dataset checkpoint CSVs |
-| `--resume` / `--no-resume` | `true` | Skip dataset/embedder pairs with existing checkpoints |
-| `--cache` / `--no-cache` | from `score.yaml` | Skip already-evaluated rows in the output CSV (`override = not cache`) |
+| `--resume` / `--no-resume` | `true` | Skip a head only when its result row and prediction archive match the current scoring identity |
 | `--safe` / `--no-safe` | from `score.yaml` | Log errors and continue instead of aborting on first failure |
-| `--missing-labels` | `as-negative` | Missing labels in multi-endpoint datasets (Tox21, MUV): `as-negative` counts them as negatives during fitting and CV, matching the imported Praski et al. table; `observed` fits each endpoint on its observed labels. Do not mix the two in one results file |
+| `--missing-labels` | `as-negative` | Missing labels in multi-endpoint datasets (Tox21, MUV): `as-negative` counts them as negatives during fitting and CV, matching the imported Praski et al. table; `observed` fits each endpoint on its observed labels. A changed mode is rejected when a row already exists |
 | `overrides` | — | Positional `key=value` pairs, e.g. `model_name=my_embedder` |
 
 ### Config files
@@ -92,7 +90,6 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
 `config/score.yaml` — default datasets and flags:
 
 ```yaml
-cache: true
 model_name: null
 datasets:
   - all
@@ -120,9 +117,8 @@ Before scoring starts, `score.py` prints a full plan:
   ...
 ```
 
-Skip logic (applied once, in order):
-1. `--skip_datasets` — explicit user exclusions.
-2. Checkpoint resume — if `--checkpoint-dir` is set and `<dir>/<dataset>__<embedder>.csv` exists with content, the dataset is skipped.
+`--skip_datasets` applies explicit user exclusions. For each remaining head,
+`--resume` skips only a complete result row with a matching prediction file.
 
 ### Scoring heads
 
@@ -136,15 +132,15 @@ Three heads run per dataset by default. Each is a `sklearn` `Pipeline` with `Gri
 
 KNN is skipped on the MUV and HIV datasets; the imported Praski et al. table has no kNN head there. Random forests use `random_state=0`. Multi-output classification uses `MultiOutputClassifier(LogisticRegression())`.
 
-### Checkpoint resume
+### Resume
 
-Pass `--checkpoint-dir <dir>` to write a per-dataset CSV after each dataset finishes:
-
-```
-<dir>/<dataset>__<embedder>.csv
-```
-
-On re-run with `--resume`, any dataset with a non-empty checkpoint is skipped entirely. If all heads fail for a dataset, no checkpoint is written. Use `--no-resume` to force re-scoring everything.
+Each result row and prediction archive records the same scoring identity,
+derived from the dataset, embedder, head, embedding content, prepared-data
+identity, missing-label rule, head grid/CV version, and code revision. A
+matching pair is skipped. A missing prediction is recomputed and its result
+row is replaced atomically after scoring. Duplicate rows or a conflicting
+identity cause an error; use a fresh output CSV for a changed campaign.
+`--no-resume` recomputes matching rows.
 
 ### Output schema
 
@@ -153,7 +149,7 @@ Results append to the output CSV with this column order:
 ```
 id, dataset, task, embedder, pooling, pooling_special_tokens_excluded,
 embedding_model_dir, embedding_tokenizer_path, embedding_max_seq_length,
-model, hyperparams, library_hash, missing_labels, prepared_data_sha256,
+model, hyperparams, library_hash, missing_labels, scoring_identity, prepared_data_sha256,
 cv_metric_name, cv_metric, test_metric_name, test_metric, key
 ```
 
@@ -167,6 +163,7 @@ cv_metric_name, cv_metric, test_metric_name, test_metric, key
 | `hyperparams` | Sorted JSON of selected `GridSearchCV` params |
 | `library_hash` | Stable digest of scoring grids; changes if grids change |
 | `missing_labels` | `as-negative` or `observed` |
+| `scoring_identity` | Digest of the inputs and policy used for this exact result and prediction |
 | `prepared_data_sha256` | SHA-256 of the prepared dataset file the embedding was built from |
 | `cv_metric` | Model-selection score (train+valid) |
 | `test_metric` | Held-out test score |
@@ -225,8 +222,7 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --datasets clf_AMES \
   --embedder my_model \
-  --output-csv outputs/eval/smoke/results.csv \
-  --checkpoint-dir outputs/eval/smoke/checkpoints
+  --output-csv outputs/eval/smoke/results.csv
 ```
 
 ### Full benchmark run
@@ -243,8 +239,7 @@ uv run python src/modernmolbert/eval/benchmarking_molecular_models/embed_modernm
 
 uv run python src/modernmolbert/eval/benchmarking_molecular_models/score.py \
   --embedder my_model \
-  --output-csv outputs/eval/my_run/results.csv \
-  --checkpoint-dir outputs/eval/my_run/checkpoints
+  --output-csv outputs/eval/my_run/results.csv
 ```
 
 ### Skip slow datasets

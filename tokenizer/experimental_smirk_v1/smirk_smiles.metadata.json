@@ -1,0 +1,16 @@
+{
+  "algorithm": "SMIRK",
+  "representation": "SMILES",
+  "smirk_version": "0.3.0",
+  "source": "https://eeg.engin.umich.edu/smirk/",
+  "special_ids": {
+    "bos_token": 159,
+    "eos_token": 160,
+    "mask_token": 164,
+    "pad_token": 162,
+    "unk_token": 0
+  },
+  "template": "[BOS] $0 [EOS]",
+  "tokenizer_sha256": "6a7eb0efab3312fb71c90e7ba815b49946c10179ceba1fc5b0b014188431ab4f",
+  "vocab_size": 165
+}

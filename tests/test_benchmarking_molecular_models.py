@@ -237,6 +237,10 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
         splits={"train": [0], "valid": [], "test": [1]},
     )
     joblib.dump(dataset, prepared_dir / "tiny.joblib")
+    model_dir = tmp_path / "model"
+    model_dir.mkdir()
+    weights = model_dir / "model.safetensors"
+    weights.write_bytes(b"first weights")
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(embed_modernmolbert, "make_featurizer", lambda args: FakeFeaturizer(1.0))
@@ -260,12 +264,18 @@ def test_embed_modernmolbert_cli_skips_existing_and_overwrites(monkeypatch, tmp_
     first = joblib.load(output_path)
     assert first.X[:, 1].tolist() == [1.0, 1.0]
     assert first.metadata["prepared_data_sha256"]
+    assert first.metadata["model_weights_sha256"] == embed_modernmolbert.file_sha256(weights)
     assert first.metadata["source_row_indices"] == [0, 1]
 
     monkeypatch.setattr(embed_modernmolbert, "make_featurizer", lambda args: FakeFeaturizer(2.0))
     embed_modernmolbert.main()
     skipped = joblib.load(output_path)
     assert skipped.X[:, 1].tolist() == [1.0, 1.0]
+
+    weights.write_bytes(b"changed weights")
+    with pytest.raises(ValueError, match="different model-weights hash"):
+        embed_modernmolbert.main()
+    weights.write_bytes(b"first weights")
 
     (prepared_dir / "tiny.joblib").write_bytes(b"changed prepared cohort")
     with pytest.raises(ValueError, match="different prepared-data hash"):

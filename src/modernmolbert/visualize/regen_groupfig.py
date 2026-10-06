@@ -36,8 +36,8 @@ MODEL_LABELS = {
     "ChemBERTa-2": "ChemBERTa-2",
     "SELFormer": "SELFormer",
     "MoLFormer": "MoLFormer",
-    "MMB-small": "ModernMolBERT-small",
-    "MMB-base": "ModernMolBERT-base",
+    "MMB-small": "MMB-small",
+    "MMB-base": "MMB-base",
 }
 MODEL_COLORS = {
     "ECFP4": "#1B9E77",
@@ -47,7 +47,7 @@ MODEL_COLORS = {
     "MMB-small": "#66A61E",
     "MMB-base": "#E6AB02",
 }
-EXTRA_COLORS = ["#A6761D", "#666666", "#1F78B4", "#B2DF8A"]
+EXTRA_COLORS = ["#1F78B4", "#33A02C", "#E31A1C", "#FF7F00", "#6A3D9A", "#A6761D"]
 DEFAULT_OUTPUT_RELATIVE = Path("paper/figures/Fig_task_group_distributions.pdf")
 
 
@@ -58,8 +58,6 @@ def _models(models: Sequence[str] | None) -> list[str]:
 def model_label(model: str) -> str:
     if model in MODEL_LABELS:
         return MODEL_LABELS[model]
-    if model.startswith("MMB-"):
-        return "ModernMolBERT-" + model.removeprefix("MMB-")
     return model
 
 
@@ -116,6 +114,7 @@ def load_group_distribution_data(
 def validate_group_distribution_data(df: pd.DataFrame, models: Sequence[str] | None = None) -> None:
     """Raise ``ValueError`` if the group-distribution source data is incomplete."""
 
+    require_complete = models is None
     models = _models(models)
     missing_columns = sorted(set(REQUIRED_COLUMNS) - set(df.columns))
     if missing_columns:
@@ -156,7 +155,12 @@ def validate_group_distribution_data(df: pd.DataFrame, models: Sequence[str] | N
         index=GROUP_ORDER,
         dtype="int64",
     )
-    if not coverage.equals(expected):
+    invalid_coverage = (
+        not coverage.equals(expected)
+        if require_complete
+        else bool((coverage > expected).to_numpy().any())
+    )
+    if invalid_coverage:
         raise ValueError(
             "Unexpected task coverage by group/model:\n"
             f"{coverage.to_string()}\n\nExpected:\n{expected.to_string()}"
@@ -178,8 +182,8 @@ def plot_group_distribution(
 ) -> pd.DataFrame:
     """Plot per-task ROC-AUC distributions and write the figure to ``output_path``."""
 
-    models = _models(models)
     validate_group_distribution_data(df, models)
+    models = _models(models)
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -254,6 +258,7 @@ def plot_group_distribution(
         fontsize=8.5,
         bbox_to_anchor=(0.5, -0.02),
     )
+    fig.text(0.5, 0.045, "MMB = ModernMolBERT", ha="center", fontsize=8.5)
 
     fig.tight_layout(rect=(0.0, 0.08, 1.0, 1.0))
     fig.savefig(output_path, bbox_inches="tight")

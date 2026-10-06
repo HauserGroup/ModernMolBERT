@@ -239,6 +239,29 @@ class ModernMolBERTSelfiesFeaturizer:
         if not model_inputs:
             raise ValueError("Cannot tokenize an empty batch")
 
+        if type(self.tokenizer).__name__ == "SmirkTokenizerFast":
+            # SMIRK 0.3.0's list path is incompatible with Transformers 5.
+            # Its single-string path remains correct, so pad those encodings
+            # here without changing the tokenizer used by existing models.
+            sequences = [
+                self.tokenizer.encode(text, add_special_tokens=True, truncation=False)
+                for text in model_inputs
+            ]
+            pad_id = self.tokenizer.pad_token_id
+            if not isinstance(pad_id, int):
+                raise ValueError("SMIRK tokenizer must have one integer pad token ID")
+            longest = max(map(len, sequences))
+            input_ids = torch.full((len(sequences), longest), pad_id, dtype=torch.long)
+            attention_mask = torch.zeros_like(input_ids)
+            for row, ids in enumerate(sequences):
+                if self.tokenizer.padding_side == "left":
+                    input_ids[row, -len(ids) :] = torch.tensor(ids, dtype=torch.long)
+                    attention_mask[row, -len(ids) :] = 1
+                else:
+                    input_ids[row, : len(ids)] = torch.tensor(ids, dtype=torch.long)
+                    attention_mask[row, : len(ids)] = 1
+            return {"input_ids": input_ids, "attention_mask": attention_mask}
+
         # Batch tokenization: one call for the whole list instead of a per-string
         # loop + manual padding. On MPS the model forward is fast enough that the
         # old Python loop became the bottleneck.

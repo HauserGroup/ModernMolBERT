@@ -8,27 +8,41 @@ from pathlib import Path
 import yaml
 
 from modernmolbert.utils import file_sha256
+from modernmolbert.eval.benchmarking_molecular_models.supervised.const import (
+    PRODUCTION_CV_POLICY,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "src/modernmolbert/eval/benchmarking_molecular_models/config/datasets.yaml"
 SCORE = ROOT / "src/modernmolbert/eval/benchmarking_molecular_models/score.py"
-RUN_IDS = {
-    "small_ape_selfies",
-    "small_ape_smiles",
-    "small_bpe_selfies",
-    "small_bpe_smiles",
-    "base_ape_selfies",
-}
+SPEC = ROOT / "configs/revision_factorial_v1.json"
+CAMPAIGN = ROOT / "outputs/revision_factorial_v1/campaign_manifest.json"
+MULTISEED_CAMPAIGN = ROOT / "outputs/revision_factorial_multiseed_v1/campaign_manifest.json"
+SPEC_DATA = json.loads(SPEC.read_text(encoding="utf-8"))
+RUN_IDS = set(SPEC_DATA["runs"])
 
 
 def command_for(
-    *, manifest_path: Path, run_id: str, task: str, output_root: Path, n_jobs: int
+    *,
+    manifest_path: Path,
+    run_id: str,
+    task: str,
+    output_root: Path,
+    n_jobs: int,
+    seed: int = 42,
+    campaign_path: Path | None = None,
 ) -> list[str]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != 1 or set(manifest.get("run_ids", [])) != RUN_IDS:
+    if manifest.get("schema") != 2 or set(manifest.get("run_ids", [])) != RUN_IDS:
         raise ValueError("Expected the frozen five-model common-row manifest")
-    if manifest.get("common_prefix") != "REVISION_COMMON_":
-        raise ValueError("Production scoring requires REVISION_COMMON_ embeddings")
+    if manifest.get("cv") != PRODUCTION_CV_POLICY:
+        raise ValueError("Evaluation manifest does not describe the production CV splitter")
+    campaign = campaign_path or (CAMPAIGN if seed == 42 else MULTISEED_CAMPAIGN)
+    if not campaign.is_file() or manifest.get("campaign_manifest_sha256") != file_sha256(campaign):
+        raise ValueError("Evaluation and campaign manifests differ")
+    prefix = "REVISION_COMMON_" if seed == 42 else f"REVISION_COMMON_s{seed}_"
+    if manifest.get("seed", 42) != seed or manifest.get("common_prefix") != prefix:
+        raise ValueError("Production scoring requires the seed-matched common embeddings")
     task_info = manifest["tasks"].get(task)
     if task_info is None or run_id not in task_info["models"]:
         raise ValueError(f"Missing common cohort for {task}/{run_id}")
@@ -36,7 +50,7 @@ def command_for(
     config_names = [name for name, info in configs.items() if info["name"] == task]
     if len(config_names) != 1:
         raise ValueError(f"Expected one benchmark config for {task}")
-    embedder = f"REVISION_COMMON_{run_id}"
+    embedder = f"{prefix}{run_id}"
     embedding = ROOT / "data/embedded" / task / f"{embedder}.joblib"
     expected = task_info["models"][run_id]["common_embedding_sha256"]
     if not embedding.is_file() or file_sha256(embedding) != expected:
@@ -45,8 +59,6 @@ def command_for(
     if not prepared.is_file() or file_sha256(prepared) != task_info["prepared_sha256"]:
         raise ValueError(f"Frozen prepared dataset missing or changed: {prepared}")
     output = output_root / run_id / f"{task}.csv"
-    if output.exists():
-        raise FileExistsError(f"Scoring output already exists; preserve or inspect it: {output}")
     if n_jobs < 1:
         raise ValueError("n_jobs must be positive")
     return [
@@ -60,13 +72,10 @@ def command_for(
         "--embedder",
         embedder,
         "--heads",
-        "rf",
-        "ridge",
-        "knn",
+        *SPEC_DATA["evaluation"]["heads"],
         "--missing-labels",
-        "as-negative",
-        "--no-cache",
-        "--no-resume",
+        SPEC_DATA["evaluation"]["missing_labels"],
+        "--resume",
         "--no-safe",
         "--n-jobs",
         str(n_jobs),
@@ -79,23 +88,34 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run_id", choices=sorted(RUN_IDS))
     parser.add_argument("task")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--campaign-manifest", type=Path)
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=ROOT / "outputs/audit/revision_factorial_v1/final_common_embeddings.json",
     )
-    parser.add_argument(
-        "--output-root", type=Path, default=ROOT / "outputs/eval/revision_factorial_v1/common_rows"
-    )
+    parser.add_argument("--output-root", type=Path)
     parser.add_argument("--n-jobs", type=int, default=4)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    manifest = args.manifest or (
+        ROOT / "outputs/revision_factorial_v1/evaluation_manifest.json"
+        if args.seed == 42
+        else ROOT / f"outputs/revision_factorial_multiseed_v1/evaluation_seed{args.seed}.json"
+    )
+    output_root = args.output_root or (
+        ROOT / "outputs/eval/revision_factorial_v1/common_rows"
+        if args.seed == 42
+        else ROOT / f"outputs/eval/revision_factorial_multiseed_v1/seed{args.seed}/common_rows"
+    )
     command = command_for(
-        manifest_path=args.manifest,
+        manifest_path=manifest,
         run_id=args.run_id,
         task=args.task,
-        output_root=args.output_root,
+        output_root=output_root,
         n_jobs=args.n_jobs,
+        seed=args.seed,
+        campaign_path=args.campaign_manifest,
     )
     if args.dry_run:
         print(" ".join(command))

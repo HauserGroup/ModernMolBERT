@@ -9,6 +9,9 @@ from scripts import run_revision_common_scoring as scoring
 
 def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(scoring, "ROOT", tmp_path)
+    campaign = tmp_path / "campaign.json"
+    campaign.write_text('{"campaign": "test"}', encoding="utf-8")
+    monkeypatch.setattr(scoring, "CAMPAIGN", campaign)
     config = tmp_path / "datasets.yaml"
     config.write_text("datasets:\n  clf_example:\n    name: example\n", encoding="utf-8")
     monkeypatch.setattr(scoring, "CONFIG", config)
@@ -22,8 +25,10 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
     manifest.write_text(
         json.dumps(
             {
-                "schema": 1,
+                "schema": 2,
+                "campaign_manifest_sha256": file_sha256(campaign),
                 "run_ids": sorted(scoring.RUN_IDS),
+                "cv": {"folds": 5, "shuffle": False, "seed": None},
                 "common_prefix": "REVISION_COMMON_",
                 "tasks": {
                     "example": {
@@ -49,8 +54,16 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
 
     command = run_cmd()
     assert command[-1].endswith("scores/small_ape_selfies/example.csv")
-    assert "--no-cache" in command and "--no-resume" in command
+    assert "--resume" in command
     assert command[command.index("--missing-labels") + 1] == "as-negative"
+
+    wrong_cv = json.loads(manifest.read_text(encoding="utf-8"))
+    wrong_cv["cv"] = {"folds": 5, "shuffle": True, "seed": 0}
+    manifest.write_text(json.dumps(wrong_cv), encoding="utf-8")
+    with pytest.raises(ValueError, match="production CV splitter"):
+        run_cmd()
+    wrong_cv["cv"] = {"folds": 5, "shuffle": False, "seed": None}
+    manifest.write_text(json.dumps(wrong_cv), encoding="utf-8")
 
     embedding.write_bytes(b"changed")
     with pytest.raises(ValueError, match="missing or changed"):
@@ -59,5 +72,24 @@ def test_scoring_command_requires_fresh_verified_common_cohort(tmp_path: Path, m
     output = Path(command[-1])
     output.parent.mkdir(parents=True)
     output.write_text("older result", encoding="utf-8")
-    with pytest.raises(FileExistsError, match="already exists"):
-        run_cmd()
+    assert run_cmd() == command
+
+    seed43_embedding = embedding.with_name("REVISION_COMMON_s43_small_ape_selfies.joblib")
+    seed43_embedding.write_bytes(b"seed 43 common embedding")
+    seed43_manifest = json.loads(manifest.read_text(encoding="utf-8"))
+    seed43_manifest["seed"] = 43
+    seed43_manifest["common_prefix"] = "REVISION_COMMON_s43_"
+    seed43_manifest["tasks"]["example"]["models"]["small_ape_selfies"][
+        "common_embedding_sha256"
+    ] = file_sha256(seed43_embedding)
+    manifest.write_text(json.dumps(seed43_manifest), encoding="utf-8")
+    seed43 = scoring.command_for(
+        manifest_path=manifest,
+        run_id="small_ape_selfies",
+        task="example",
+        output_root=tmp_path / "seed43_scores",
+        n_jobs=4,
+        seed=43,
+        campaign_path=campaign,
+    )
+    assert seed43[seed43.index("--embedder") + 1] == "REVISION_COMMON_s43_small_ape_selfies"

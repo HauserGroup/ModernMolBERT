@@ -36,6 +36,8 @@ def log_predictions(data: HeadResult, pred_directory: str):
         artifact["test_source_row_indices"] = source_rows
     if data.prepared_data_sha256 is not None:
         artifact["prepared_data_sha256"] = np.asarray(data.prepared_data_sha256)
+    if data.scoring_identity is not None:
+        artifact["scoring_identity"] = np.asarray(data.scoring_identity)
 
     target_path = base_path + ".npz"
     tmp_path = base_path + ".tmp.npz"

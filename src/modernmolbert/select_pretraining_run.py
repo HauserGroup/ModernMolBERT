@@ -44,6 +44,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from modernmolbert.utils import load_run_args
+
 import pandas as pd
 
 
@@ -153,14 +155,18 @@ def best_eval_from_log_history(
 
 
 def summarize_run(run_dir: Path, metric: str, lower_is_better: bool) -> dict[str, Any]:
-    run_args = read_json(run_dir / "run_args.json")
+    run_args = load_run_args(run_dir)
     eval_results = read_json(run_dir / "eval_results.json")
     train_results = read_json(run_dir / "train_results.json")
     trainer_state = read_json(run_dir / "trainer_state.json")
-    metadata_path = run_dir / "run_metadata.json"
-    if not metadata_path.exists():
-        metadata_path = run_dir / "ape_tokenizer_metadata.json"
-    metadata = read_json(metadata_path)
+    identity = read_json(run_dir / "run_identity.json")
+    if identity.get("schema") == 2:
+        metadata = dict(identity.get("result", {}))
+    else:
+        metadata_path = run_dir / "run_metadata.json"
+        if not metadata_path.exists():
+            metadata_path = run_dir / "ape_tokenizer_metadata.json"
+        metadata = read_json(metadata_path)
 
     final_model = run_dir / "final_model"
     has_final_model = (
@@ -249,7 +255,7 @@ def discover_runs(run_root: Path) -> list[Path]:
     for child in sorted(run_root.iterdir()):
         if not child.is_dir() or child.name.startswith("."):
             continue
-        if (child / "run_args.json").exists() or (child / "trainer_state.json").exists():
+        if (child / "run_identity.json").exists() or (child / "trainer_state.json").exists():
             runs.append(child)
     return runs
 

@@ -29,7 +29,14 @@ parser.add_argument("--out", type=Path, default=ROOT / "outputs/eval/paper/table
 parser.add_argument(
     "--models", nargs="+", default=None, help="Matrix columns to show, in order (new-model runs)."
 )
+parser.add_argument(
+    "--five-seed-mean",
+    action="store_true",
+    help="Label internal columns as verified five-seed means (requires --models).",
+)
 ARGS = parser.parse_args()
+if ARGS.five_seed_mean and ARGS.models is None:
+    parser.error("--five-seed-mean requires --models")
 
 MATRIX = ARGS.matrix
 OUT = ARGS.out
@@ -79,8 +86,8 @@ COLS = [
 ]
 HEAD = ["ECFP4", "ChBa-2", "SELF.", "MoLF.", "MMB-s", "MMB-b", "MMB-sp"]
 LEGEND = (
-    r"\emph{MMB-s} = \model{}-small (standard), "
-    r"\emph{MMB-b} = \model{}-base, \emph{MMB-sp} = small span masking"
+    r"\emph{MMB-s} = MMB-small (standard), "
+    r"\emph{MMB-b} = MMB-base, \emph{MMB-sp} = small span masking"
 )
 SHORT = {
     "ECFP4": "ECFP4",
@@ -90,14 +97,17 @@ SHORT = {
     "MMB-small": "MMB-s",
     "MMB-base": "MMB-b",
     "MMB-small-span": "MMB-sp",
+    "MMB-small-APE-SELFIES": "s-A/SF",
+    "MMB-small-APE-SMILES": "s-A/SM",
+    "MMB-small-BPE-SELFIES": "s-B/SF",
+    "MMB-small-BPE-SMILES": "s-B/SM",
+    "MMB-base-APE-SELFIES": "b-A/SF",
 }
 if ARGS.models is not None:
     COLS = [str(c) for c in ARGS.models]
     HEAD = [SHORT.get(c, c) for c in COLS]
     mmb = [c for c in COLS if c.startswith("MMB-")]
-    LEGEND = ", ".join(
-        rf"\emph{{{SHORT.get(c, c)}}} = \model{{}}-{c.removeprefix('MMB-')}" for c in mmb
-    )
+    LEGEND = ", ".join(rf"\emph{{{SHORT.get(c, c)}}} = MMB-{c.removeprefix('MMB-')}" for c in mmb)
 elif not ARGS.exclude_hetero_span:
     COLS.append("MMB-small-hetero")
     HEAD.append("MMB-h")
@@ -124,8 +134,17 @@ lines = [
     r"{\footnotesize\setlength{\tabcolsep}{3.5pt}",
     r"\begin{longtable}{l " + "r " * len(COLS) + "}",
     r"  \caption{Per-task test ROC-AUC ($\times100$) for all models on the "
-    r"25-task benchmark. " + LEGEND + r". ``--'' marks evaluations not "
-    r"yet run.}\label{tab:pertask}\\",
+    r"25-task benchmark. MMB = ModernMolBERT. " + LEGEND + r". ``--'' marks an unavailable score; "
+    r"only endpoints with defined test ROC-AUC enter multi-endpoint task means. "
+    + (
+        r"Internal entries average five seeds on verified common test rows; "
+        r"imported baselines use table-only test rows with unverified molecule identities."
+        if ARGS.five_seed_mean
+        else r"Internal and external test-row populations differ; see evaluation Methods."
+        if ARGS.models is not None
+        else r"Historical entries follow the archived evaluation protocol."
+    )
+    + r"}\label{tab:pertask}\\",
     r"  \toprule",
     r"  \textbf{Task} & " + " & ".join(r"\textbf{" + h + "}" for h in HEAD) + r" \\",
     r"  \midrule",

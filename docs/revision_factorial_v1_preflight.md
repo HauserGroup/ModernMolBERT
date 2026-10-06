@@ -4,6 +4,10 @@ This record supplies evidence for `MASTER_REVISION_PLAN.md` G4–G5. Pilot model
 diagnostics and are excluded from downstream selection. The frozen tokenizer/data
 contract is in `docs/revision_factorial_v1_handoff.md`.
 
+Historical diagnostic record: the commands and readiness gates below describe
+the September preflight. For current launch and scoring commands, use
+[revision_factorial_v1_reproduce.md](revision_factorial_v1_reproduce.md).
+
 ## Helios environment and inputs
 
 - Host: `helios.tail670d76.ts.net`, checkout

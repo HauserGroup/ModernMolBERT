@@ -5,6 +5,9 @@ precedes any downstream score. The five runs share ChEMBL source rows, one
 training-row permutation, one 4,096-row validation cohort, seed 42 and a
 384-token context (including BOS/EOS). The base encoder reuses APE–SELFIES.
 
+This handoff is the frozen input record. Its launch-gate section is historical;
+current commands are in [revision_factorial_v1_reproduce.md](revision_factorial_v1_reproduce.md).
+
 ## Corpus and shared row IDs
 
 | Artifact | Rows | SHA-256 |

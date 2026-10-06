@@ -256,8 +256,10 @@ def build_readme(metadata: dict, repo_id: str = DEFAULT_REPO_ID) -> str:
         "```\n\n"
         "## Versions\n\n" + "\n".join(f"- {k}: {v}" for k, v in versions.items()) + "\n\n"
         "## License\n\n"
-        "ChEMBL data is released under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). "
-        "The prepared dataset files retain the CC BY-SA 3.0 terms.\n"
+        "Source attribution: [ChEMBL release 36](https://doi.org/10.6019/CHEMBL.database.36) "
+        "from the [EMBL-EBI ChEMBL resource](https://www.ebi.ac.uk/chembl/). "
+        "ChEMBL data is released under [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/); "
+        "the prepared dataset files retain those terms.\n"
     )
 
 

@@ -17,6 +17,7 @@ Output: Supplementary_2.pdf (Appendix A).
 """
 
 import argparse
+import csv
 from pathlib import Path
 import json
 import matplotlib
@@ -33,6 +34,11 @@ parser.add_argument(
     help="Run directory containing trainer_state.json.",
 )
 parser.add_argument("--figure-dir", type=Path, default=ROOT / "paper/figures")
+parser.add_argument(
+    "--source-data",
+    type=Path,
+    help="Optional CSV of every plotted log-history value, preserving duplicate steps.",
+)
 ARGS = parser.parse_args()
 FIGDIR = ARGS.figure_dir
 FIGDIR.mkdir(parents=True, exist_ok=True)
@@ -43,6 +49,32 @@ lh = ts["log_history"]
 train = [(e["step"], e["loss"]) for e in lh if "loss" in e and "eval_loss" not in e]
 ev_loss = [(e["step"], e["eval_loss"]) for e in lh if "eval_loss" in e]
 ev_acc = [(e["step"], e["eval_masked_accuracy"]) for e in lh if "eval_masked_accuracy" in e]
+
+if ARGS.source_data is not None:
+    records = [
+        {
+            "log_history_index": index,
+            "step": event["step"],
+            "series": series,
+            "value": event[key],
+        }
+        for index, event in enumerate(lh)
+        for key, series in (
+            ("loss", "train_loss"),
+            ("eval_loss", "validation_loss"),
+            ("eval_masked_accuracy", "validation_masked_accuracy"),
+        )
+        if key in event
+    ]
+    ARGS.source_data.parent.mkdir(parents=True, exist_ok=True)
+    with ARGS.source_data.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=("log_history_index", "step", "series", "value"),
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        writer.writerows(records)
 
 if ev_acc:
     fig, (axA, axL) = plt.subplots(1, 2, figsize=(11, 4.2))

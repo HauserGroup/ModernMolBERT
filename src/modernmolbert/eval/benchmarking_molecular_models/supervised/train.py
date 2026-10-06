@@ -1,5 +1,6 @@
 import gc
 import os
+import time
 import numpy as np
 import logging as log
 
@@ -218,9 +219,18 @@ def fit_multioutput_finite_label_model(
     best_score = -np.inf
     best_params = None
 
-    for params in param_grid:
+    for candidate_index, params in enumerate(param_grid, start=1):
         fold_scores = []
-        for train_idx, valid_idx in make_splits():
+        for fold_index, (train_idx, valid_idx) in enumerate(make_splits(), start=1):
+            started = time.monotonic()
+            log.info(
+                "Sparse multi-output CV: head=%s candidate=%s/%s fold=%s/%s",
+                model_head,
+                candidate_index,
+                len(param_grid),
+                fold_index,
+                CV_SPLITS,
+            )
             estimator = clone(base_pipeline)
             estimator.set_params(**params)
 
@@ -229,6 +239,17 @@ def fit_multioutput_finite_label_model(
             y_score = wrapped.predict_proba(X[valid_idx])
 
             score = finite_label_multioutput_score(y[valid_idx], y_score)
+            log.info(
+                "Sparse multi-output CV complete: head=%s candidate=%s/%s fold=%s/%s "
+                "score=%s elapsed_s=%.1f",
+                model_head,
+                candidate_index,
+                len(param_grid),
+                fold_index,
+                CV_SPLITS,
+                score,
+                time.monotonic() - started,
+            )
             if np.isfinite(score):
                 fold_scores.append(score)
 
@@ -243,6 +264,7 @@ def fit_multioutput_finite_label_model(
     final_estimator = clone(base_pipeline)
     final_estimator.set_params(**best_params)
     final_model = FiniteLabelMultiOutputClassifier(final_estimator)
+    log.info("Sparse multi-output final fit: head=%s", model_head)
     final_model.fit(X, y)
 
     return {

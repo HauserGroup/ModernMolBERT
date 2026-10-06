@@ -24,7 +24,8 @@ if TYPE_CHECKING:
 
 APE = "APE"
 BPE = "BPE"
-ALGORITHMS = (APE, BPE)
+SMIRK = "SMIRK"
+ALGORITHMS = (APE, BPE, SMIRK)
 REPRESENTATIONS = (SELFIES_REPRESENTATION, SMILES_REPRESENTATION)
 
 
@@ -53,7 +54,23 @@ def load_tokenizer(
 ) -> "PreTrainedTokenizerBase":
     """Build the tokenizer described by ``metadata`` from its file."""
     representation = tokenizer_representation(metadata)
-    if tokenizer_algorithm(metadata) == BPE:
+    algorithm = tokenizer_algorithm(metadata)
+    if algorithm == SMIRK:
+        if representation != SMILES_REPRESENTATION:
+            raise ValueError("SMIRK tokenizer requires SMILES representation")
+        try:
+            from smirk import SmirkTokenizerFast
+        except ImportError as exc:
+            raise ImportError("Install smirk==0.3.0 for experimental SMIRK runs") from exc
+
+        options = {} if model_max_length is None else {"model_max_length": model_max_length}
+        return SmirkTokenizerFast(
+            tokenizer_file=Path(vocab_path),
+            template="[BOS] $0 [EOS]",
+            representation=representation,
+            **options,
+        )
+    if algorithm == BPE:
         from modernmolbert.tokenization.bpe import load_bpe_tokenizer
 
         return load_bpe_tokenizer(
@@ -115,8 +132,6 @@ def load_checkpoint_tokenizer(path: str | Path) -> tuple["PreTrainedTokenizerBas
     standard ``tokenizer.json`` at the root. A directory with only ``vocab.json``,
     or a bare APE vocabulary without metadata, as in the earliest runs, is APE.
     """
-    from transformers import AutoTokenizer
-
     path = Path(path)
     if path.is_file():
         metadata_path = metadata_path_for_vocab(path)
@@ -131,6 +146,8 @@ def load_checkpoint_tokenizer(path: str | Path) -> tuple["PreTrainedTokenizerBas
 
     ape_dir = path / "ape_tokenizer"
     if ape_dir.is_dir():
+        from transformers import AutoTokenizer
+
         tokenizer = AutoTokenizer.from_pretrained(str(ape_dir), trust_remote_code=True)
         if type(tokenizer).__name__ != "APEPreTrainedTokenizer":
             raise TypeError(f"Expected APEPreTrainedTokenizer, got {type(tokenizer)!r}")
@@ -138,6 +155,23 @@ def load_checkpoint_tokenizer(path: str | Path) -> tuple["PreTrainedTokenizerBas
         return tokenizer, tokenizer_representation({"representation": representation})
 
     if (path / "tokenizer.json").is_file():
+        config_path = path / "tokenizer_config.json"
+        if config_path.is_file():
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            if config.get("tokenizer_class") == "SmirkTokenizerFast":
+                from smirk import SmirkTokenizerFast
+
+                # Transformers 5's AutoTokenizer falls back to TokenizersBackend,
+                # which cannot deserialize SMIRK's custom pre-tokenizer. The
+                # package's own loader restores that component correctly.
+                tokenizer = SmirkTokenizerFast.from_pretrained(str(path))
+                representation = tokenizer.init_kwargs.get("representation")
+                if representation is None:
+                    raise ValueError(f"{config_path} does not record a representation")
+                return tokenizer, tokenizer_representation({"representation": representation})
+
+        from transformers import AutoTokenizer
+
         tokenizer = AutoTokenizer.from_pretrained(str(path))
         representation = tokenizer.init_kwargs.get("representation")
         if representation is None:

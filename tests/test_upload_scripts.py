@@ -42,6 +42,15 @@ def test_model_upload_uses_saved_context_vocab_and_masking(tmp_path: Path) -> No
         upload_model.write_collator_config(tmp_path, tmp_path, masking_strategy="span")
 
 
+def test_archived_hetero_span_upload_uses_recorded_mask_rate(tmp_path: Path) -> None:
+    # The archived checkpoint has training_args.bin but no run identity JSON.
+    # Its saved output_dir names mask_hetero_span__mlm_0p15__lr_4e-4.
+    upload_model.write_collator_config(tmp_path, tmp_path, masking_strategy="hetero_span")
+    collator = json.loads((tmp_path / "collator_config.json").read_text())
+    assert collator["masking_strategy"] == "hetero_span"
+    assert collator["mlm_probability"] == 0.15
+
+
 class _RecordingApi:
     def __init__(self) -> None:
         self.create_repo_calls: list[dict] = []
@@ -145,6 +154,10 @@ def test_upload_dataset_to_hub_dry_run_stages_files(tmp_path: Path) -> None:
         "train.parquet",
         "valid.parquet",
     ]
+    card = (tmp_path / "staging" / "README.md").read_text()
+    assert "10.6019/CHEMBL.database.36" in card
+    assert "https://www.ebi.ac.uk/chembl/" in card
+    assert "CC BY-SA 3.0" in card
 
 
 def test_upload_dataset_to_hub_uses_injected_api(tmp_path: Path) -> None:

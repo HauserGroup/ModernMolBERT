@@ -70,13 +70,13 @@ on that intersection before treating scores as paired. Keep all pilot outputs
 under `outputs/experimental_smirk_v1/`; do not feed them to manuscript result
 generators until the pilot is reviewed.
 
-The separate Helios analysis checkout can evaluate all five models after the
+The consolidated Helios checkout can evaluate all five models after the
 training queue completes. It checks the GPU before every embedding stage and
 scores on CPU. Its queue status and logs stay under
-`outputs/experimental_smirk_v1/` in that checkout:
+`outputs/experimental_smirk_v1/`:
 
 ```bash
-# From /home/jakob/projects/ModernMolBERT-analysis after installing smirk==0.3.0:
+# From /home/jakob/projects/ModernMolBERT after installing smirk==0.3.0:
 tmux new -s smirk-evaluation
 bash scripts/experiments/run_smirk_evaluation_queue.sh
 ```

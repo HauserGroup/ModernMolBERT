@@ -2,6 +2,11 @@ MIT License
 
 Copyright (c) 2026 Hauser group
 
+Scope: this licence covers the code and files written by the Hauser group. It
+does not cover third-party material, including the vendored benchmark harness
+in src/modernmolbert/eval/benchmarking_molecular_models/, which has no
+open-source licence of its own (see the NOTICE file in that directory).
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

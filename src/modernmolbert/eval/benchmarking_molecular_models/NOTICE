@@ -1,0 +1,20 @@
+Third-party code: not covered by the repository's MIT licence
+
+The code in this directory derives from
+https://github.com/MLCIL/benchmarking_molecular_models, the benchmark of
+Praski et al. (2025), "Benchmarking pretrained molecular embedding models for
+molecular representation learning". It was copied at upstream commit 17d2aa1
+and then modified (see VENDORED.md).
+
+The upstream project states: "Feel free to use any parts of this project in
+your research. If you do so, please cite our paper as shown above. Due to the
+vast number of models used in this project, we're unable to provide a unified
+license for the entire repository. Please refer to the individual model
+implementations for their respective licenses."
+
+The upstream repository therefore offers no open-source licence. This
+directory is included under that research-use permission only. The MIT
+licence in the repository root does not apply to it, and no licence is granted
+here for redistribution or reuse of the upstream code. If you use it, cite the
+paper above and check the licences of the individual model implementations.
+Requesting an explicit licence from the upstream authors is an open item.

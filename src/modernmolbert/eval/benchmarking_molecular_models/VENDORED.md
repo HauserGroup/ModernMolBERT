@@ -2,12 +2,11 @@
 
 ## Upstream Provenance
 
-- **Repository**: [epfl-lep/benchmarking-molecular-models](https://github.com/epfl-lep/benchmarking-molecular-models)
+- **Repository**: [MLCIL/benchmarking_molecular_models](https://github.com/MLCIL/benchmarking_molecular_models)
 - **Imported results**: the reference tables and `data/Praski_benchmarking_results/arxiv_preprint_2025_08.csv`
   are byte-identical to the authors' public CSV at upstream commit `17d2aa1` (see `docs/baselines.md`).
-- **Code revision**: the upstream commit this code was copied from was not recorded when it was
-  vendored and is not known; the local changes below are therefore listed relative to the
-  imported results, not to a code diff.
+- **Code revision**: the code was copied from upstream commit `17d2aa1`, the same commit as the
+  imported results above. The local changes below are listed relative to that commit.
 - **Location**: `src/modernmolbert/eval/benchmarking_molecular_models/`
 
 ## Purpose

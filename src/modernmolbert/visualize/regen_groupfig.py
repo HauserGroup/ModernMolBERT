@@ -36,8 +36,8 @@ MODEL_LABELS = {
     "ChemBERTa-2": "ChemBERTa-2",
     "SELFormer": "SELFormer",
     "MoLFormer": "MoLFormer",
-    "MMB-small": "ModernMolBERT-small",
-    "MMB-base": "ModernMolBERT-base",
+    "MMB-small": "MMB-small",
+    "MMB-base": "MMB-base",
 }
 MODEL_COLORS = {
     "ECFP4": "#1B9E77",
@@ -58,8 +58,6 @@ def _models(models: Sequence[str] | None) -> list[str]:
 def model_label(model: str) -> str:
     if model in MODEL_LABELS:
         return MODEL_LABELS[model]
-    if model.startswith("MMB-"):
-        return "ModernMolBERT-" + model.removeprefix("MMB-")
     return model
 
 
@@ -260,6 +258,7 @@ def plot_group_distribution(
         fontsize=8.5,
         bbox_to_anchor=(0.5, -0.02),
     )
+    fig.text(0.5, 0.045, "MMB = ModernMolBERT", ha="center", fontsize=8.5)
 
     fig.tight_layout(rect=(0.0, 0.08, 1.0, 1.0))
     fig.savefig(output_path, bbox_inches="tight")

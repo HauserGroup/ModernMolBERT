@@ -86,8 +86,8 @@ COLS = [
 ]
 HEAD = ["ECFP4", "ChBa-2", "SELF.", "MoLF.", "MMB-s", "MMB-b", "MMB-sp"]
 LEGEND = (
-    r"\emph{MMB-s} = \model{}-small (standard), "
-    r"\emph{MMB-b} = \model{}-base, \emph{MMB-sp} = small span masking"
+    r"\emph{MMB-s} = MMB-small (standard), "
+    r"\emph{MMB-b} = MMB-base, \emph{MMB-sp} = small span masking"
 )
 SHORT = {
     "ECFP4": "ECFP4",
@@ -107,9 +107,7 @@ if ARGS.models is not None:
     COLS = [str(c) for c in ARGS.models]
     HEAD = [SHORT.get(c, c) for c in COLS]
     mmb = [c for c in COLS if c.startswith("MMB-")]
-    LEGEND = ", ".join(
-        rf"\emph{{{SHORT.get(c, c)}}} = \model{{}}-{c.removeprefix('MMB-')}" for c in mmb
-    )
+    LEGEND = ", ".join(rf"\emph{{{SHORT.get(c, c)}}} = MMB-{c.removeprefix('MMB-')}" for c in mmb)
 elif not ARGS.exclude_hetero_span:
     COLS.append("MMB-small-hetero")
     HEAD.append("MMB-h")
@@ -136,7 +134,7 @@ lines = [
     r"{\footnotesize\setlength{\tabcolsep}{3.5pt}",
     r"\begin{longtable}{l " + "r " * len(COLS) + "}",
     r"  \caption{Per-task test ROC-AUC ($\times100$) for all models on the "
-    r"25-task benchmark. " + LEGEND + r". ``--'' marks an unavailable score; "
+    r"25-task benchmark. MMB = ModernMolBERT. " + LEGEND + r". ``--'' marks an unavailable score; "
     r"only endpoints with defined test ROC-AUC enter multi-endpoint task means. "
     + (
         r"Internal entries average five seeds on verified common test rows; "

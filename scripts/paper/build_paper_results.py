@@ -281,7 +281,7 @@ def display_name(label: str) -> str:
     if label == "ChemBERTa-2":
         return "ChemBERTa-2 (MLM)"
     if label.startswith("MMB-"):
-        return r"\textbf{\model{}-" + label.removeprefix("MMB-") + "}"
+        return r"\textbf{MMB-" + label.removeprefix("MMB-") + "}"
     return label
 
 
@@ -333,7 +333,7 @@ lines += [
     r"  \caption{%",
     rf"    Mean ROC-AUC ($\times100$) on the {N_TASKS_MAIN}-task benchmark of "
     r"\citet{praskiBenchmarkingPretrainedMolecular2025}, broken down by task",
-    r"    group. Each entry averages per-task ROC-AUC. "
+    r"    group. MMB = ModernMolBERT. Each entry averages per-task ROC-AUC. "
     + (
         r"Internal downstream heads (logistic regression, random forest or $k$NN) "
         r"are selected by training-side cross-validation. The imported baseline "
